@@ -361,6 +361,7 @@
   [^ByteBuffer bb header]
 
   (.position bb (:string-table-start header))
+
   ;; How many strings do we have?
   (let [str-count (.getInt bb)]
 
@@ -385,6 +386,38 @@
              ;; Either continue on to the next loop or
              ;; terminate by returning the string table
              (recur (inc i) limit (conj string-table (String. str-buffer)))))))))
+
+(def arz-record-header
+  (ordered-map
+   :filename          :int32
+   :type              (string :ascii)
+   :offset            :int32
+   :compressed-size   :int32
+   :decompressed-size :int32
+   :unknown           :int32
+   :unknown2          :int32
+   ))
+
+(defn- load-db-records-header-table
+  [^ByteBuffer bb header string-table]
+
+  ;; Move the buffer to the beginning of the header
+  (.position bb (:record-table-start header))
+
+  ;; Read all the headers
+  (let [record-headers (reduce
+                        (fn [accum _]
+                          (conj accum
+                                (read-struct arz-record-header bb)))
+                        []
+                        (range (:record-table-entries header)))]
+
+    ;; Look up all the record filenames in the string table
+    (map (fn [item]
+           (->> (item :filename)
+                (nth string-table)
+                (assoc item :filename)))
+         record-headers)))
 
 
 (defn load-game-db
@@ -413,4 +446,4 @@
 #_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
 #_(def h (load-db-header f))
 #_(time (def st (load-db-string-table f h)))
-#_(time (def st (load-db-string-table2 f h)))
+#_(time (def dt (load-db-records-header-table f h st)))
