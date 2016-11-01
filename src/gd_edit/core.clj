@@ -323,35 +323,10 @@
    :string-table-size    :int32))
 
 
-;; (def arz-header-codec
-;;   (g/ordered-map
-;;    :unknown              :uint16-le
-;;    :version              :uint16-le
-;;    :record-table-start   :uint32-le
-;;    :record-table-size    :uint32-le
-;;    :record-table-entries :uint32-le
-;;    :string-table-start   :uint32-le
-;;    :string-table-size    :uint32-le))
-
-
 (def arz-string-table
   (variable-count
    (string :ascii)
    :length-prefix :int32))
-
-
-;; (def arz-record-header-codec
-;;   (gloss/ordered-map
-;;    :type :uint16-le
-;;    :count :uint16-le
-;;    :fieldname-index   :uint32-le))
-
-;; (def arz-string-table-codec
-;;   (g/repeated
-;;    (g/finite-frame
-;;     (g/prefix :uint32-le)
-;;     (g/string :ascii))
-;;    :prefix :uint32-le))
 
 
 (defn mmap
@@ -412,17 +387,6 @@
              (recur (inc i) limit (conj string-table (String. str-buffer)))))))))
 
 
-;; (defn- load-db-string-table3
-;;   [^ByteBuffer bb header]
-
-;;   (let [table-size (:string-table-size header)
-;;         buffer (byte-array table-size)]
-;;     ;; Jump to the start of the string table and start decoding
-;;     (.position bb (:string-table-start header))
-;;     (.get bb buffer 0 table-size)
-;;     (gloss.io/decode arz-string-table-codec buffer false)))
-
-
 (defn load-game-db
   [filepath]
 
@@ -448,8 +412,5 @@
 #_(def f (mmap "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
 #_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
 #_(def h (load-db-header f))
-#_(time (dotimes [n 10]
-           (load-db-string-table f h)))
 #_(time (def st (load-db-string-table f h)))
 #_(time (def st (load-db-string-table2 f h)))
-#_(def st (load-db-string-table3 f h))
