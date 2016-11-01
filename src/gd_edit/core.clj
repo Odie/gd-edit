@@ -72,6 +72,62 @@
     ;; Return the spec untouched
     spec))
 
+(defn compile-meta
+  [{:keys [struct/length-prefix] :as spec-meta}]
+
+  ;; The only meta field that needs to be updated is the "length-prefix" field
+  ;; If it's not available, we don't need to do anything to compile this
+  (if (nil? length-prefix)
+    (assoc spec-meta :compiled true)
+
+    ;; There is no reason for a length prefix to be a composite type
+    ;; So we won't handle that case
+    (let [primitives-spec (primitives-specs length-prefix)]
+      (if primitives-spec
+        ;; Update the length-prefix field to the function to be called
+        (assoc spec-meta
+               :struct/length-prefix (nth primitives-spec 2)
+               :compiled true)
+
+        ;; If we're not looking at a primitive type, we're looking at a composite type...
+        (throw (Throwable. (str "Cannot handle spec:" length-prefix)))))))
+
+
+(defn compile-spec
+  [spec]
+
+  (let [compiled-spec (compile-spec- spec)
+        compiled-meta (compile-meta (meta spec))]
+    (with-meta compiled-spec compiled-meta)))
+
+
+(defn compile-spec-
+  [spec]
+
+  (let [type (spec-type spec)]
+    (cond
+      ;; String specs are dummy items
+      ;; Just return the item itself
+      (= type :string)
+      spec
+
+      ;; Sequence of specs?
+      ;; Compile each one and return it
+      ;; This should handle :variable-count also
+      (sequential? spec)
+      (reduce
+       (fn [accum item]
+         (conj accum (compile-spec item))
+         )
+       (empty spec) 
+       spec)
+
+      ;; Otherwise, this should just be a plain primitive
+      :else
+      (nth (primitives-specs spec) 2)
+      )))
+
+
 (defn read-struct
   "Spec can also be a single primitive spec. In that case, we'll just read
   a single item from the bytebuffer.
@@ -107,17 +163,26 @@
 (defmethod read-spec :default
   [spec bb]
 
-  (if (seq? spec)
+  (cond
+
+    ;; If the spec has been compiled, we will get a function in the place of a
+    ;; keyword indicating a primitive.
+    ;; Call it with the byte buffer to read it
+    (clojure.test/function? spec)
+    (spec bb)
+
     ;; If we're looking at some sequence, assume this is a sequence of specs and
     ;; read through it all
+    (seq? spec)
     (reduce
      (fn [accum spec-item]
        (conj accum (read-spec spec-item bb)))
      []
      spec)
-    
+
     ;; Otherwise, we should be dealing with some kind of primitive...
     ;; Look up the primitive keyword in the primitives map
+    :else
     (let [primitives-spec (primitives-specs spec)]
 
       ;; If the primitive is found...
@@ -257,20 +322,23 @@
    :string-table-start   :int32
    :string-table-size    :int32))
 
-(def arz-header-codec
-  (g/ordered-map
-   :unknown              :uint16-le
-   :version              :uint16-le
-   :record-table-start   :uint32-le
-   :record-table-size    :uint32-le
-   :record-table-entries :uint32-le
-   :string-table-start   :uint32-le
-   :string-table-size    :uint32-le))
+
+;; (def arz-header-codec
+;;   (g/ordered-map
+;;    :unknown              :uint16-le
+;;    :version              :uint16-le
+;;    :record-table-start   :uint32-le
+;;    :record-table-size    :uint32-le
+;;    :record-table-entries :uint32-le
+;;    :string-table-start   :uint32-le
+;;    :string-table-size    :uint32-le))
+
 
 (def arz-string-table
   (variable-count
    (string :ascii)
    :length-prefix :int32))
+
 
 ;; (def arz-record-header-codec
 ;;   (gloss/ordered-map
@@ -285,8 +353,6 @@
 ;;     (g/string :ascii))
 ;;    :prefix :uint32-le))
 
-(def arz-string-table-codec
-  [:uint32-le :uint32-le])
 
 (defn mmap
   [filepath]
@@ -308,14 +374,15 @@
 
 ;; After some number of attempts to get gloss to load the string table, I gave up and just
 ;; hand-coded the string table reading.
+;; (defn- load-db-string-table2
+;;   [^ByteBuffer bb header]
+
+;;   ;; Jump to the start of the string table and start decoding
+;;   (.position bb (:string-table-start header))
+;;   (read-struct (compile-spec arz-string-table) bb))
+
+
 (defn- load-db-string-table
-  [^ByteBuffer bb header]
-
-  ;; Jump to the start of the string table and start decoding
-  (.position bb (:string-table-start header))
-  (read-struct arz-string-table bb))
-
-(defn- load-db-string-table2
   [^ByteBuffer bb header]
 
   (.position bb (:string-table-start header))
@@ -337,7 +404,6 @@
            (let [str-len (.getInt bb)
                  str-buffer (byte-array str-len)]
 
-
              ;; Read the specified number of bytes and convert it to a string
              (.get bb str-buffer 0 str-len)
 
@@ -345,15 +411,17 @@
              ;; terminate by returning the string table
              (recur (inc i) limit (conj string-table (String. str-buffer)))))))))
 
-(defn- load-db-string-table3
-  [^ByteBuffer bb header]
 
-  (let [table-size (:string-table-size header)
-        buffer (byte-array table-size)]
-    ;; Jump to the start of the string table and start decoding
-    (.position bb (:string-table-start header))
-    (.get bb buffer 0 table-size)
-    (gloss.io/decode arz-string-table-codec buffer false)))
+;; (defn- load-db-string-table3
+;;   [^ByteBuffer bb header]
+
+;;   (let [table-size (:string-table-size header)
+;;         buffer (byte-array table-size)]
+;;     ;; Jump to the start of the string table and start decoding
+;;     (.position bb (:string-table-start header))
+;;     (.get bb buffer 0 table-size)
+;;     (gloss.io/decode arz-string-table-codec buffer false)))
+
 
 (defn load-game-db
   [filepath]
@@ -380,6 +448,8 @@
 #_(def f (mmap "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
 #_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
 #_(def h (load-db-header f))
+#_(time (dotimes [n 10]
+           (load-db-string-table f h)))
 #_(time (def st (load-db-string-table f h)))
 #_(time (def st (load-db-string-table2 f h)))
 #_(def st (load-db-string-table3 f h))
