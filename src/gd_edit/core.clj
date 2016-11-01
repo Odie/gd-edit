@@ -21,11 +21,11 @@
 
 (def primitives-specs
   ;; name => primitives spec
-  {:byte   [:byte    1 #(.get %)      ]
-   :int16  [:int16   2 #(.getShort %) ]
-   :int32  [:int     4 #(.getInt %)   ]
-   :float  [:float   4 #(.getFloat %) ]
-   :double [:double  4 #(.getDouble %)]
+  {:byte   [:byte    1 (fn[^ByteBuffer bb] (.get bb))      ]
+   :int16  [:int16   2 (fn[^ByteBuffer bb] (.getShort bb)) ]
+   :int32  [:int     4 (fn[^ByteBuffer bb] (.getInt bb))   ]
+   :float  [:float   4 (fn[^ByteBuffer bb] (.getFloat bb)) ]
+   :double [:double  4 (fn[^ByteBuffer bb] (.getDouble bb))]
    })
 
 (defn sizeof
@@ -200,7 +200,7 @@
 
 
 (defmethod read-spec :string
-  [spec bb]
+  [spec ^ByteBuffer bb]
 
   (let [
         valid-encodings {:ascii "US-ASCII"
@@ -299,7 +299,7 @@
 
 
 (defn- load-db-header
-  [^java.nio.ByteBuffer bb]
+  [^ByteBuffer bb]
   
   ;; Jump to the start of the file header and start decoding
   (.position bb 0)
@@ -309,14 +309,14 @@
 ;; After some number of attempts to get gloss to load the string table, I gave up and just
 ;; hand-coded the string table reading.
 (defn- load-db-string-table
-  [^java.nio.ByteBuffer bb header]
+  [^ByteBuffer bb header]
 
   ;; Jump to the start of the string table and start decoding
   (.position bb (:string-table-start header))
   (read-struct arz-string-table bb))
 
 (defn- load-db-string-table2
-  [^java.nio.ByteBuffer bb header]
+  [^ByteBuffer bb header]
 
   (.position bb (:string-table-start header))
   ;; How many strings do we have?
@@ -346,7 +346,7 @@
              (recur (inc i) limit (conj string-table (String. str-buffer)))))))))
 
 (defn- load-db-string-table3
-  [^java.nio.ByteBuffer bb header]
+  [^ByteBuffer bb header]
 
   (let [table-size (:string-table-size header)
         buffer (byte-array table-size)]
