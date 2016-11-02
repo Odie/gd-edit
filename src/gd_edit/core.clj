@@ -449,7 +449,7 @@
 
     ;; Try to read the entire record...
     (reduce
-     (fn [record i]
+     (fn [record _]
        ;; Did we finish reading the entire record?
        (if (<= (.remaining record-buffer) 0)
          ;; If so, return the accumulated record
@@ -462,33 +462,43 @@
                fieldname (nth string-table (.getInt record-buffer))
 
                ;; Read out the indicate number of data items into a list
-               val-vec (reduce
-                        (fn [accum j]
-                          (cond (= type 1)
-                                (conj accum (.getFloat record-buffer))
+               val-vec (loop [i 0
+                              limit data-count
+                              accum []]
+                         ;; Did we retrieve all the items?
+                         (if (>= i limit)
 
-                                (= type 2)
-                                (conj accum (nth string-table (.getInt record-buffer)))
+                           ;; If so, return the items now
+                           accum
 
-                                :else
-                                (conj accum (.getInt record-buffer))
-                                ))
-                        []
-                        (range data-count))
+                           ;; Otherwise, grab one more item and loop
+                           (recur (inc i)
+                                  limit
+                                  (conj accum 
+                                        (cond (= type 1)
+                                              (.getFloat record-buffer)
+
+                                              (= type 2)
+                                              (nth string-table (.getInt record-buffer))
+
+                                              :else
+                                              (.getInt record-buffer)
+                                              )))))
+               val (nth val-vec 0)
                ]
 
            (cond
              ;; Do we have more than one value?
              ;; Add it to the record
-             (> 1 (count val-vec))
+             (> 1 data-count)
              (assoc record fieldname val-vec)
 
              ;; Otherwise, we only have a single value in the vector
              ;; If the value is not zero or empty string, add it to the record
-             (and (not= (first val-vec) (int 0))
-                  (not= (first val-vec) (float 0))
-                  (not= (first val-vec) ""))
-             (assoc record fieldname (first val-vec))
+             (and (not= val 0)
+                  (not= val (float 0))
+                  (not= val ""))
+             (assoc record fieldname val)
 
              ;; Otherwise, don't append any new fields to the record
              ;; Just return it as is
@@ -496,7 +506,7 @@
              record
              ))))
      {}          ;; Start reduce with an empty record
-     (range)     ;; Have reduce loop forever. We'll check the exit condition in the lambda
+     (repeat 0)     ;; Have reduce loop forever. We'll check the exit condition in the lambda
      )))
 
 (defn- load-db-records
