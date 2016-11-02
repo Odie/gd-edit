@@ -461,37 +461,45 @@
                data-count (.getShort record-buffer)
                fieldname (nth string-table (.getInt record-buffer))
 
+               get-one-field (fn []
+                               (cond (= type 1)
+                                     (.getFloat record-buffer)
+
+                                     (= type 2)
+                                     (nth string-table (.getInt record-buffer))
+
+                                     :else
+                                     (.getInt record-buffer)))
+
                ;; Read out the indicate number of data items into a list
-               val-vec (loop [i 0
-                              limit data-count
-                              accum []]
-                         ;; Did we retrieve all the items?
-                         (if (>= i limit)
+               val (if (= data-count 1)
 
-                           ;; If so, return the items now
-                           accum
+                     ;; Only one item to get?
+                     ;; Read the value and be done
+                     (get-one-field)
 
-                           ;; Otherwise, grab one more item and loop
-                           (recur (inc i)
-                                  limit
-                                  (conj accum 
-                                        (cond (= type 1)
-                                              (.getFloat record-buffer)
+                     ;; We have more than one value?
+                     ;; Setup and loop and read out all the values into a vector
+                     (loop [i 0
+                            limit data-count
+                            accum []]
+                       ;; Did we retrieve all the items?
+                       (if (>= i limit)
 
-                                              (= type 2)
-                                              (nth string-table (.getInt record-buffer))
+                         ;; If so, return the items now
+                         accum
 
-                                              :else
-                                              (.getInt record-buffer)
-                                              )))))
-               val (nth val-vec 0)
+                         ;; Otherwise, grab one more item and loop
+                         (recur (inc i)
+                                limit
+                                (conj accum (get-one-field))))))
                ]
 
            (cond
              ;; Do we have more than one value?
              ;; Add it to the record
              (> 1 data-count)
-             (assoc record fieldname val-vec)
+             (assoc record fieldname val)
 
              ;; Otherwise, we only have a single value in the vector
              ;; If the value is not zero or empty string, add it to the record
