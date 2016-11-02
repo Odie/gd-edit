@@ -1,6 +1,7 @@
 (ns gd-edit.arz-reader
   (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils])
+            [gd-edit.utils :as utils]
+            [clojure.string :as string])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
@@ -8,7 +9,7 @@
   (:gen-class))
 
 (def arz-header
-  (s/ordered-map 
+  (s/ordered-map
    :unknown              :int16
    :version              :int16
    :record-table-start   :int32
@@ -25,7 +26,7 @@
 
 (defn- load-db-header
   [^ByteBuffer bb]
-  
+
   ;; Jump to the start of the file header and start decoding
   (.position bb 0)
   (s/read-struct arz-header bb))
@@ -107,7 +108,7 @@
 
 
 (defn- load-db-record
-  [^ByteBuffer bb header string-table record-header]
+  [^ByteBuffer bb header string-table record-header localization-table]
 
   (let [{:keys [compressed-size decompressed-size]} record-header
         compressed-data (byte-array (:compressed-size record-header))
@@ -146,8 +147,27 @@
                                (cond (= type 1)
                                      (.getFloat record-buffer)
 
+                                     ;; Looking at a string?
                                      (= type 2)
-                                     (nth string-table (.getInt record-buffer))
+
+                                     ;; Look up the string from the string table
+                                     (let [str (nth string-table (.getInt record-buffer))]
+
+                                       ;; If the string looks like a "tag" name used for localization...
+                                       (if (string/starts-with? (string/lower-case str)"tag")
+                                         ;; (do
+                                         ;;   (if (nil? (localization-table str))
+                                         ;;     ;; (println "replacing \"" str "\" with" (localization-table str))
+                                         ;;     (println "could not replace localization string:" str)
+                                         ;;     ))
+
+                                         ;; Look it up in the localization table
+                                         (or (localization-table str) str)
+
+                                         ;; Otherwise, just use the string as is
+                                         str
+                                         )
+                                       )
 
                                      :else
                                      (.getInt record-buffer)))
@@ -200,7 +220,7 @@
 
 
 (defn- load-db-records
-  [^ByteBuffer bb header string-table]
+  [^ByteBuffer bb header string-table localization-table]
 
   ;; Load up all the record headers
   (->> (load-db-records-header-table bb header string-table)
@@ -209,7 +229,7 @@
        (map (fn [record-header]
 
               ;; Read a single record
-              (-> (load-db-record bb header string-table record-header)
+              (-> (load-db-record bb header string-table record-header localization-table)
 
                   ;; Add in the recordname from the header
                   (assoc :recordname (:filename record-header))
@@ -220,7 +240,7 @@
 
 
 (defn load-game-db
-  [filepath]
+  [filepath localization-table]
 
   ;; Open the database file
   (let [bb (utils/mmap filepath)
@@ -228,10 +248,10 @@
 
         ;; Read and parse the header
         header (load-db-header bb)
-        string-table (load-db-string-table bb header)] 
+        string-table (load-db-string-table bb header)]
 
     ;; Read in all the file records
-    (load-db-records bb header string-table)))
+    (load-db-records bb header string-table localization-table)))
 
 
 #_(time  (load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))

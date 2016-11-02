@@ -16,7 +16,8 @@
   ;; name => primitives spec
   {:byte   [:byte    1 (fn[^ByteBuffer bb] (.get bb))      ]
    :int16  [:int16   2 (fn[^ByteBuffer bb] (.getShort bb)) ]
-   :int32  [:int     4 (fn[^ByteBuffer bb] (.getInt bb))   ]
+   :int32  [:int32   4 (fn[^ByteBuffer bb] (.getInt bb))   ]
+   :int64  [:int64   8 (fn[^ByteBuffer bb] (.getLong bb))  ]
    :float  [:float   4 (fn[^ByteBuffer bb] (.getFloat bb)) ]
    :double [:double  4 (fn[^ByteBuffer bb] (.getDouble bb))]
    })
@@ -118,7 +119,7 @@
        (fn [accum item]
          (conj accum (compile-spec item))
          )
-       (empty spec) 
+       (empty spec)
        spec)
 
       ;; Otherwise, this should just be a plain primitive
@@ -218,7 +219,7 @@
   ;; original spec
   (let [spec-seq (list spec)]
 
-    ;; Attach the meta info to the spec 
+    ;; Attach the meta info to the spec
     ;; Any sequence can be have meta info attached
     (with-meta spec-seq
       {:struct/type :variable-count
