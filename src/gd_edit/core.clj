@@ -1,10 +1,11 @@
 (ns gd-edit.core
   (:require [clojure.java.io :as io]
-            [gloss.core :as g]
-            [gloss.io])
+            )
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel])
+            [java.nio.channels FileChannel]
+            [net.jpountz.lz4 LZ4Factory]
+            )
   (:gen-class))
 
 
@@ -92,6 +93,7 @@
         ;; If we're not looking at a primitive type, we're looking at a composite type...
         (throw (Throwable. (str "Cannot handle spec:" length-prefix)))))))
 
+(declare compile-spec-)
 
 (defn compile-spec
   [spec]
@@ -412,13 +414,103 @@
                         []
                         (range (:record-table-entries header)))]
 
-    ;; Look up all the record filenames in the string table
+    ;; Look up all the record file names in the string table
     (map (fn [item]
            (->> (item :filename)
                 (nth string-table)
                 (assoc item :filename)))
          record-headers)))
 
+(defn hexify [s]
+  (apply str
+    (map #(format "%02x " (byte %)) s)))
+
+(defn- load-db-record
+  [^ByteBuffer bb header string-table record-header]
+
+  (let [{:keys [compressed-size decompressed-size]} record-header
+        compressed-data (byte-array (:compressed-size record-header))
+        decompressed-data (byte-array (:decompressed-size record-header))
+        decompressor (.fastDecompressor (LZ4Factory/fastestInstance))
+
+        ;; Move to where the record is
+        ;; Note: we're adding 24 to account for the file header
+        _ (.position bb (+ (:offset record-header) 24))
+
+        ;; Grab the compressed data
+        _ (.get bb compressed-data 0 compressed-size)
+
+        ;; Decompress the data
+        _ (.decompress decompressor compressed-data 0 decompressed-data 0 decompressed-size)
+
+        record-buffer (ByteBuffer/wrap (bytes decompressed-data))
+        _ (.order record-buffer java.nio.ByteOrder/LITTLE_ENDIAN)
+        ]
+
+    ;; Try to read the entire record...
+    (reduce
+     (fn [record i]
+       ;; Did we finish reading the entire record?
+       (if (<= (.remaining record-buffer) 0)
+         ;; If so, return the accumulated record
+         (reduced record)
+
+         ;; Otherwise, read one more entry...
+         (let [type (.getShort record-buffer)
+
+               data-count (.getShort record-buffer)
+               fieldname (nth string-table (.getInt record-buffer))
+
+               ;; Read out the indicate number of data items into a list
+               val-vec (reduce
+                        (fn [accum j]
+                          (cond (= type 1)
+                                (conj accum (.getFloat record-buffer))
+
+                                (= type 2)
+                                (conj accum (nth string-table (.getInt record-buffer)))
+
+                                :else
+                                (conj accum (.getInt record-buffer))
+                                ))
+                        []
+                        (range data-count))
+               ]
+
+           (cond
+             ;; Do we have more than one value?
+             ;; Add it to the record
+             (> 1 (count val-vec))
+             (assoc record fieldname val-vec)
+
+             ;; Otherwise, we only have a single value in the vector
+             ;; If the value is not zero or empty string, add it to the record
+             (and (not= (first val-vec) (int 0))
+                  (not= (first val-vec) (float 0))
+                  (not= (first val-vec) ""))
+             (assoc record fieldname (first val-vec))
+
+             ;; Otherwise, don't append any new fields to the record
+             ;; Just return it as is
+             :else
+             record
+             ))))
+     {}          ;; Start reduce with an empty record
+     (range)     ;; Have reduce loop forever. We'll check the exit condition in the lambda
+     )))
+
+(defn- load-db-records
+  [^ByteBuffer bb header string-table]
+
+  ;; Load up all the record headers
+  (->> (load-db-records-header-table bb header string-table)
+
+       ;; Try to read each record
+       (map (fn [record-header]
+              (load-db-record bb header string-table record-header)))
+
+       (doall)
+       ))
 
 (defn load-game-db
   [filepath]
@@ -429,17 +521,13 @@
 
         ;; Read and parse the header
         header (load-db-header bb)
-        string-table (load-db-string-table bb header)
+        string-table (load-db-string-table bb header)] 
 
-        ;; Read in all the file records
-        ]
-
-        ;; Read in the individual file parts
-
-    (last string-table)))
+    ;; Read in all the file records
+    (load-db-records bb header string-table)))
 
 
-#_(load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz")
+#_(time  (load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
 
 
 #_(def f (mmap "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
@@ -447,3 +535,4 @@
 #_(def h (load-db-header f))
 #_(time (def st (load-db-string-table f h)))
 #_(time (def dt (load-db-records-header-table f h st)))
+#_(time (def rt (load-db-records f h st)))
