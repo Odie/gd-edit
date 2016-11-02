@@ -192,7 +192,7 @@
   (let [bb (utils/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
-        record-headers (load-record-headers f h)]
+        record-headers (load-record-headers bb header)]
 
     (->> record-headers
          (map (fn [record-header]

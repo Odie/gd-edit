@@ -15,7 +15,7 @@
   (apply str
          (map #(format "%02x " (byte %)) s)))
 
-(defmacro time
+(defmacro timed
   "Times the execution time of the given expression. Returns a vector of [elapsed-time sexp-result]"
   [sexp]
 
@@ -28,4 +28,3 @@
   "Given duration in nanoseconds, return the duration in seconds"
   [time]
   (/ (float time) 1000000000))
-
