@@ -14,3 +14,18 @@
 (defn hexify [s]
   (apply str
          (map #(format "%02x " (byte %)) s)))
+
+(defmacro time
+  "Times the execution time of the given expression. Returns a vector of [elapsed-time sexp-result]"
+  [sexp]
+
+  `(let [start# (System/nanoTime)
+         result# ~sexp
+         end# (System/nanoTime)]
+    [(- end# start#) result#]))
+
+(defn nanotime->secs
+  "Given duration in nanoseconds, return the duration in seconds"
+  [time]
+  (/ (float time) 1000000000))
+
