@@ -82,6 +82,8 @@
     not=))
 
 (defn tokens->query-predicate
+  "Given a list of token that represents a query clause, return a predicate suitable for used
+  by the query function"
   [[target op query-val & rest]]
 
   (cond

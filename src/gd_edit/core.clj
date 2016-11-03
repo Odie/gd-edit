@@ -4,6 +4,7 @@
             [gd-edit.arc-reader :as arc-reader]
             [gd-edit.utils :as utils]
             [gd-edit.globals]
+            [gd-edit.command-handlers :as handlers]
             [clansi.core :refer [style]])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
@@ -34,6 +35,7 @@
 (def command-map
   {
    ["exit"] (fn [input] (System/exit 0))
+   ["q"] (fn [input] (handlers/query-comand-handler input))
    })
 
 (defn- find-command
@@ -62,6 +64,7 @@
    []
    tokens))
 
+
 (defn- repl-eval
   [[input tokens :as input-vec] command-map]
 
@@ -74,18 +77,25 @@
         handler (command-map command)]
     (if (nil? handler)
       (println "Don't know how to handle this command")
-      (handler input-vec))))
+      (handler [input-vec (drop (count command) tokens)]))))
+
+(defn- repl-iter
+  "Runs one repl iteration. Useful when the program is run from the repl"
+  []
+
+  (repl-eval (repl-read) command-map)
+  (println))
+
 
 (defn- repl
   []
 
   (while true
-    (repl-eval (repl-read) command-map)
-    (println)))
+    (repl-iter)))
 
 
-(defn -main
-  [& args]
+(defn- initialize
+  []
 
   (let [[localization-load-time localization-table]
         (utils/timed
@@ -111,9 +121,13 @@
     (println)
     (println "Ready to rock!")
     (println)
-
-    (repl)
   ))
 
-#_(def l (arc-reader/load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
-#_(def db (arz-reader/load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz" l))
+
+(defn -main
+  [& args]
+
+  (initialize)
+  (repl))
+
+#_(initialize)
