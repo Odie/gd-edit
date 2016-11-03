@@ -1,14 +1,6 @@
 (ns gd-edit.db-query
   (:require [clojure.string :as string]))
 
-;; (defn partial-match
-;;   [name]
-
-;;   (fn [item]
-;;     (-> item
-;;         (string/lower-case)
-;;         (.contains name)
-;;         )))
 
 (defn case-insensitive-match
   "Check if str2 can be found in str1"
@@ -27,8 +19,7 @@
   (fn [pair]
     (-> (first pair)
         (string/lower-case)
-        (.contains (string/lower-case name))
-        )))
+        (.contains (string/lower-case name)))))
 
 (defn hashmap-has-key
   [name]
@@ -37,9 +28,7 @@
     (->> (keys map)
          (some (fn [key]
                  (-> (string/lower-case key)
-                     (.contains name))
-                 ))
-         )))
+                     (.contains name)))))))
 
 (defmacro qand
   [& xs]
@@ -73,13 +62,42 @@
    db
    predicates))
 
+(defn token->op-fn
+  [op-token]
 
-(def r (time
-        (query gd-edit.core/db
-               (qand  (ci-match key "recordname")
-                      (ci-match value "affix"))
+  (cond
+    (= op-token "~")
+    ci-match
 
-               (qpred (ci-match key "cold"))
+    (= op-token "=")
+    =
 
-               (qand (ci-match key "levelreq")
-                     (= value 74)))))
+    (= op-token ">")
+    >
+
+    (= op-token "<")
+    <
+
+    (= op-token "!=")
+    not=))
+
+(defn tokens->query-predicate
+  [[target op query-val & rest]]
+
+  (cond
+    (= target "key")
+    (qpred ((token->op-fn op) key query-val))
+
+    (= target "value")
+    (qpred ((token->op-fn op) value query-val))
+
+    :else
+    (qand  (ci-match key target)
+           ((token->op-fn op) value query-val))))
+
+#_(def r (time
+          (query gd-edit.core/db
+                 (tokens->query-predicate ["recordname" "~" "affix"])
+                 (tokens->query-predicate ["key" "~" "cold"])
+                 (tokens->query-predicate ["levelreq" "=" 74])
+                 )))
