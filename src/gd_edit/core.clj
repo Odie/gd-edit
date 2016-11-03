@@ -3,7 +3,8 @@
             [gd-edit.arz-reader :as arz-reader]
             [gd-edit.arc-reader :as arc-reader]
             [gd-edit.utils :as utils]
-            )
+            [gd-edit.globals]
+            [clansi.core :refer [style]])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel])
@@ -20,7 +21,7 @@
   []
 
   ;; Print the prompt
-  (print "> ")
+  (print (style "> " :green))
 
   ;; Read a line
   (tokenize-input (read-line)))
@@ -85,6 +86,7 @@
 
 (defn -main
   [& args]
+
   (let [[localization-load-time localization-table]
         (utils/timed
          (arc-reader/load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
@@ -93,6 +95,8 @@
         (utils/timed
          (arz-reader/load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"
                                   localization-table))]
+
+    (reset! gd-edit.globals/db db)
 
     (println (count localization-table)
              "localization strings loaded in"
@@ -110,3 +114,6 @@
 
     (repl)
   ))
+
+#_(def l (arc-reader/load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
+#_(def db (arz-reader/load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz" l))
