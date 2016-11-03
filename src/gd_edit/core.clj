@@ -10,6 +10,78 @@
   (:gen-class))
 
 
+(defn- tokenize-input
+  [input]
+
+  [input
+   (into [] (re-seq #"\"[^\"]+\"|\S+" input))])
+
+(defn- repl-read
+  []
+
+  ;; Print the prompt
+  (print "> ")
+
+  ;; Read a line
+  (tokenize-input (read-line)))
+
+
+(defn split-at-space
+  [str]
+  (clojure.string/split str #"\s+"))
+
+(def command-map
+  {
+   ["exit"] (fn [input] (System/exit 0))
+   })
+
+(defn- find-command
+  "Try to find the \"longest\" command match"
+  [tokens command-map]
+  ;; We're trying to find the most specific match in the command map.
+  ;; This means we can put command handlers like "q" and "q show"
+  ;; directly in the command map and figure out which one should be
+  ;; called
+  (reduce
+   (fn [accum item]
+     ;; accum will be the longest match we found so far
+     ;; Check if we can match against a command if we put one more token
+     ;; into the command
+     (let [command (conj accum item)]
+
+       ;; Is the new command in the command-map?
+       (if (command-map command)
+         ;; If so, we've found a slightly longer match
+         command
+
+         ;; If not, we can't find a longer match and we're
+         ;; done with the reduce
+         (reduced accum)
+         )))
+   []
+   tokens))
+
+(defn- repl-eval
+  [[input tokens :as input-vec] command-map]
+
+  ;; Try to find the "longest" command match
+  ;; Basically, we're trying to find the most specific match.
+  ;; This means we can put command handlers like "q" and "q show"
+  ;; directly in the command map and figure out which one should be
+  ;; called
+  (let [command (find-command tokens command-map)
+        handler (command-map command)]
+    (if (nil? handler)
+      (println "Don't know how to handle this command")
+      (handler input-vec))))
+
+(defn- repl
+  []
+
+  (while true
+    (repl-eval (repl-read) command-map)
+    (println)))
+
 
 (defn -main
   [& args]
@@ -31,4 +103,10 @@
              "records loaded in"
              (format "%.3f" (utils/nanotime->secs db-load-time))
              "seconds")
+
+    (println)
+    (println "Ready to rock!")
+    (println)
+
+    (repl)
   ))
