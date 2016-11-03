@@ -16,6 +16,8 @@
 
   (.contains (string/lower-case (str str1)) (string/lower-case (str str2))))
 
+(def ci-match case-insensitive-match)
+
 (defn pair-has-key
   [name]
 
@@ -39,11 +41,17 @@
                  ))
          )))
 
-(defmacro pred-and
+(defmacro qand
   [& xs]
 
   `(fn [[~'key ~'value]]
     (and ~@xs)))
+
+(defmacro qpred
+  [& xs]
+
+  `(fn [[~'key ~'value]]
+     ~@xs))
 
 (defn query
   "Given a db (list of maps) and some predicates, return all maps that
@@ -68,14 +76,10 @@
 
 (def r (time
         (query gd-edit.core/db
-               (fn [[key value]]
-                 (and  (case-insensitive-match key "recordname")
-                       (case-insensitive-match value "affix")))
+               (qand  (ci-match key "recordname")
+                      (ci-match value "affix"))
 
-               (fn [[key value]]
-                 (case-insensitive-match key "cold"))
+               (qpred (ci-match key "cold"))
 
-               (fn [[key value]]
-                 (case-insensitive-match key "levelreq")
-                 (= value 74))
-               )))
+               (qand (ci-match key "levelreq")
+                     (= value 74)))))
