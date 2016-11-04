@@ -157,10 +157,33 @@
     :else
     (strip-quotes input)))
 
+(defn valid-target?
+  [target]
+
+  (if (contains? #{"recordname" "key" "value"} target)
+    true
+    false))
+
+(defn valid-op?
+  [op]
+
+  (if (contains? #{"~" "=" "!=" ">" "<" ">=" "<="} op)
+    true
+    false))
+
 (defn tokens->query-predicate
   "Given a list of token that represents a query clause, return a predicate suitable for used
   by the query function"
   [[target op query-val & rest]]
+
+  (if-not (valid-target? target)
+    (throw (Throwable. (format "\"%s\" is not a valid target" target))))
+  (if (nil? op)
+    (throw (Throwable. "No op supplied")))
+  (if-not (valid-op? op)
+    (throw (Throwable. (format "\"%s\" is not a valid op" op))))
+  (if (nil? query-val)
+    (throw (Throwable. "Missing query value")))
 
   (let [coerced-val (coerce-query-val query-val)]
     (cond

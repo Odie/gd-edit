@@ -80,11 +80,15 @@
 (defn query-comand-handler
   [[input tokens]]
 
-  (let [predicates (query/query-string->query-predicates input)
+  (let [predicates (try (query/query-string->query-predicates input)
+                        (catch Throwable e (println (str "Query syntax error: " (.getMessage e)))))]
 
-        ;; Run a query against the db using generated predicates
-        result (->> (apply query/query @g/db predicates)
-                    (sort-by :recordname))]
+    (when (not (nil? predicates))
 
-    (set-new-query-result! g/query-state result)
-    (print-paginated-result @g/query-state)))
+      ;; Run a query against the db using generated predicates
+      (set-new-query-result! g/query-state
+
+                             (->> (apply query/query @g/db predicates)
+                                  (sort-by :recordname)))
+
+      (print-paginated-result @g/query-state))))
