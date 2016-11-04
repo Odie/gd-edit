@@ -75,40 +75,104 @@
    db
    predicates))
 
-(defn token->op-fn
-  [op-token]
+
+(defn query-string-compare
+  [op record-val query-val]
+
+  ;; Strings can only be compared using ~ = !=
+  ;; All other ops will return false
+  (cond
+    (= op "~")
+    (ci-match record-val query-val)
+
+    (= op "=")
+    (= record-val query-val)
+
+    (= op "!=")
+    (not= record-val query-val)
+
+    :else
+    false))
+
+(defn query-numeric-compare
+  [op record-val query-val]
 
   (cond
-    (= op-token "~")
-    ci-match
+    (= op "=")
+    (= record-val query-val)
 
-    (= op-token "=")
-    =
+    (= op ">")
+    (> record-val query-val)
 
-    (= op-token ">")
-    >
+    (= op "<")
+    (< record-val query-val)
 
-    (= op-token "<")
-    <
+    (= op "!=")
+    (not= record-val query-val)
 
-    (= op-token "!=")
-    not=))
+    (= op ">=")
+    (>= record-val query-val)
+
+    (= op "<=")
+    (<= record-val query-val)
+
+    :else
+    false))
+
+
+(defn- numeric?
+  [item]
+
+  (or (integer? item) (float? item)))
+
+
+(defn query-compare
+  [op record-val query-val]
+
+  (cond
+    (and (string? record-val) (string? query-val))
+    (query-string-compare op record-val query-val)
+
+    (and (numeric? record-val) (numeric? query-val))
+    (query-numeric-compare op record-val query-val)
+
+    :else
+    false))
+
+(defn strip-quotes
+  [input]
+  (string/replace input #"^\"|\"$" ""))
+
+(defn coerce-query-val
+  [input]
+
+  (cond
+    ;; Does it look like an integer?
+    (re-matches #"^[0-9]*$" input)
+    (Integer/parseInt input)
+
+    (re-matches #"^[0-9]*(?:\.[0-9]*)?$" input)
+    (Float/parseFloat input)
+
+    :else
+    (strip-quotes input)))
 
 (defn tokens->query-predicate
   "Given a list of token that represents a query clause, return a predicate suitable for used
   by the query function"
   [[target op query-val & rest]]
 
-  (cond
-    (= target "key")
-    (qpred ((token->op-fn op) key query-val))
+  (let [coerced-val (coerce-query-val query-val)]
+    (cond
+      (= target "key")
+      (qpred (query-compare op key coerced-val))
 
-    (= target "value")
-    (qpred ((token->op-fn op) value query-val))
+      (= target "value")
+      (qpred (query-compare op value coerced-val))
 
-    :else
-    (qand  (ci-match key target)
-           ((token->op-fn op) value query-val))))
+      :else
+      (qand  (ci-match key target)
+             (query-compare op value coerced-val)))))
 
 ;; The outputted query predicates is currently a list of predicates.
 ;; An item might also be a vector, in which case, a single kv-pair must satisfy all the predicates
@@ -130,7 +194,7 @@
       (recur (drop 3 ast)
              (conj result-predicates (tokens->query-predicate (take 3 ast))))
 
-      ;; If it is a vector, we're going to recurisvely process that node and append the results
+      ;; If it is a vector, we're going to recursively process that node and append the results
       (sequential? (first ast))
       (recur (drop 1 ast)
              (conj result-predicates (query-ast->query-predicates (first ast))
@@ -165,10 +229,13 @@
         ;; Move whatever we've collected into the last item of the ast
         ;; Grab the last 2 items, conj the last one into the second to the last one
         (= token ")")
-        (let [last-nodes (take-last 2 ast-stack)]
+        (let [last-node (peek ast-stack)
+              ast (pop ast-stack)
+              ]
           (recur (rest ts)
-                 (conj (drop-last 2 ast-stack)
-                       (conj (first last-nodes) (second last-nodes)))))
+                 (assoc ast
+                        (dec (count ast))
+                        (conj (last ast) last-node))))
 
         ;; Just another token?
         :else
@@ -181,7 +248,7 @@
 
 (defn query-string->tokens
   [input]
-  (into [] (re-seq #"[\(\)\~\>\<=]|(?:\!\=)|\"[^\"]+\"|\w+" input)))
+  (into [] (re-seq #"(?:\!\=)|(?:\>\=)|(?:\<\=)|[\(\)\~\<\>\=]|\"[^\"]+\"|[\w\/\.]+" input)))
 
 (defn query-string->query-predicates
   [input]
