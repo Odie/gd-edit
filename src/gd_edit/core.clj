@@ -36,6 +36,7 @@
   {
    ["exit"] (fn [input] (System/exit 0))
    ["q"] (fn [input] (handlers/query-comand-handler input))
+   ["qshow"] (fn [input] (handlers/query-show-handler input))
    })
 
 (defn- find-command
