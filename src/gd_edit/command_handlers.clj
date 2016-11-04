@@ -50,7 +50,7 @@
     (doseq [[key value] kv-map]
 
       (when (not= key :recordname)
-        (println (format "\t%s: %s" key value))
+        (println (format "\t%s: %s" (style key :white) (style value :darkgray)))
         ))
 
     (println)
@@ -67,7 +67,7 @@
 
     (print-result-records paginated-result)
     (println)
-    (println (format "%d-%d / %d matched records" start-entry end-entry (count result)))))
+    (println (format "%d-%d / %d %s" start-entry end-entry (count result) (style "matched records" :darkgray)))))
 
 
 (defn query-show-handler
