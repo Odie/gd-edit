@@ -5,6 +5,7 @@
             [gd-edit.utils :as utils]
             [gd-edit.globals]
             [gd-edit.command-handlers :as handlers]
+            [gd-edit.jline :as jl]
             [clansi.core :refer [style]]
             [clojure.string :as string])
   (:import  [java.nio ByteBuffer]
@@ -22,11 +23,8 @@
 (defn- repl-read
   []
 
-  ;; Print the prompt
-  (print (style "> " :green))
-
   ;; Read a line
-  (tokenize-input (read-line)))
+  (tokenize-input (jl/readline (style "> " :green ))))
 
 
 (defn split-at-space
@@ -38,6 +36,7 @@
    ["exit"] (fn [input] (System/exit 0))
    ["q"] (fn [input] (handlers/query-comand-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
+   ["qn"] (fn [input] (handlers/query-show-handler input))
    })
 
 (defn- find-command
@@ -135,6 +134,7 @@
 (defn -main
   [& args]
 
+  (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (initialize)
   (repl))
 
