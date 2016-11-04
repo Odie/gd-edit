@@ -5,7 +5,8 @@
             [gd-edit.utils :as utils]
             [gd-edit.globals]
             [gd-edit.command-handlers :as handlers]
-            [clansi.core :refer [style]])
+            [clansi.core :refer [style]]
+            [clojure.string :as string])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel])
@@ -76,9 +77,15 @@
   ;; called
   (let [command (find-command tokens command-map)
         handler (command-map command)]
+
     (if (nil? handler)
       (println "Don't know how to handle this command")
-      (handler [input-vec (drop (count command) tokens)]))))
+
+      ;; Remove the tokens that represent the command itself
+      ;; They shouldn't be passed to the command handlers
+      (let [param-tokens (drop (count command) tokens)
+            command-input-string (string/join " " param-tokens)]
+        (handler [command-input-string tokens])))))
 
 (defn- repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"

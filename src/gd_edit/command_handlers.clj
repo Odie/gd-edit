@@ -80,15 +80,11 @@
 (defn query-comand-handler
   [[input tokens]]
 
-  ;; TODO Add token validation!
-
-  (let [;; Generate predicates from the input tokens
-        clauses (partition 3 tokens)
-        predicates (map query/tokens->query-predicate clauses)
+  (let [predicates (query/query-string->query-predicates input)
 
         ;; Run a query against the db using generated predicates
         result (->> (apply query/query @g/db predicates)
-                     (sort-by :recordname))]
+                    (sort-by :recordname))]
 
     (set-new-query-result! g/query-state result)
     (print-paginated-result @g/query-state)))
