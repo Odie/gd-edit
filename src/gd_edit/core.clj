@@ -101,16 +101,30 @@
     (repl-iter)))
 
 
+(defn- get-db-filepath
+  []
+
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\database\\database.arz"))
+
+(defn- get-localization-filepath
+  []
+
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\resources\\text_en.arc"))
+
 (defn- initialize
   []
 
   (let [[localization-load-time localization-table]
         (utils/timed
-         (arc-reader/load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
+         (arc-reader/load-localization-table (get-localization-filepath)))
 
         [db-load-time db]
         (utils/timed
-         (arz-reader/load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"
+         (arz-reader/load-game-db (get-db-filepath)
                                   localization-table))]
 
     (reset! gd-edit.globals/db db)
