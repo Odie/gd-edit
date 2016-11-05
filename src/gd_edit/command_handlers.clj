@@ -59,28 +59,6 @@
     ))
 
 
-(defn- order-query-results
-  [result query-state]
-
-  (let [{:keys [filter-max-fields]} query-state]
-
-    ;; How will we display the results?
-    (cond
-      (not (empty? filter-max-fields))
-      (reduce
-       (fn [transformed-result sort-field]
-         (->> transformed-result
-              (sort-by (fn [record] (get record sort-field)) >)))
-       result
-       filter-max-fields
-       )
-
-      ;; By default, we'll sort the results by the recordname
-      :else
-      (->> result
-           (sort-by :recordname))
-      )))
-
 (defn print-paginated-result
   [query-state]
 
@@ -112,8 +90,7 @@
 
       ;; Run a query against the db using generated predicates
       (set-new-query-result! g/query-state
-                             (-> (apply query/query @g/db predicates)
-                                 (order-query-results @g/query-state))
+                             (query/query @g/db predicates)
                              input)
 
       (print-paginated-result @g/query-state))))
@@ -126,12 +103,3 @@
 "usage: q <target> <op> <value>
        <target> can be \"recordname\", \"value\", or \"key\"")
       (run-query input)))
-
-
-(defn query-filter-handler
-  [[input tokens]]
-
-  (if (and (u/ci-match (first tokens) "max") (not (nil? (second tokens))))
-    (swap! g/query-state update :filter-max-fields conj (second tokens)))
-
-  (println "Maximizing by fields: " (:filter-max-fields @g/query-state)))

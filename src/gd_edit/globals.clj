@@ -5,5 +5,4 @@
   (atom {:query-string nil
          :result nil
          :page 0
-         :pagination-size 10
-         :filter-max-fields []}))
+         :pagination-size 10}))

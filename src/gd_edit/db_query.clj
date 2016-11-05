@@ -34,10 +34,9 @@
   `(fn [[~'key ~'value]]
      ~@xs))
 
-(defn query
-  "Given a db (list of maps) and some predicates, return all maps that
-  satisfies all predicates "
-  [db & predicates]
+(defn- predicates->result
+  "Given a db and some predicates, return a list of results that satisfies all predicates."
+  [db predicates]
 
   (reduce
    (fn [accum query-pred]
@@ -67,6 +66,33 @@
    db
    predicates))
 
+
+(defn- order-results
+  "Order the results by the values of given in the order vector"
+  [result order]
+
+  (cond
+    (not (empty? order))
+    (reduce
+     (fn [transformed-result sort-field]
+       (->> transformed-result
+            (sort-by (fn [record] (get record sort-field)) >)))
+     result
+     (reverse order)
+     )
+
+    ;; By default, we'll sort the results by the recordname
+    :else
+    (->> result
+         (sort-by :recordname))))
+
+(defn query
+  "Given a db (list of maps) and some predicates, return all maps that
+  satisfies all predicates "
+  [db {:keys [predicates order]}]
+
+  (-> (predicates->result db predicates)
+      (order-results order)))
 
 (defn query-string-compare
   [op record-val query-val]
@@ -195,25 +221,30 @@
   [query-ast]
 
   (loop [ast query-ast
-         result-predicates []]
+         result {:order []
+                 :predicates []}]
 
     (cond
       ;; Done walking through the ast?
       (empty? ast)
-      result-predicates
+      result
+
+      ;; order keyword found? sort the info into a separate :order vector
+      (= (string/lower-case (first ast)) "order")
+      (recur (drop 2 ast)
+             (update result :order conj (second ast)))
 
       ;; Take a peek at the first item
       (not (sequential? (first ast)))
       ;; If it's not a vector, assume we can just grab 3 items and use that as a clause
       ;; Note that we're not checking any kind of grammar here...
       (recur (drop 3 ast)
-             (conj result-predicates (tokens->query-predicate (take 3 ast))))
+             (update result :predicates conj (tokens->query-predicate (take 3 ast))))
 
       ;; If it is a vector, we're going to recursively process that node and append the results
       (sequential? (first ast))
       (recur (drop 1 ast)
-             (conj result-predicates (query-ast->query-predicates (first ast))
-             ))
+             (update result :predicates conj (query-ast->query-predicates (first ast))))
       )))
 
 (defn tokens->query-ast

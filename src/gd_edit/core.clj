@@ -37,7 +37,6 @@
    ["q"] (fn [input] (handlers/query-comand-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
    ["qn"] (fn [input] (handlers/query-show-handler input))
-   ["q" "filter"] (fn [input] (handlers/query-filter-handler input))
    })
 
 (defn- find-command
