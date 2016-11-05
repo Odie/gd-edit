@@ -1,6 +1,7 @@
 (ns gd-edit.db-query
   (:require [clojure.string :as string]
-            [gd-edit.utils :as u]))
+            [gd-edit.utils :as u]
+            [clj-fuzzy.metrics :as metrics]))
 
 (defn pair-has-key
   [name]
@@ -67,24 +68,56 @@
    predicates))
 
 
+(defn string-best-match
+  [distance-fn haystack needle]
+
+  (reduce
+     (fn [best candidate]
+
+       (if (> (distance-fn best needle)
+              (distance-fn candidate needle))
+         candidate
+         best))
+
+     (first haystack)
+     haystack
+     ))
+
+(defn- string-best-matches
+  "Transform candidates into their best matches defined by the fieldnames"
+  [fieldnames candidates]
+
+  (map
+   (fn [item]
+     (string-best-match metrics/jaccard fieldnames item))
+
+   candidates))
+
+
 (defn- order-results
   "Order the results by the values of given in the order vector"
   [result order]
 
-  (cond
-    (not (empty? order))
-    (reduce
-     (fn [transformed-result sort-field]
-       (->> transformed-result
-            (sort-by (fn [record] (get record sort-field)) >)))
-     result
-     (reverse order)
-     )
+  (let [order-fields (string-best-matches (->> result
+                                               first
+                                               keys
+                                               (map str))
+                                          order
+                                          )]
+    (cond
+      (not (empty? order-fields))
+      (reduce
+       (fn [transformed-result sort-field]
+         (->> transformed-result
+              (sort-by (fn [record] (or (get record sort-field) 0)) >)))
+       result
+       (reverse order-fields)
+       )
 
-    ;; By default, we'll sort the results by the recordname
-    :else
-    (->> result
-         (sort-by :recordname))))
+      ;; By default, we'll sort the results by the recordname
+      :else
+      (->> result
+           (sort-by :recordname)))))
 
 (defn query
   "Given a db (list of maps) and some predicates, return all maps that
