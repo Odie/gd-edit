@@ -3,7 +3,11 @@
             [gd-edit.arz-reader :as arz-reader]
             [gd-edit.arc-reader :as arc-reader]
             [gd-edit.utils :as utils]
-            )
+            [gd-edit.globals]
+            [gd-edit.command-handlers :as handlers]
+            [gd-edit.jline :as jl]
+            [clansi.core :refer [style]]
+            [clojure.string :as string])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel])
@@ -19,11 +23,8 @@
 (defn- repl-read
   []
 
-  ;; Print the prompt
-  (print "> ")
-
   ;; Read a line
-  (tokenize-input (read-line)))
+  (tokenize-input (jl/readline (style "> " :green ))))
 
 
 (defn split-at-space
@@ -33,6 +34,9 @@
 (def command-map
   {
    ["exit"] (fn [input] (System/exit 0))
+   ["q"] (fn [input] (handlers/query-comand-handler input))
+   ["qshow"] (fn [input] (handlers/query-show-handler input))
+   ["qn"] (fn [input] (handlers/query-show-handler input))
    })
 
 (defn- find-command
@@ -61,6 +65,7 @@
    []
    tokens))
 
+
 (defn- repl-eval
   [[input tokens :as input-vec] command-map]
 
@@ -71,28 +76,58 @@
   ;; called
   (let [command (find-command tokens command-map)
         handler (command-map command)]
+
     (if (nil? handler)
       (println "Don't know how to handle this command")
-      (handler input-vec))))
+
+      ;; Remove the tokens that represent the command itself
+      ;; They shouldn't be passed to the command handlers
+      (let [param-tokens (drop (count command) tokens)
+            command-input-string (string/join " " param-tokens)]
+        (handler [command-input-string tokens])))))
+
+(defn- repl-iter
+  "Runs one repl iteration. Useful when the program is run from the repl"
+  []
+
+  (repl-eval (repl-read) command-map)
+  (println))
+
 
 (defn- repl
   []
 
   (while true
-    (repl-eval (repl-read) command-map)
-    (println)))
+    (repl-iter)))
 
 
-(defn -main
-  [& args]
+(defn- get-db-filepath
+  []
+
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\database\\database.arz"))
+
+(defn- get-localization-filepath
+  []
+
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"
+    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\resources\\text_en.arc"))
+
+(defn- initialize
+  []
+
   (let [[localization-load-time localization-table]
         (utils/timed
-         (arc-reader/load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
+         (arc-reader/load-localization-table (get-localization-filepath)))
 
         [db-load-time db]
         (utils/timed
-         (arz-reader/load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"
+         (arz-reader/load-game-db (get-db-filepath)
                                   localization-table))]
+
+    (reset! gd-edit.globals/db db)
 
     (println (count localization-table)
              "localization strings loaded in"
@@ -107,6 +142,14 @@
     (println)
     (println "Ready to rock!")
     (println)
-
-    (repl)
   ))
+
+
+(defn -main
+  [& args]
+
+  (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
+  (initialize)
+  (repl))
+
+#_(initialize)
