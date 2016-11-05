@@ -1,14 +1,6 @@
 (ns gd-edit.db-query
-  (:require [clojure.string :as string]))
-
-
-(defn case-insensitive-match
-  "Check if str2 can be found in str1"
-  [str1 str2]
-
-  (.contains (string/lower-case (str str1)) (string/lower-case (str str2))))
-
-(def ci-match case-insensitive-match)
+  (:require [clojure.string :as string]
+            [gd-edit.utils :as u]))
 
 (defn pair-has-key
   [name]
@@ -83,7 +75,7 @@
   ;; All other ops will return false
   (cond
     (= op "~")
-    (ci-match record-val query-val)
+    (u/ci-match record-val query-val)
 
     (= op "=")
     (= record-val query-val)
@@ -194,7 +186,7 @@
       (qpred (query-compare op value coerced-val))
 
       :else
-      (qand  (ci-match key target)
+      (qand  (u/ci-match key target)
              (query-compare op value coerced-val)))))
 
 ;; The outputted query predicates is currently a list of predicates.

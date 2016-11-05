@@ -37,6 +37,7 @@
    ["q"] (fn [input] (handlers/query-comand-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
    ["qn"] (fn [input] (handlers/query-show-handler input))
+   ["q" "filter"] (fn [input] (handlers/query-filter-handler input))
    })
 
 (defn- find-command
@@ -84,7 +85,7 @@
       ;; They shouldn't be passed to the command handlers
       (let [param-tokens (drop (count command) tokens)
             command-input-string (string/join " " param-tokens)]
-        (handler [command-input-string tokens])))))
+        (handler [command-input-string param-tokens])))))
 
 (defn- repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"

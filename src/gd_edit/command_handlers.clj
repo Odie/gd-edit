@@ -1,6 +1,7 @@
 (ns gd-edit.command-handlers
   (:require [gd-edit.db-query :as query]
             [gd-edit.globals :as g]
+            [gd-edit.utils :as u]
             [clansi.core :refer [style]]))
 
 (defn paginate-next
@@ -28,7 +29,7 @@
 
 
 (defn get-paginated-result
-  [{:keys [result page pagination-size] :as query-state}]
+  [result {:keys [page pagination-size] :as query-state}]
 
   (->> result
        (drop (* page pagination-size))
@@ -36,9 +37,10 @@
 
 
 (defn set-new-query-result!
-  [query-state-atom new-result]
+  [query-state-atom new-result query-string]
 
   (reset! g/query-state (assoc @g/query-state
+                               :query-string query-string
                                :result new-result
                                :page 0)))
 
@@ -56,11 +58,34 @@
     (println)
     ))
 
+
+(defn- order-query-results
+  [result query-state]
+
+  (let [{:keys [filter-max-fields]} query-state]
+
+    ;; How will we display the results?
+    (cond
+      (not (empty? filter-max-fields))
+      (reduce
+       (fn [transformed-result sort-field]
+         (->> transformed-result
+              (sort-by (fn [record] (get record sort-field)) >)))
+       result
+       filter-max-fields
+       )
+
+      ;; By default, we'll sort the results by the recordname
+      :else
+      (->> result
+           (sort-by :recordname))
+      )))
+
 (defn print-paginated-result
   [query-state]
 
   (let [{:keys [result page pagination-size]} query-state
-        paginated-result (get-paginated-result query-state)
+        paginated-result (get-paginated-result result query-state)
         start-entry (* page pagination-size)
         end-entry (+ start-entry (min (count paginated-result) pagination-size))
         ]
@@ -87,9 +112,9 @@
 
       ;; Run a query against the db using generated predicates
       (set-new-query-result! g/query-state
-
-                             (->> (apply query/query @g/db predicates)
-                                  (sort-by :recordname)))
+                             (-> (apply query/query @g/db predicates)
+                                 (order-query-results @g/query-state))
+                             input)
 
       (print-paginated-result @g/query-state))))
 
@@ -101,3 +126,12 @@
 "usage: q <target> <op> <value>
        <target> can be \"recordname\", \"value\", or \"key\"")
       (run-query input)))
+
+
+(defn query-filter-handler
+  [[input tokens]]
+
+  (if (and (u/ci-match (first tokens) "max") (not (nil? (second tokens))))
+    (swap! g/query-state update :filter-max-fields conj (second tokens)))
+
+  (println "Maximizing by fields: " (:filter-max-fields @g/query-state)))
