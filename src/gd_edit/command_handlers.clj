@@ -49,14 +49,14 @@
   [results]
   (doseq [kv-map results]
     (println (:recordname kv-map))
-    (doseq [[key value] kv-map]
+    (doseq [[key value] (->> kv-map
+                             seq
+                             (filter #(not (keyword? (first %1))))
+                             (sort-by first))]
 
-      (when (not= key :recordname)
-        (println (format "\t%s: %s" (style key :white) (style value :darkgray)))
-        ))
+      (println (format "\t%s: %s" (style key :white) (style value :darkgray))))
 
-    (println)
-    ))
+    (println)))
 
 
 (defn print-paginated-result
