@@ -240,7 +240,8 @@
         (do
           ;; We should be left with a single constructed ast node
           ;; If this didn't happen, then there is an un-closed paren in the query string somewhere
-          (assert (= (count ast-stack) 1))
+          (if (not= (count ast-stack) 1)
+            (throw (Throwable. "unmatched parentheses")))
           (first ast-stack))
 
         ;; Opening new expression

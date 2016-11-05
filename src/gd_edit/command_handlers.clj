@@ -77,8 +77,8 @@
   (print-paginated-result @g/query-state))
 
 
-(defn query-comand-handler
-  [[input tokens]]
+(defn run-query
+  [input]
 
   (let [predicates (try (query/query-string->query-predicates input)
                         (catch Throwable e (println (str "Query syntax error: " (.getMessage e)))))]
@@ -92,3 +92,12 @@
                                   (sort-by :recordname)))
 
       (print-paginated-result @g/query-state))))
+
+(defn query-comand-handler
+  [[input tokens]]
+
+  (if (empty? input)
+      (println
+"usage: q <target> <op> <value>
+       <target> can be \"recordname\", \"value\", or \"key\"")
+      (run-query input)))
