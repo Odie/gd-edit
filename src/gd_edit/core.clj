@@ -6,8 +6,9 @@
             [gd-edit.globals]
             [gd-edit.command-handlers :as handlers]
             [gd-edit.jline :as jl]
-            [clansi.core :refer [style]]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [jansi-clj.auto]
+            [jansi-clj.core :refer :all])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel])
@@ -24,7 +25,7 @@
   []
 
   ;; Read a line
-  (tokenize-input (jl/readline (style "> " :green ))))
+  (tokenize-input (jl/readline (green "> "))))
 
 
 (defn split-at-space

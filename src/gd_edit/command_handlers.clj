@@ -2,7 +2,7 @@
   (:require [gd-edit.db-query :as query]
             [gd-edit.globals :as g]
             [gd-edit.utils :as u]
-            [clansi.core :refer [style]]))
+            [jansi-clj.core :refer :all]))
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -54,7 +54,7 @@
                              (filter #(not (keyword? (first %1))))
                              (sort-by first))]
 
-      (println (format "\t%s: %s" (style key :white) (style value :darkgray))))
+      (println (format "\t%s: %s" key (yellow value))))
 
     (println)))
 
@@ -65,12 +65,11 @@
   (let [{:keys [result page pagination-size]} query-state
         paginated-result (get-paginated-result result query-state)
         start-entry (* page pagination-size)
-        end-entry (+ start-entry (min (count paginated-result) pagination-size))
-        ]
+        end-entry (+ start-entry (min (count paginated-result) pagination-size))]
 
     (print-result-records paginated-result)
     (println)
-    (println (format "%d-%d / %d %s" start-entry end-entry (count result) (style "matched records" :darkgray)))))
+    (println (format "%d-%d / %d %s" start-entry end-entry (count result) (yellow "matched records")))))
 
 
 (defn query-show-handler

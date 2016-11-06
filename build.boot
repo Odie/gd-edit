@@ -6,6 +6,8 @@
           :dependencies   '[[org.clojure/clojure "RELEASE"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
                             [org.jline/jline "3.0.1"]
+                            [org.fusesource.jansi/jansi "1.14"]
+                            [jansi-clj "0.1.0"]
                             [adzerk/boot-test "RELEASE" :scope "test"]])
 
 (task-options!
