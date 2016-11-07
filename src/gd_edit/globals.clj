@@ -2,6 +2,7 @@
 
 (def db (atom {}))
 (def query-state
-  (atom {:result nil
+  (atom {:query-string nil
+         :result nil
          :page 0
          :pagination-size 10}))

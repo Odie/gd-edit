@@ -1,4 +1,5 @@
 (ns gd-edit.utils
+  (:require [clojure.string :as string])
   (:import  [java.nio ByteBuffer]
             [java.nio.channels FileChannel]))
 
@@ -28,3 +29,11 @@
   "Given duration in nanoseconds, return the duration in seconds"
   [time]
   (/ (float time) 1000000000))
+
+(defn case-insensitive-match
+  "Check if str2 can be found in str1"
+  [str1 str2]
+
+  (.contains (string/lower-case (str str1)) (string/lower-case (str str2))))
+
+(def ci-match case-insensitive-match)

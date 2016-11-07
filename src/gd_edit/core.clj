@@ -6,8 +6,8 @@
             [gd-edit.globals]
             [gd-edit.command-handlers :as handlers]
             [gd-edit.jline :as jl]
-            [clansi.core :refer [style]]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [jansi-clj.core :refer :all])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel])
@@ -24,7 +24,7 @@
   []
 
   ;; Read a line
-  (tokenize-input (jl/readline (style "> " :green ))))
+  (tokenize-input (jl/readline (green "> "))))
 
 
 (defn split-at-space
@@ -37,6 +37,8 @@
    ["q"] (fn [input] (handlers/query-comand-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
    ["qn"] (fn [input] (handlers/query-show-handler input))
+   ["db"] (fn [input] (handlers/db-show-handler input))
+   ["db" "show"] (fn [input] (handlers/db-show-handler input))
    })
 
 (defn- find-command
@@ -84,7 +86,7 @@
       ;; They shouldn't be passed to the command handlers
       (let [param-tokens (drop (count command) tokens)
             command-input-string (string/join " " param-tokens)]
-        (handler [command-input-string tokens])))))
+        (handler [command-input-string param-tokens])))))
 
 (defn- repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"
@@ -149,6 +151,7 @@
   [& args]
 
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
+  (jansi-clj.core/install!)
   (initialize)
   (repl))
 
