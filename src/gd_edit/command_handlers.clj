@@ -2,7 +2,8 @@
   (:require [gd-edit.db-query :as query]
             [gd-edit.globals :as g]
             [gd-edit.utils :as u]
-            [jansi-clj.core :refer :all]))
+            [jansi-clj.core :refer :all]
+            [clojure.string :as string]))
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -102,3 +103,83 @@
 "usage: q <target> <op> <value>
        <target> can be \"recordname\", \"value\", or \"key\"")
       (run-query input)))
+
+(defn string-first-n-path-components
+  "Given a path, return a path with the first n path components"
+  [n path]
+
+  (clojure.string/join "/" (take n (clojure.string/split path #"/"))))
+
+(defn db-partial-record-path-matches
+  [db path]
+
+  (let [paths (->> db
+                   (map :recordname))]
+
+    ;; Generate a set of paths such that...
+    (reduce (fn [accum item]
+
+              ;; If the items first n components are a partial match to the user specified path
+              (if (every? (fn [item-pair]
+                            (u/ci-match (second item-pair) (first item-pair)))
+
+                          (partition 2 (interleave (clojure.string/split path #"/")
+                                                   (clojure.string/split item #"/"))))
+
+                ;; Take the string of the first n+1 components and put it in the set
+                (conj accum item)
+                accum
+                ))
+
+            []
+            paths)))
+
+(defn db-show-handler
+  [[input tokens]]
+
+  (let [path (first tokens)]
+    (if (nil? path)
+      (println "Please provide some path to attempt matching")
+
+      (let [sorted-matches
+
+            ;; Grab a list of items from the db that partially matches the specified path
+            (->> (db-partial-record-path-matches @gd-edit.globals/db path)
+
+                 ;; Consolidate the search so we only have n+1 path components
+                 (reduce (fn [accum item]
+                           (conj accum
+                                  (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
+                         #{})
+
+                 ;; Sort the matches
+                 (sort))
+
+            ;; It's possible for the user to target a single record using "db show".
+            ;; It that happens, we should just display the contents of that record instead of a
+            ;; list of matched paths
+            ;; Try to fetch the full recordname of the match now
+            sole-match-recordname
+            (if (= 1 (count sorted-matches))
+              (first (db-partial-record-path-matches @gd-edit.globals/db path))
+              nil)]
+
+        ;; If we have a single record match
+        (if sole-match-recordname
+
+          ;; Locate the record by name
+          (->> (filter (fn [item]
+                         (= (:recordname item) sole-match-recordname))
+                       @gd-edit.globals/db)
+
+               ;; Print the record
+               (print-result-records))
+
+
+          ;; If we have multiple record matches...
+          ;; Just print the names
+          (do
+            (doseq [item sorted-matches]
+              (println item))
+            (println)
+            (println (count sorted-matches) " matches")))))))

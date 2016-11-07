@@ -7,7 +7,6 @@
             [gd-edit.command-handlers :as handlers]
             [gd-edit.jline :as jl]
             [clojure.string :as string]
-            [jansi-clj.auto]
             [jansi-clj.core :refer :all])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
@@ -38,6 +37,8 @@
    ["q"] (fn [input] (handlers/query-comand-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
    ["qn"] (fn [input] (handlers/query-show-handler input))
+   ["db"] (fn [input] (handlers/db-show-handler input))
+   ["db" "show"] (fn [input] (handlers/db-show-handler input))
    })
 
 (defn- find-command
@@ -150,6 +151,7 @@
   [& args]
 
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
+  (jansi-clj.core/install!)
   (initialize)
   (repl))
 
