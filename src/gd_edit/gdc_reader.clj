@@ -188,11 +188,26 @@
                   (s/variable-count UID)
                   :length 3)
 
-   ;; [StaticCount(3)]
-   ;; public List<UID> currentRespawn = new List<UID>();
-
    :current-respawn (s/variable-count UID
                      :length 3)
+))
+
+(def Block6
+  (s/ordered-map
+   :version :int32
+
+   :teleporter-points (s/variable-count
+                       (s/variable-count UID)
+                       :length 3)
+   ))
+
+(def Block7
+  (s/ordered-map
+   :version :int32
+
+   :markers (s/variable-count
+             (s/variable-count UID)
+             :length 3)
 ))
 
 (defn unsigned-long
@@ -460,7 +475,7 @@
 
         ;; Verify we have the correct enc-state at this point
         checksum (Integer/toUnsignedLong (.getInt bb))
-        ;; _ (assert (= checksum (:enc-state @context)))
+        _ (assert (= checksum (:enc-state @context)))
         ]
 
     (assoc block-data :block-id id)))
@@ -495,8 +510,10 @@
         block3 (read-block bb enc-context)
         block4 (read-block bb enc-context)
         block5 (read-block bb enc-context)
+        block6 (read-block bb enc-context)
+        block7 (read-block bb enc-context)
         ]
 
-    block5))
+    block7))
 
-#_(def r (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+#_(def r (time  (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
