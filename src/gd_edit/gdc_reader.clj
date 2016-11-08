@@ -719,23 +719,16 @@
 
         mystery-field (read-bytes! bb enc-context 16)
 
-        block1 (read-block bb enc-context)
-        block2 (read-block bb enc-context)
-        block3 (read-block bb enc-context)
-        block4 (read-block bb enc-context)
-        block5 (read-block bb enc-context)
-        block6 (read-block bb enc-context)
-        block7 (read-block bb enc-context)
-        block17 (read-block bb enc-context)
-        block8 (read-block bb enc-context)
-        block12 (read-block bb enc-context)
-        block13 (read-block bb enc-context)
-        block14 (read-block bb enc-context)
-        block15 (read-block bb enc-context)
-        block16 (read-block bb enc-context)
-        block10 (read-block bb enc-context)
-        ]
+        ;; Keep reading more blocks until we've reached the end of the file
+        block-list (loop [block-list (transient [])]
+                     (if (= (.remaining bb) 0)
+                       (persistent! block-list)
 
-    block10))
+                       (recur (conj! block-list (read-block bb enc-context)))))
+
+        character (assoc (apply merge block-list)
+                         :meta-block-list block-list)
+        ]
+    character))
 
 #_(def r (time  (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
