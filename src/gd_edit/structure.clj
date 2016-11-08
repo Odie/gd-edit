@@ -162,11 +162,16 @@
 
         context (if (atom? prim-specs) prim-specs nil)
 
+        read-fn (:struct/read (meta spec))
+
         ;; Get a list of specs to read without the fieldnames
         stripped-spec (strip-orderedmap-fields spec)
 
-        ;; Read in data using the list of specs
-        values (read-spec stripped-spec bb primitive-specs context)]
+        ;; Read in the value using either a supplied read function or
+        ;; by following the spec
+        values (if-not (nil? read-fn)
+                 (read-fn bb context)
+                 (read-spec stripped-spec bb primitive-specs context))]
 
     ;; We've read all the values
     ;; If the user didn't ask for a map back, then we're done
@@ -337,8 +342,7 @@
     (if (:transform-bytes! prim-specs)
       ((:transform-bytes! prim-specs) buffer context))
 
-    (String. buffer (valid-encodings requested-encoding))
-    ))
+    (String. buffer (valid-encodings requested-encoding))))
 
 
 (defn seq->bytes

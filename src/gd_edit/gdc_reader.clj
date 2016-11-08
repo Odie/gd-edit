@@ -5,7 +5,12 @@
   (:import  [java.nio ByteBuffer]))
 
 
-(declare read-block read-byte! read-int! read-bool! read-float!)
+(declare read-block read-byte! read-int! read-bool! read-float! read-bytes! read-string!)
+
+(defn merge-meta
+  "Merges the provided map into the meta map of the provided object."
+  [obj map]
+  (with-meta obj (merge (meta obj) map)))
 
 (def FilePreamble
   (s/ordered-map
@@ -91,10 +96,6 @@
         (s/ordered-map
          :attached :bool)))
 
-(defn merge-meta
-  "Merges the provided map into the meta map of the provided object."
-  [obj map]
-  (with-meta obj (merge (meta obj) map)))
 
 (def InventorySack
   (s/ordered-map
@@ -123,7 +124,6 @@
 (defn read-block3
   [^ByteBuffer bb context]
 
-  #break
   (let [version (read-int! bb context)
         has-data (read-bool! bb context)
         sack-count (read-int! bb context)
@@ -152,8 +152,7 @@
         alternate2-set (reduce (fn  [accum _]
                                  (conj accum (s/read-struct EquipmentItem bb context)))
                                []
-                               (range 2))
-        ]
+                               (range 2))]
     {:version           version
      :has-data          has-data
      :sack-count        sack-count
@@ -165,16 +164,14 @@
      :alternate1        alternate1
      :alternate1-set    alternate1-set
      :alternate2        alternate2
-     :alternate2-set    alternate2-set
-     }
-    ))
+     :alternate2-set    alternate2-set}))
 
 (def Block4
   (s/ordered-map
-    :version :int32
-    :stash-width :int32
+    :version      :int32
+    :stash-width  :int32
     :stash-height :int32
-    :stash-items (s/variable-count StashItem)))
+    :stash-items  (s/variable-count StashItem)))
 
 (def UID
   (s/string :ascii :length 16))
@@ -268,9 +265,124 @@
 
 (def Block13
   (s/ordered-map
-   :version          :int32
-   :myFaction        :int32
+   :version        :int32
+   :my-faction     :int32
    :faction-values (s/variable-count Faction)))
+
+(defn read-hotslot
+  [^ByteBuffer bb context]
+
+  (let [type (read-int! bb context)]
+    (cond
+      (= type 0)
+      {:type type
+       :skill-name (read-string! bb context)
+       :is-item-skill (read-bool! bb context)
+       :item-name (read-string! bb context)
+       :item-equip-location (read-int! bb context)
+       }
+
+      (= type 4)
+      {type type
+       :item-name (read-string! bb context)
+       :bitmap-up (read-string! bb context)
+       :bitmap-down (read-string! bb context)
+       :default-text (read-string! bb context {:encoding :utf-16-le})
+       })))
+
+(def HotSlot
+  (merge-meta
+   (s/ordered-map
+    :skill-name          (s/string :ascii)
+    :item-name           (s/string :ascii)
+    :bitmap-up           (s/string :ascii)
+    :bitmap-down         (s/string :ascii)
+    :default-text        (s/string :ascii)
+    :type                :int32
+    :item-equip-location :int32
+    :is-item-skill       :bool)
+   {:struct/read read-hotslot}))
+
+(def Block14
+  (s/ordered-map
+   :version                :int32
+   :equipment-selection    :bool
+   :skill-window-selection :int32
+   :skill-setting-valid    :bool
+
+   :skill-sets             (s/variable-count
+                            (s/ordered-map
+                             :primary-skill   (s/string :ascii)
+                             :secondary-skill (s/string :ascii)
+                             :skill-active    :bool)
+                            :length 5)
+
+   :hotslots                (s/variable-count HotSlot :length 36)
+   :camera-distance        :float))
+
+(def Block15
+  (s/ordered-map
+   :version :int32
+   :tutorials-unlocked (s/variable-count :int32)))
+
+(def GreatestMonsterKilled
+  (s/ordered-map
+   :name               (s/string :ascii)
+   :level              :int32
+   :life-mana          :int32
+   :last-monster-hit   (s/string :ascii)
+   :last-monster-hitBy (s/string :ascii)))
+
+(def Block16
+  (s/ordered-map
+   :version               :int32
+   :playtime-seconds      :int32
+   :death-count           :int32
+   :kill-count            :int32
+   :experience-from-kills :int32
+   :health-potions-used   :int32
+   :energy-potions-used   :int32
+   :max-level             :int32
+   :hit-received          :int32
+   :hits-inflicted        :int32
+   :crits-inflicted       :int32
+   :crits-received        :int32
+   :greatest-damage-done  :float
+
+   :greatest-monster-killed (s/variable-count GreatestMonsterKilled :length 3)
+
+   :championKills         :int32
+   :lastMonsterHitDA       :float
+   :lastMonsterHitOA       :float
+   :greatestDamageReceived :float
+   :heroKills             :int32
+   :itemsCrafted          :int32
+   :relicsCrafted         :int32
+   :tier2RelicsCrafted    :int32
+   :tier3RelicsCrafted    :int32
+   :devotionShrinesUnlocked :int32
+   :oneShotChestsUnlocked :int32
+   :loreNotesCollected    :int32
+
+   :boss-kills            (s/variable-count :int32 :length 3)
+
+   :survivalGreatestWave  :int32
+   :survivalGreatestScore :int32
+   :survivalDefenseBuilt  :int32
+   :survivalPowerUpsActivated :int32
+
+   :uniqueItemsFound      :int32
+   :randomizedItemsFound  :int32))
+
+
+(def Block10
+  (s/ordered-map
+   :version               :int32
+
+   :tokens-per-difficulty (s/variable-count
+                           (s/variable-count
+                            (s/string :ascii))
+                           :length 3)))
 
 (defn unsigned-long
   [val]
@@ -354,6 +466,45 @@
 
     [buffer (decrypt-bytes! buffer context)]))
 
+(defn- buffer-size-for-string
+  [length encoding]
+
+  (cond
+    (= encoding :utf-16-le)
+    (* length 2)
+
+    :else
+    length))
+
+(defn read-string!
+  ([^ByteBuffer bb context]
+   (read-string! bb context {:static-length -1 :encoding :ascii}))
+
+  ([^ByteBuffer bb
+    {:keys [enc-state enc-table] :as context}
+    {:keys [static-length encoding]
+     :or {static-length -1
+          encoding :ascii}}]
+
+   (let [valid-encodings {:ascii "US-ASCII"
+                          :utf-8 "UTF-8"
+                          :utf-16-le "UTF-16LE"}
+
+         ;; What is the length of the string we want to read?
+         ;; If a static length has been configured, use it
+         ;; Otherwise, read the length
+         char-count (if (not= static-length -1)
+                      static-length
+                      (read-int! bb context))
+
+         byte-count (buffer-size-for-string char-count encoding)
+
+         ;; Create a temp buffer to hold the bytes before turning it into a java string
+         buffer (byte-array byte-count)]
+
+     ;; Read the bytes and turn it into a string
+     (String. (read-bytes! bb context byte-count) (valid-encodings encoding)))))
+
 (defn- read-byte-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
@@ -377,7 +528,7 @@
       (bit-and 0x00000000ffffffff)
 
       ;; turn the value back into an int
-      (int)))
+      (.intValue)))
 
 (defn- read-int-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -579,8 +730,12 @@
         block8 (read-block bb enc-context)
         block12 (read-block bb enc-context)
         block13 (read-block bb enc-context)
+        block14 (read-block bb enc-context)
+        block15 (read-block bb enc-context)
+        block16 (read-block bb enc-context)
+        block10 (read-block bb enc-context)
         ]
 
-    block2))
+    block10))
 
 #_(def r (time  (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
