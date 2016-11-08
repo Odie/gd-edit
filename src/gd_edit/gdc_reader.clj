@@ -4,6 +4,8 @@
             [clojure.string :as string])
   (:import  [java.nio ByteBuffer]))
 
+;;(set! *warn-on-reflection* true)
+(set! *unchecked-math* true)
 
 (declare read-block read-byte! read-int! read-bool! read-float! read-bytes! read-string!)
 
@@ -388,7 +390,7 @@
   [val]
 
   (if (= (type val) java.lang.Integer)
-    (.toUnsignedLong val)
+    (Integer/toUnsignedLong val)
     val))
 
 (def byte-array-type (Class/forName "[B"))
@@ -443,7 +445,7 @@
       ;; Not done?
       ;; Grab the next byte, decrypt it, store it back in the same spot
       (let [enc-val (aget buffer i)
-            val (.byteValue (bit-and 0x00000000000000ff (bit-xor enc-val enc-state)))]
+            val (byte ^long (bit-and 0x00000000000000ff (bit-xor enc-val enc-state)))]
 
         (aset buffer i val)
         (recur (inc i) limit (enc-next-state enc-val enc-state enc-table) enc-table)
@@ -503,7 +505,7 @@
          buffer (byte-array byte-count)]
 
      ;; Read the bytes and turn it into a string
-     (String. (read-bytes! bb context byte-count) (valid-encodings encoding)))))
+     (String. ^bytes (read-bytes! bb context byte-count) ^String (valid-encodings encoding)))))
 
 (defn- read-byte-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -528,7 +530,7 @@
       (bit-and 0x00000000ffffffff)
 
       ;; turn the value back into an int
-      (.intValue)))
+      (int)))
 
 (defn- read-int-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -630,7 +632,7 @@
       ;; Basically, we want to do
       ;;   uint new-val = (val << 31 | val >> 1) * 39916801
       (let [new-val (Integer/toUnsignedLong
-                     (.intValue
+                     (int
                       (unchecked-multiply
                        (long (bit-or (bit-shift-left val 31) (bit-shift-right val 1)))
                        (long 39916801))))]
@@ -689,7 +691,7 @@
 
         ;; Verify we have the correct enc-state at this point
         checksum (Integer/toUnsignedLong (.getInt bb))
-        ;; _ (assert (= checksum (:enc-state @context)))
+        _ (assert (= checksum (:enc-state @context)))
         ]
 
     (assoc block-data :block-id id)))
@@ -697,7 +699,7 @@
 (defn load-character-file
   [filepath]
 
-  (let [bb (utils/mmap filepath)
+  (let [bb ^ByteBuffer (utils/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         seed (bit-xor (.getInt bb) 1431655765)
