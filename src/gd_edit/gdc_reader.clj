@@ -168,6 +168,13 @@
      }
     ))
 
+(def Block4
+  (s/ordered-map
+    :version :UInt32
+    :stash-width :UInt32
+    :stash-height :UInt32
+    :stash-items (s/variable-count StashItem)))
+
 (defn unsigned-long
   [val]
 
@@ -466,8 +473,9 @@
         block1 (read-block bb enc-context)
         block2 (read-block bb enc-context)
         block3 (read-block bb enc-context)
+        block4 (read-block bb enc-context)
         ]
 
-    block3))
+    block4))
 
 #_(def r (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
