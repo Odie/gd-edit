@@ -178,6 +178,14 @@
       (zipmap (take-nth 2 spec) values))
     ))
 
+(defn read-spec-sequential
+  [spec bb prim-specs context]
+
+  (reduce
+   (fn [accum spec-item]
+     (conj accum (read-spec spec-item bb prim-specs context)))
+   []
+   spec))
 
 (defmethod read-spec :default
   [spec bb prim-specs context]
@@ -192,12 +200,8 @@
 
     ;; If we're looking at some sequence, assume this is a sequence of specs and
     ;; read through it all
-    (seq? spec)
-    (reduce
-     (fn [accum spec-item]
-       (conj accum (read-spec spec-item bb prim-specs context)))
-     []
-     spec)
+    (sequential? spec)
+    (read-spec-sequential spec bb prim-specs context)
 
     ;; Otherwise, we should be dealing with some kind of primitive...
     ;; Look up the primitive keyword in the primitives map
@@ -218,7 +222,7 @@
   "Tags the given spec so read-structure will return a map instead of a vector.
   Returns the collection it was given."
   [& fields]
-  (with-meta fields {:struct/return-type :map}))
+  (with-meta (into [] fields) {:struct/return-type :map}))
 
 
 (defn variable-count
@@ -248,12 +252,11 @@
 (defmethod read-spec :variable-count
   [spec bb prim-specs context]
 
-  (let [
-        ;; Destructure fields in the attached meta info
+  (let [;; Destructure fields in the attached meta info
         {length-prefix :struct/length-prefix} (meta spec)
 
         ;; Read out the count of the spec to read
-        length (read-spec length-prefix bb)
+        length (read-spec length-prefix bb prim-specs context)
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
@@ -263,11 +266,11 @@
     ;; We're abusing reduce here by producing a lazy sequence to control the number of
     ;; iterations we run.
     (reduce
-     (fn [accum _]
+     (fn [accum i]
        ;; Read another one out
-       (conj accum (read-spec unwrapped-spec bb)))
+       (conj accum (read-struct unwrapped-spec bb context)))
      []
-     (repeat length 1))))
+     (range length))))
 
 
 (defn string
@@ -307,8 +310,6 @@
 
         ;; Read out the length of the string
         length (read-spec length-prefix bb prim-specs context)
-        _ (if (> 0 length)
-            #break (print "hi"))
 
         ;; Create a temp buffer to hold the bytes before turning it into a java string
         buffer (byte-array (buffer-size-for-string length requested-encoding))
@@ -323,7 +324,8 @@
     (if (:transform-bytes! prim-specs)
       ((:transform-bytes! prim-specs) buffer context))
 
-    (String. buffer (valid-encodings requested-encoding))))
+    (String. buffer (valid-encodings requested-encoding))
+    ))
 
 
 (defn seq->bytes

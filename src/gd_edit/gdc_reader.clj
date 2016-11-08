@@ -4,6 +4,8 @@
   (:import  [java.nio ByteBuffer]))
 
 
+(declare read-block)
+
 (def FilePreamble
   (s/ordered-map
    :magic   :int32
@@ -49,6 +51,122 @@
    :health                 :float
    :energy                 :float
    ))
+
+
+(def Item
+  (s/ordered-map
+   :basename       (s/string :ascii)
+   :prefix-name    (s/string :ascii)
+   :suffix-name    (s/string :ascii)
+   :modifier-name  (s/string :ascii)
+   :transmute-name (s/string :ascii)
+   :seed           :int32
+
+   :relic-name     (s/string :ascii)
+   :relic-bonus    (s/string :ascii)
+   :relic-seed     :int32
+
+   :augment-name   (s/string :ascii)
+   :unknown        :int32
+   :augment-seed   :int32
+
+   :var1           :int32
+   :stack-count    :int32))
+
+(def InventoryItem
+  (into Item
+        (s/ordered-map
+         :X :float
+         :Y :float)))
+
+(def StashItem
+  (into Item
+        (s/ordered-map
+         :X :float
+         :Y :float)))
+
+(def EquipmentItem
+  (into Item
+        (s/ordered-map
+         :attached :bool)))
+
+(defn merge-meta
+  "Merges the provided map into the meta map of the provided object."
+  [obj map]
+  (with-meta obj (merge (meta obj) map)))
+
+(def InventorySack
+  (s/ordered-map
+   :unused :bool
+   :invetory-items (s/variable-count InventoryItem)))
+
+(def Block0 InventorySack)
+
+;; For reference only
+(def Block3
+  (s/ordered-map
+   :version           :int32
+   :has-data          :bool
+   :sack-count        :int32
+   :focused-sack      :int32
+   :selected-sack     :int32
+   :inventory-sacks   :ignore
+   :use-alt-weaponset :bool
+   :equipment         :ignore
+   :alternate1        :bool
+   :alternate1-set    :ignore
+   :alternate2        :bool
+   :alternate2-set    :ignore))
+
+
+(defn read-block3
+  [^ByteBuffer bb context]
+
+  #break
+  (let [version (read-int! bb context)
+        has-data (read-bool! bb context)
+        sack-count (read-int! bb context)
+        focused-sack (read-int! bb context)
+        selected-sack (read-int! bb context)
+
+        inventory-sacks (reduce (fn  [accum _]
+                                  (conj accum (read-block bb context)))
+                         []
+                         (range sack-count))
+
+        use-alt-weaponset (read-bool! bb context)
+
+        equipment (reduce (fn  [accum _]
+                            (conj accum (s/read-struct EquipmentItem bb context)))
+                          []
+                          (range 12))
+
+        alternate1 (read-bool! bb context)
+        alternate1-set (reduce (fn  [accum _]
+                            (conj accum (s/read-struct EquipmentItem bb context)))
+                          []
+                          (range 2))
+
+        alternate2 (read-bool! bb context)
+        alternate2-set (reduce (fn  [accum _]
+                                 (conj accum (s/read-struct EquipmentItem bb context)))
+                               []
+                               (range 2))
+        ]
+    {:version           version
+     :has-data          has-data
+     :sack-count        sack-count
+     :focused-sack      focused-sack
+     :selected-sack     selected-sack
+     :inventory-sacks   inventory-sacks
+     :use-alt-weaponset use-alt-weaponset
+     :equipment         equipment
+     :alternate1        alternate1
+     :alternate1-set    alternate1-set
+     :alternate2        alternate2
+     :alternate2-set    alternate2-set
+     }
+    ))
 
 (defn unsigned-long
   [val]
@@ -139,6 +257,24 @@
   (let [enc-val (.get bb)]
     [(short (bit-and 0x00000000000000ff (bit-xor enc-val enc-state))) (enc-next-state enc-val enc-state enc-table)]))
 
+(defn decrypt-int
+  [val enc-state]
+
+  ;; We want to xor the value with the enc-state to get back the decrypted int.
+  ;; However, since enc-state is stored as a long, we'll want to do some additional
+  ;; masking to get rid of the unwanted bits.
+  ;; Otherwise, when we try to turn the long value back into an int, jvm will throw
+  ;; an "out of range" exception.
+
+  ;; decrypt the value by xor-ing
+  (-> (bit-xor val enc-state)
+
+      ;; mask out useless bits (from the enc-state)
+      (bit-and 0x00000000ffffffff)
+
+      ;; turn the value back into an int
+      (int)))
+
 (defn- read-int-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
@@ -151,7 +287,7 @@
                       )]
 
     ;; Return [decrypted-value next-enc-state] pair
-    [(bit-and 0x00000000ffffffff (bit-xor enc-val enc-state)) (enc-next-state byte-data enc-state enc-table)]))
+    [(decrypt-int enc-val enc-state) (enc-next-state byte-data enc-state enc-table)]))
 
 (defn- read-bool-
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
@@ -257,23 +393,6 @@
     (throw (Throwable. "I don't understand this gdc format!"))))
 
 
-(defn decrypt-int
-  [val enc-state]
-
-  ;; We want to xor the value with the enc-state to get back the decrypted int.
-  ;; However, since enc-state is stored as a long, we'll want to do some additional
-  ;; masking to get rid of the unwanted bits.
-  ;; Otherwise, when we try to turn the long value back into an int, jvm will throw
-  ;; an "out of range" exception.
-
-  ;; decrypt the value by xor-ing
-  (-> (bit-xor val enc-state)
-
-      ;; mask out useless bits (from the enc-state)
-      (bit-and 0x00000000ffffffff)
-
-      ;; turn the value back into an int
-      (int)))
 
 (defn read-block
   [^ByteBuffer bb context]
@@ -283,16 +402,31 @@
 
         ;; Try to fetch the block spec by name
         block-spec-var (resolve (symbol (str "Block" id)))
-        _ (if (nil? block-spec-var)
+        block-spec (if-not (nil? block-spec-var)
+                     (var-get block-spec-var)
+                     nil)
+
+        ;; Try to fetch a custom read function by name
+        block-read-fn-var (resolve (symbol (str "read-block" id)))
+        block-read-fn (if-not (nil? block-read-fn-var)
+                        (var-get block-read-fn-var)
+                        nil)
+
+        ;; If neither a block spec or a custom read function can be found...
+        ;; We don't know how to read this block
+        _ (if (and (nil? block-spec) (nil? block-read-fn))
             (throw (Throwable. "Don't know how to read block " id)))
-        block-spec (var-get block-spec-var)
 
         ;; Get the total length of the block
         length (decrypt-int (.getInt bb) (:enc-state @context))
         expected-end-position (+ (.position bb) length)
 
-        ;; Try to read the block according to the specification
-        block-data (s/read-struct block-spec bb context)
+        ;; Try to read the block
+        ;; If a custom read function was provided, use that
+        ;; Otherwise, try to read using a block spec
+        block-data (if block-read-fn
+                     (block-read-fn bb context)
+                     (s/read-struct block-spec bb context))
 
         ;; Verify we've reached the expected position
         _ (assert (= expected-end-position (.position bb)))
@@ -331,8 +465,9 @@
 
         block1 (read-block bb enc-context)
         block2 (read-block bb enc-context)
+        block3 (read-block bb enc-context)
         ]
 
-    block2))
+    block3))
 
 #_(def r (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
