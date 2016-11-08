@@ -19,22 +19,36 @@
 
 (def Block1
   (s/ordered-map
-   :version              :int16
-   :in-main-quest        :bool
-   :has-been-in-game     :bool
-   :last-difficulty      :byte
+   :version                :int32
+   :in-main-quest          :bool
+   :has-been-in-game       :bool
+   :last-difficulty        :byte
    :greatest-difficulty-completed :byte
-   :iron                 :int32
+   :iron                   :int32
    :greatest-survival-difficulty-completed :byte
-   :tributes             :int32
-   :ui-compass-state     :byte
-   :always-show-loot     :uint32
-   :show-skill-help      :bool
-   :alt-weapon-set       :bool
+   :tributes               :int32
+   :ui-compass-state       :byte
+   :always-show-loot       :int32
+   :show-skill-help        :bool
+   :alt-weapon-set         :bool
    :alt-weapon-set-enabled :bool
-   :player-texture       :string))
+   :player-texture         (s/string :ascii)))
 
-
+(def Block2
+  (s/ordered-map
+   :version                :int32
+   :level-in-bio           :int32
+   :experience             :int32
+   :modifier-points        :int32
+   :skill-points           :int32
+   :devotion-points        :int32
+   :total-devotion-points-unlocked :int32
+   :physique               :float
+   :cunning                :float
+   :spirit                 :float
+   :health                 :float
+   :energy                 :float
+   ))
 
 (defn unsigned-long
   [val]
@@ -123,7 +137,7 @@
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
 
   (let [enc-val (.get bb)]
-    [(byte (bit-and 0x00000000000000ff (bit-xor enc-val enc-state))) (enc-next-state enc-val enc-state enc-table)]))
+    [(short (bit-and 0x00000000000000ff (bit-xor enc-val enc-state))) (enc-next-state enc-val enc-state enc-table)]))
 
 (defn- read-int-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -142,24 +156,32 @@
 (defn- read-bool-
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
 
-  (let [[val next-enc-state] (read-byte bb context)]
+  (let [[val next-enc-state] (read-byte- bb context)]
     [(= val 1) next-enc-state]))
 
 (defn- read-float-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
 
-  (let [val (bit-xor (.getFloat bb) enc-state)
+  ;; Java doesn't allow bit-wise manipulation for floats
+  ;; We'll have to read a 4 byte quantity, decrypt it, then reinterpret it as a float
+  (let [enc-val (.getInt bb)
         byte-data (-> (ByteBuffer/allocate 4)
-                      (.putFloat val)
-                      (.array))]
+                      (.putInt enc-val)
+                      (.array)
+                      (reverse))
+        reinterpreter (ByteBuffer/allocate 4)
+        ]
 
-    [val (enc-next-state byte-data enc-state enc-table)]))
+    [(-> reinterpreter
+         ;; Decrypt the bit pattern
+         ;; And re-interpret the bits as a float
+         (.putInt (bit-and 0x00000000ffffffff (bit-xor enc-val enc-state)))
+         (.flip)
+         (.getFloat))
 
-(def read-bytes (partial read-and-update-context read-bytes-))
-(def read-bool (partial read-and-update-context read-bool-))
-(def read-int (partial read-and-update-context read-int-))
-(def read-float (partial read-and-update-context read-float-))
+     (enc-next-state byte-data enc-state enc-table)]))
+
 
 (defn read-and-update-context
   [read-fn ^ByteBuffer bb context & rest]
@@ -173,6 +195,11 @@
     ;; Return the read value
     val))
 
+(def read-bytes! (partial read-and-update-context read-bytes-))
+(def read-byte!  (partial read-and-update-context read-byte-))
+(def read-bool!  (partial read-and-update-context read-bool-))
+(def read-int!   (partial read-and-update-context read-int-))
+(def read-float! (partial read-and-update-context read-float-))
 
 (defn make-enc-context
   [enc-state enc-table]
@@ -183,10 +210,10 @@
 
          ;; Specs table for the structure lib
          :primitive-specs {:transform-bytes! transform-bytes!
-                           :byte   [:byte    1 read-byte ]
-                           :bool   [:byte    1 read-bool ]
-                           :int32  [:int32   4 read-int  ]
-                           :float  [:float   4 read-float]}
+                           :byte   [:byte    1 read-byte! ]
+                           :bool   [:byte    1 read-bool! ]
+                           :int32  [:int32   4 read-int!  ]
+                           :float  [:float   4 read-float!]}
          }))
 
 (defn generate-encryption-table
@@ -227,8 +254,55 @@
 
   (if (or (not= (:magic preamble) 0x58434447)
           (not= (:version preamble) 1))
-    (throw (Throwable. "I don't understand this gdc format!"))
-    ))
+    (throw (Throwable. "I don't understand this gdc format!"))))
+
+
+(defn decrypt-int
+  [val enc-state]
+
+  ;; We want to xor the value with the enc-state to get back the decrypted int.
+  ;; However, since enc-state is stored as a long, we'll want to do some additional
+  ;; masking to get rid of the unwanted bits.
+  ;; Otherwise, when we try to turn the long value back into an int, jvm will throw
+  ;; an "out of range" exception.
+
+  ;; decrypt the value by xor-ing
+  (-> (bit-xor val enc-state)
+
+      ;; mask out useless bits (from the enc-state)
+      (bit-and 0x00000000ffffffff)
+
+      ;; turn the value back into an int
+      (int)))
+
+(defn read-block
+  [^ByteBuffer bb context]
+
+  (let [;; Read the block id
+        id (read-int! bb context)
+
+        ;; Try to fetch the block spec by name
+        block-spec-var (resolve (symbol (str "Block" id)))
+        _ (if (nil? block-spec-var)
+            (throw (Throwable. "Don't know how to read block " id)))
+        block-spec (var-get block-spec-var)
+
+        ;; Get the total length of the block
+        length (decrypt-int (.getInt bb) (:enc-state @context))
+        expected-end-position (+ (.position bb) length)
+
+        ;; Try to read the block according to the specification
+        block-data (s/read-struct block-spec bb context)
+
+        ;; Verify we've reached the expected position
+        _ (assert (= expected-end-position (.position bb)))
+
+        ;; Verify we have the correct enc-state at this point
+        checksum (Integer/toUnsignedLong (.getInt bb))
+        _ (assert (= checksum (:enc-state @context)))
+        ]
+
+    (assoc block-data :block-id id)))
 
 (defn load-character-file
   [filepath]
@@ -249,12 +323,16 @@
         header-checksum (Integer/toUnsignedLong (.getInt bb))
         _ (assert (= header-checksum (:enc-state @enc-context)))
 
-        data-version (read-int bb enc-context)
+        data-version (read-int! bb enc-context)
         _ (if (not (contains? #{6 7} data-version))
             (throw (Throwable. "I can't read this gdc format!")))
 
-        mystery-field (read-bytes bb enc-context 16)]
+        mystery-field (read-bytes! bb enc-context 16)
 
-    mystery-field))
+        block1 (read-block bb enc-context)
+        block2 (read-block bb enc-context)
+        ]
+
+    block2))
 
 #_(def r (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))

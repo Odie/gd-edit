@@ -307,6 +307,8 @@
 
         ;; Read out the length of the string
         length (read-spec length-prefix bb prim-specs context)
+        _ (if (> 0 length)
+            #break (print "hi"))
 
         ;; Create a temp buffer to hold the bytes before turning it into a java string
         buffer (byte-array (buffer-size-for-string length requested-encoding))
