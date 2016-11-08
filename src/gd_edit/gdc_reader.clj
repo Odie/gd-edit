@@ -427,7 +427,7 @@
     (enc-next-state-with-byte byte-data enc-state enc-table)))
 
 (defn decrypt-bytes!
-  [buffer context]
+  [^bytes buffer context]
   (loop [i 0
          limit (count buffer)
          enc-state (:enc-state context)
