@@ -246,11 +246,31 @@
   (s/ordered-map
    :version :int32
 
-   :skills                   (s/variable-count CharacterSkill)
-   :masteriesAllowed         :int32
-   :skillPointsReclaimed     :int32
-   :devotionPointsReclaimed  :int32
-   :item-skills              (s/variable-count ItemSkill)))
+   :skills                     (s/variable-count CharacterSkill)
+   :masteries-allowed          :int32
+   :skill-points-reclaimed     :int32
+   :devotion-points-reclaimed  :int32
+   :item-skills                (s/variable-count ItemSkill)))
+
+(def Block12
+  (s/ordered-map
+   :version :int32
+   :lore-item-names (s/variable-count
+                     (s/string :ascii))))
+
+(def Faction
+  (s/ordered-map
+   :faction-changed  :bool
+   :faction-unlocked :bool
+   :faction-value    :float
+   :positive-boost   :float
+   :negative-boost   :float))
+
+(def Block13
+  (s/ordered-map
+   :version          :int32
+   :myFaction        :int32
+   :faction-values (s/variable-count Faction)))
 
 (defn unsigned-long
   [val]
@@ -390,14 +410,15 @@
                       (.putInt enc-val)
                       (.array)
                       (reverse))
-        reinterpreter (ByteBuffer/allocate 4)
+        reinterpreter (ByteBuffer/allocate 8)
         ]
 
     [(-> reinterpreter
          ;; Decrypt the bit pattern
          ;; And re-interpret the bits as a float
-         (.putInt (bit-and 0x00000000ffffffff (bit-xor enc-val enc-state)))
+         (.putLong (bit-and 0x00000000ffffffff (bit-xor enc-val enc-state)))
          (.flip)
+         (.position 4)
          (.getFloat))
 
      (enc-next-state byte-data enc-state enc-table)]))
@@ -517,7 +538,7 @@
 
         ;; Verify we have the correct enc-state at this point
         checksum (Integer/toUnsignedLong (.getInt bb))
-        _ (assert (= checksum (:enc-state @context)))
+        ;; _ (assert (= checksum (:enc-state @context)))
         ]
 
     (assoc block-data :block-id id)))
@@ -556,8 +577,10 @@
         block7 (read-block bb enc-context)
         block17 (read-block bb enc-context)
         block8 (read-block bb enc-context)
+        block12 (read-block bb enc-context)
+        block13 (read-block bb enc-context)
         ]
 
-    block8))
+    block2))
 
 #_(def r (time  (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
