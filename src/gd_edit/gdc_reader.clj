@@ -1,6 +1,7 @@
 (ns gd-edit.gdc-reader
   (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils])
+            [gd-edit.utils :as utils]
+            [clojure.string :as string])
   (:import  [java.nio ByteBuffer]))
 
 
@@ -209,6 +210,47 @@
              (s/variable-count UID)
              :length 3)
 ))
+
+(def Block17
+  (s/ordered-map
+   :version :int32
+
+   :markers (s/variable-count
+             (s/variable-count UID)
+             :length 6)
+   ))
+
+(def CharacterSkill
+  (s/ordered-map
+   :skill-name               (s/string :ascii)
+   :level                    :int32
+   :enabled                  :bool
+   :devotion-level           :int32
+   :devotion-experience      :int32
+   :sublevel                 :int32
+   :skill-active             :bool
+   :skill-transition         :bool
+   :autocast-skill-name      (s/string :ascii)
+   :autocast-controller-name (s/string :ascii)))
+
+(def ItemSkill
+  (s/ordered-map
+   :skill-name               (s/string :ascii)
+   :autocast-skill-name      (s/string :ascii)
+   :autocast-controller-name (s/string :ascii)
+   :unknown-bytes            (s/string :ascii :length 4)
+   :unknown                  (s/string :ascii)
+   ))
+
+(def Block8
+  (s/ordered-map
+   :version :int32
+
+   :skills                   (s/variable-count CharacterSkill)
+   :masteriesAllowed         :int32
+   :skillPointsReclaimed     :int32
+   :devotionPointsReclaimed  :int32
+   :item-skills              (s/variable-count ItemSkill)))
 
 (defn unsigned-long
   [val]
@@ -512,8 +554,10 @@
         block5 (read-block bb enc-context)
         block6 (read-block bb enc-context)
         block7 (read-block bb enc-context)
+        block17 (read-block bb enc-context)
+        block8 (read-block bb enc-context)
         ]
 
-    block7))
+    block8))
 
 #_(def r (time  (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
