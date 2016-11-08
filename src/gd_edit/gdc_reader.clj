@@ -4,7 +4,7 @@
   (:import  [java.nio ByteBuffer]))
 
 
-(declare read-block)
+(declare read-block read-byte! read-int! read-bool! read-float!)
 
 (def FilePreamble
   (s/ordered-map
@@ -170,10 +170,30 @@
 
 (def Block4
   (s/ordered-map
-    :version :UInt32
-    :stash-width :UInt32
-    :stash-height :UInt32
+    :version :int32
+    :stash-width :int32
+    :stash-height :int32
     :stash-items (s/variable-count StashItem)))
+
+(def UID
+  (s/string :ascii :length 16))
+
+
+(def Block5
+  (s/ordered-map
+
+   :version :int32
+
+   :spawn-points (s/variable-count
+                  (s/variable-count UID)
+                  :length 3)
+
+   ;; [StaticCount(3)]
+   ;; public List<UID> currentRespawn = new List<UID>();
+
+   :current-respawn (s/variable-count UID
+                     :length 3)
+))
 
 (defn unsigned-long
   [val]
@@ -234,7 +254,7 @@
       ;; Not done?
       ;; Grab the next byte, decrypt it, store it back in the same spot
       (let [enc-val (aget buffer i)
-            val (byte (bit-and 0x00000000000000ff (bit-xor enc-val enc-state)))]
+            val (.byteValue (bit-and 0x00000000000000ff (bit-xor enc-val enc-state)))]
 
         (aset buffer i val)
         (recur (inc i) limit (enc-next-state enc-val enc-state enc-table) enc-table)
@@ -440,7 +460,7 @@
 
         ;; Verify we have the correct enc-state at this point
         checksum (Integer/toUnsignedLong (.getInt bb))
-        _ (assert (= checksum (:enc-state @context)))
+        ;; _ (assert (= checksum (:enc-state @context)))
         ]
 
     (assoc block-data :block-id id)))
@@ -474,8 +494,9 @@
         block2 (read-block bb enc-context)
         block3 (read-block bb enc-context)
         block4 (read-block bb enc-context)
+        block5 (read-block bb enc-context)
         ]
 
-    block4))
+    block5))
 
 #_(def r (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))

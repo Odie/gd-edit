@@ -233,8 +233,10 @@
 
   This says we will read a :uint16 first to determine how many :uint32 to read
   from the stream."
-  [spec & {:keys [length-prefix]
-           :or {length-prefix :int32}}]
+  [spec & {:keys [length-prefix length]
+           :or {length-prefix :int32
+                length -1
+                }}]
 
   ;; We're about to attach some meta info to the spec
   ;; First, wrap the spec in another collection...
@@ -246,6 +248,7 @@
     ;; Any sequence can be have meta info attached
     (with-meta spec-seq
       {:struct/type :variable-count
+       :struct/length length
        :struct/length-prefix length-prefix})))
 
 
@@ -253,10 +256,12 @@
   [spec bb prim-specs context]
 
   (let [;; Destructure fields in the attached meta info
-        {length-prefix :struct/length-prefix} (meta spec)
+        {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
 
         ;; Read out the count of the spec to read
-        length (read-spec length-prefix bb prim-specs context)
+        length (if (not= static-length -1)
+                 static-length
+                 (read-spec length-prefix bb prim-specs context))
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
@@ -277,12 +282,14 @@
   "Returns a spec used to read a string of a specific type of encoding.
   Can supply :length-prefix to indicate how to read the length of the string.
   The default :length-prefix is a :int32."
-  [enc & {:keys [length-prefix]
-          :or {length-prefix :int32}}]
+  [enc & {:keys [length-prefix length]
+          :or {length-prefix :int32
+               length -1}}]
 
   ;; Tag a dummy sequence with the info passed into the function
   (with-meta '(:string)
     {:struct/type :string
+     :struct/length length
      :struct/length-prefix length-prefix
      :struct/string-encoding enc}))
 
@@ -306,10 +313,16 @@
                          :utf-16-le "UTF-16LE"}
 
         ;; Destructure fields in the attached meta info
-        {length-prefix :struct/length-prefix requested-encoding :struct/string-encoding} (meta spec)
+        {static-length :struct/length
+         length-prefix :struct/length-prefix
+         requested-encoding :struct/string-encoding} (meta spec)
 
-        ;; Read out the length of the string
-        length (read-spec length-prefix bb prim-specs context)
+        ;; What is the length of the string we want to read?
+        ;; If a static length has been configured, use it
+        ;; Otherwise, read the length
+        length (if (not= static-length -1)
+                 static-length
+                 (read-spec length-prefix bb prim-specs context))
 
         ;; Create a temp buffer to hold the bytes before turning it into a java string
         buffer (byte-array (buffer-size-for-string length requested-encoding))
