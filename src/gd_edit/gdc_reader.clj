@@ -696,6 +696,16 @@
 
     (assoc block-data :block-id id)))
 
+(defn block-strip-meta-info-fields
+  [block]
+
+
+  (->> block
+       (filter (fn [[key value]]
+                 (not (contains? #{:version :block-id} key))))
+       (into {}))
+  )
+
 (defn load-character-file
   [filepath]
 
@@ -728,7 +738,12 @@
 
                        (recur (conj! block-list (read-block bb enc-context)))))
 
-        character (assoc (apply merge block-list)
+        ;; Try to merge all the block lists into one giant character sheet
+        character (assoc (apply merge (->> block-list
+                                           (map (fn [block]
+                                                  (->> block)
+                                                  ))
+                                           ))
                          :meta-block-list block-list)
         ]
     character))
