@@ -247,6 +247,46 @@
 
   (not (.startsWith (str (first kv-pair)) ":meta-")))
 
+(defn print-character
+  [character-map]
+
+  ;; We want to be able to show a nice, easy to read list...
+  ;; To do this, we first need to figure out how long the keyname is
+  ;; Once we determine this, we can pad the keynames.
+  (let [character (->> character-map
+                       (filter without-meta-fields))
+
+        max-key-length (reduce
+                        (fn [max-length key-str]
+                          (if (> (count key-str) max-length)
+                            (count key-str)
+                            max-length))
+                        0
+
+                        ;; Map the keys to a more readable string format
+                        (->> character
+                             (keys)
+                             (map keyword->str))
+                        )]
+
+    (doseq [[key value] character]
+      (println
+
+       ;; Print the key name
+       (format (format "%%%ds :" (+ max-key-length 2))
+               (keyword->str key))
+
+       ;; Print the value
+       (cond
+         (coll? value)
+         "[collection]"
+
+         (and (string? value) (empty? value))
+         "\"\""
+
+         :else
+         (yellow value))))))
+
 (defn show-handler
   [[input tokens]]
 
@@ -256,34 +296,7 @@
     (character-selection-screen!)
 
     ;; If the character is loaded... we should display the fields now...
-    ;; We want to be able to show a nice, easy to read list...
-    (let [character (->> @globals/character
-                         (filter without-meta-fields))
-
-          max-key-length (reduce
-                          (fn [max-length key-str]
-                            (if (> (count key-str) max-length)
-                              (count key-str)
-                              max-length))
-                          0
-
-                          ;; Map the keys to a more readable string format
-                          (->> character
-                               (keys)
-                               (map keyword->str))
-                          )]
-
-      (doseq [kv-pair character]
-        (println
-
-         ;; Print the key name
-         (format (format "%%%ds :" (+ max-key-length 2))
-                 (keyword->str (first kv-pair)))
-
-         ;; Print the value
-         (if (coll? (second kv-pair))
-           "[collection]"
-           (yellow (second kv-pair))))))))
+    (print-character @globals/character)))
 
 #_(choose-character-handler [nil nil])
 #_(show-handler [nil nil])
