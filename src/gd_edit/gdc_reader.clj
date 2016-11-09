@@ -732,12 +732,16 @@
         mystery-field (read-bytes! bb enc-context 16)
 
         ;; Keep reading more blocks until we've reached the end of the file
-        block-list (loop [block-list (transient [])]
-                     (if (= (.remaining bb) 0)
-                       (persistent! block-list)
+        block-list (-> (loop [block-list (transient [])]
+                         (if (= (.remaining bb) 0)
+                           (persistent! block-list)
 
-                       (recur (conj! block-list (read-block bb enc-context)))))
+                           (recur (conj! block-list (read-block bb enc-context)))))
 
+                       ;; Append the header block when we're done reading
+                       (conj header))
+
+        _ (println (nth block-list 0))
         ;; Try to merge all the block lists into one giant character sheet
         character (assoc (apply merge (map block-strip-meta-info-fields block-list))
                          :meta-block-list block-list)
