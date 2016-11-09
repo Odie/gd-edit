@@ -739,11 +739,7 @@
                        (recur (conj! block-list (read-block bb enc-context)))))
 
         ;; Try to merge all the block lists into one giant character sheet
-        character (assoc (apply merge (->> block-list
-                                           (map (fn [block]
-                                                  (->> block)
-                                                  ))
-                                           ))
+        character (assoc (apply merge (map block-strip-meta-info-fields block-list))
                          :meta-block-list block-list)
         ]
     character))

@@ -254,7 +254,8 @@
   ;; To do this, we first need to figure out how long the keyname is
   ;; Once we determine this, we can pad the keynames.
   (let [character (->> character-map
-                       (filter without-meta-fields))
+                       (filter without-meta-fields)
+                       (sort-by first))
 
         max-key-length (reduce
                         (fn [max-length key-str]
@@ -285,18 +286,43 @@
          "\"\""
 
          :else
-         (yellow value))))))
+         (yellow value))))
+
+    (println " ")
+    (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "items")))
+
+
+(defn- partially-match-fields
+  [path coll]
+
+  (->> coll
+       (filter without-meta-fields)
+       (filter (fn [[key value]]
+                 (-> key
+                     (keyword->str)
+                     (u/ci-match path))))
+       ))
 
 (defn show-handler
   [[input tokens]]
 
-  ;; If the character hasn't been loaded...
-  ;; Move to the character selection screen first
-  (if-not (character-loaded?)
+  (cond
+    ;; If the character hasn't been loaded...
+    ;; Move to the character selection screen first
+    (not (character-loaded?))
     (character-selection-screen!)
 
-    ;; If the character is loaded... we should display the fields now...
-    (print-character @globals/character)))
+    ;; The character is loaded
+    ;; If there aren't any filter conditions, just display all the character fields
+    (= (count tokens) 0)
+    (print-character @globals/character)
+
+    :else
+    (do
+      (let [path (first tokens)]
+        ;; (partially-match-fields path @globals/character)))))
+        (print-character (partially-match-fields path @globals/character))))))
+
 
 #_(choose-character-handler [nil nil])
-#_(show-handler [nil nil])
+#_(show-handler [nil ["level"]])
