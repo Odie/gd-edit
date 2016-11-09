@@ -37,3 +37,13 @@
   (.contains (string/lower-case (str str1)) (string/lower-case (str str2))))
 
 (def ci-match case-insensitive-match)
+
+(defn expand-home [s]
+  (if (.startsWith s "~")
+    (clojure.string/replace-first s "~" (System/getProperty "user.home"))
+    s))
+
+(defmacro doseq-indexed [index-sym [item-sym coll] & body]
+  `(doseq [[~item-sym ~index-sym]
+           (map vector ~coll (range))]
+     ~@body))

@@ -2,8 +2,12 @@
   (:require [gd-edit.db-query :as query]
             [gd-edit.globals :as g]
             [gd-edit.utils :as u]
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.gdc-reader :as gdc]
             [jansi-clj.core :refer :all]
-            [clojure.string :as string]))
+            [clojure.string :as string]
+            [clojure.java.io :as io]
+            [gd-edit.globals :as globals]))
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -183,3 +187,103 @@
               (println item))
             (println)
             (println (count sorted-matches) " matches")))))))
+
+(defn- last-path-component
+  [path]
+
+  (last (clojure.string/split path #"[/\\]")))
+
+(defn- character-selection-screen
+  []
+
+  ;; grab a list save directories where a "player.gdc" file exists
+  (let [save-dirs (->> (dirs/get-save-dir)
+                       (io/file)
+                       (.listFiles)
+                       (filter #(.isDirectory %1))
+                       (filter #(.exists (io/file %1 "player.gdc"))))]
+
+    (reset! gd-edit.globals/menu
+            {:display-fn
+             (fn []
+               (println "Please choose a character to load:"))
+
+             ;; generate the menu choices
+             ;; reduce over save-dirs with each item being [index save-dir-item]
+             :choice-map (reduce
+                          (fn [accum [idx dir]]
+                            (let [display-idx (inc idx)]
+
+                              (conj accum
+                                    [(str display-idx)                    ; command string
+                                     (last-path-component (.getPath dir)) ; menu display string
+                                     (fn []                               ; function to run when selected
+                                       (reset! globals/character
+                                               (gdc/load-character-file (.getPath (io/file dir "player.gdc"))))
+                                       (reset! globals/menu {})
+                                       )])))
+                          []
+                          (map-indexed vector save-dirs))
+             })))
+
+(defn character-selection-screen! [] (reset! gd-edit.globals/menu (character-selection-screen)))
+
+(defn choose-character-handler
+  [[input tokens]]
+
+  character-selection-screen!)
+
+(defn- character-loaded?
+  []
+  (and (not (nil? @gd-edit.globals/character))
+       (not (empty? @gd-edit.globals/character))))
+
+(defn- keyword->str
+  [k]
+  (subs (str k) 1))
+
+(defn- without-meta-fields
+  [kv-pair]
+
+  (not (.startsWith (str (first kv-pair)) ":meta-")))
+
+(defn show-handler
+  [[input tokens]]
+
+  ;; If the character hasn't been loaded...
+  ;; Move to the character selection screen first
+  (if-not (character-loaded?)
+    (character-selection-screen!)
+
+    ;; If the character is loaded... we should display the fields now...
+    ;; We want to be able to show a nice, easy to read list...
+    (let [character (->> @globals/character
+                         (filter without-meta-fields))
+
+          max-key-length (reduce
+                          (fn [max-length key-str]
+                            (if (> (count key-str) max-length)
+                              (count key-str)
+                              max-length))
+                          0
+
+                          ;; Map the keys to a more readable string format
+                          (->> character
+                               (keys)
+                               (map keyword->str))
+                          )]
+
+      (doseq [kv-pair character]
+        (println
+
+         ;; Print the key name
+         (format (format "%%%ds :" (+ max-key-length 2))
+                 (keyword->str (first kv-pair)))
+
+         ;; Print the value
+         (if (coll? (second kv-pair))
+           "[collection]"
+           (yellow (second kv-pair))))))))
+
+#_(choose-character-handler [nil nil])
+#_(show-handler [nil nil])

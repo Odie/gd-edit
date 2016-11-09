@@ -337,44 +337,44 @@
 
 (def Block16
   (s/ordered-map
-   :version               :int32
-   :playtime-seconds      :int32
-   :death-count           :int32
-   :kill-count            :int32
-   :experience-from-kills :int32
-   :health-potions-used   :int32
-   :energy-potions-used   :int32
-   :max-level             :int32
-   :hit-received          :int32
-   :hits-inflicted        :int32
-   :crits-inflicted       :int32
-   :crits-received        :int32
-   :greatest-damage-done  :float
+   :version                 :int32
+   :playtime-seconds        :int32
+   :death-count             :int32
+   :kill-count              :int32
+   :experience-from-kills   :int32
+   :health-potions-used     :int32
+   :energy-potions-used     :int32
+   :max-level               :int32
+   :hit-received            :int32
+   :hits-inflicted          :int32
+   :crits-inflicted         :int32
+   :crits-received          :int32
+   :greatest-damage-done    :float
 
    :greatest-monster-killed (s/variable-count GreatestMonsterKilled :length 3)
 
-   :championKills         :int32
-   :lastMonsterHitDA       :float
-   :lastMonsterHitOA       :float
-   :greatestDamageReceived :float
-   :heroKills             :int32
-   :itemsCrafted          :int32
-   :relicsCrafted         :int32
-   :tier2RelicsCrafted    :int32
-   :tier3RelicsCrafted    :int32
-   :devotionShrinesUnlocked :int32
-   :oneShotChestsUnlocked :int32
-   :loreNotesCollected    :int32
+   :champion-kills              :int32
+   :last-monster-hit-DA         :float
+   :last-monster-hit-OA         :float
+   :greatest-damage-received    :float
+   :hero-kills                  :int32
+   :items-crafted               :int32
+   :relics-crafted              :int32
+   :tier2-relics-crafted        :int32
+   :tier3-relics-crafted        :int32
+   :devotion-shrines-unlocked   :int32
+   :one-shot-chests-unlocked    :int32
+   :lore-notes-collected        :int32
 
-   :boss-kills            (s/variable-count :int32 :length 3)
+   :boss-kills                  (s/variable-count :int32 :length 3)
 
-   :survivalGreatestWave  :int32
-   :survivalGreatestScore :int32
-   :survivalDefenseBuilt  :int32
-   :survivalPowerUpsActivated :int32
+   :survival-greatest-wave      :int32
+   :survival-greatest-score     :int32
+   :survival-defense-built      :int32
+   :survival-powerups-activated :int32
 
-   :uniqueItemsFound      :int32
-   :randomizedItemsFound  :int32))
+   :unique-items-found          :int32
+   :randomized-items-found      :int32))
 
 
 (def Block10
@@ -659,13 +659,13 @@
         id (read-int! bb context)
 
         ;; Try to fetch the block spec by name
-        block-spec-var (resolve (symbol (str "Block" id)))
+        block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))
         block-spec (if-not (nil? block-spec-var)
                      (var-get block-spec-var)
                      nil)
 
         ;; Try to fetch a custom read function by name
-        block-read-fn-var (resolve (symbol (str "read-block" id)))
+        block-read-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "read-block" id)))
         block-read-fn (if-not (nil? block-read-fn-var)
                         (var-get block-read-fn-var)
                         nil)
@@ -733,4 +733,5 @@
         ]
     character))
 
-#_(def r (time  (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
+#_(def r (time (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
+#_(time  (reset! gd-edit.globals/character (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
