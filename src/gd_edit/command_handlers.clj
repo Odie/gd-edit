@@ -293,7 +293,7 @@
 
     (when-not skip-item-count
       (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "items"))))
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
 (def print-map print-character)
 
@@ -307,6 +307,7 @@
              (filter (fn [[key value]]
                        (-> key
                            (keyword->str)
+                           (string/replace "-" "")
                            (u/ci-match k)))))))
 
 (defn- coerce-to-int
