@@ -297,17 +297,38 @@
 
 (def print-map print-character)
 
+(defn str-without-dash
+  [str]
+  (string/replace str "-" ""))
+
 (defn- partially-match-key
   "Given a map and a partial key, return a list of pairs that partially matches the key"
   [m search-target]
 
-  (into {}
-        (->> m
-             (filter without-meta-fields)
-             (filter (fn [[key value]]
-                       (let [k-str (keyword->str key)]
-                         (or (u/ci-match k-str search-target)
-                             (u/ci-match (string/replace k-str "-" "") search-target))))))))
+  (let [haystack (filter without-meta-fields m)
+
+        ;; Locate all partial matches
+        partial-matches (filter (fn [[key value]]
+                                  (let [k-str (keyword->str key)]
+                                    (or (u/ci-match k-str search-target)
+                                        (u/ci-match (str-without-dash k-str) search-target))))
+                                haystack)
+
+        ;; Are any of the partial matches actual exact matches?
+        ;; If we don't look for
+        exact-match (filter (fn [[key value]]
+                              (let [k-str (keyword->str key)]
+                                (or (and (u/ci-match k-str search-target)
+                                         (= (count k-str) (count search-target)))
+                                    (and (u/ci-match (str-without-dash k-str) search-target)
+                                         (= (count (str-without-dash k-str)) (count search-target))))))
+                            partial-matches)]
+
+    ;; If we can find an exact match, use that.
+    ;; Otherwise, return the partial matches
+    (if (= (count exact-match) 1)
+      exact-match
+      partial-matches)))
 
 (defn- coerce-to-int
   [input]
@@ -342,12 +363,13 @@
   (letfn [;; We want to return a slightly more complex set of data to the caller.
           ;; This helper function helps us construct the return map so we don't have
           ;; to sprinkle this everywhere.
-          (return-result [result end-ks & others]
+          (return-result [result end-ks actual-path & others]
             (merge {;; Report the result the caller said to report
                     :status result
 
                     ;; Calculate the longest path traversed
                     :longest-path (take (- (count ks-all) (count end-ks)) ks-all)
+                    :actual-path actual-path
                     }
 
                    (first others))
@@ -355,42 +377,45 @@
     ;; For each item in the specified ks
     ;; Try to iterate a level deeper using the next key
     (loop [cursor m
-           ks ks-all]
+           ks ks-all
+           actual-path []
+           ]
 
       ;; Which key are we trying to navigate to?
       (let [k (first ks)]
         (cond
           ;; Did we try navigating into a location that doesn't exist?
           (nil? cursor)
-          (return-result :not-found ks)
+          (return-result :not-found ks actual-path)
 
           ;; Did we exhaust all the keys?
           ;; If so, we're done navigating into the hierarchy.
           ;; The cursor should be pointing at the item the user wants
           (nil? k)
-          (return-result :found ks {:found-item cursor})
+          (return-result :found ks actual-path {:found-item cursor})
 
           ;; If we have a sequential collection, just try to navigate into
           ;; the collection with the key
           (sequential? cursor)
-          (recur (nav-into cursor k) (rest ks))
+          (recur (nav-into cursor k) (rest ks) (conj actual-path (coerce-to-int k)))
 
           ;; If we're looking at an associative collection, then we want to
           ;; perform partial matching on the current key
           (associative? cursor)
-          (let [matches (partially-match-key m k)]
+          (let [matches (partially-match-key cursor k)]
             (cond
               ;; If we can't get a match at all, we cannot navigate to the key
               (= (count matches) 0)
-              (return-result :not-found (rest ks))
+              (return-result :not-found (rest ks) actual-path)
 
               ;; If we have more than one match, tell the caller we cannot
               ;; resolve this ambiguity.
               (> (count matches) 1)
-              (return-result :too-many-matches (rest ks) {:ambiguous-matches matches})
+              (return-result :too-many-matches (rest ks) actual-path {:ambiguous-matches matches})
 
               :else
-              (recur (second (first matches)) (rest ks)))))))))
+              (let [[matched-key matched-value] (first matches)]
+                (recur matched-value (rest ks) (conj actual-path matched-key))))))))))
 
 
 (defn print-details
@@ -460,8 +485,6 @@
                            (do
                              (newline)
                              (print-map item :skip-item-count true)
-                             ;; (println i)
-                             ;; (println (count obj))
                              (if-not (= i (dec (count obj)))
                                (newline))
                              )
@@ -475,6 +498,19 @@
       :else
       (throw (Throwable. "Unhandled case"))
       )))
+
+(defn print-ambiguous-walk-result
+  [result]
+
+  (println (format "Cannot traverse path because \"%s\""
+                   (clojure.string/join "/" (:longest-path result)))
+           "matches more than one item:")
+
+  (doseq [ambiguous-item (->> (:ambiguous-matches result)
+                              (keys)
+                              (map keyword->str))]
+    (print-indent 1)
+    (println ambiguous-item)))
 
 (defn show-handler
   [[input tokens]]
@@ -508,15 +544,7 @@
                             (println "No matches found")
 
                             (= status :too-many-matches)
-                            (do
-                              (println (format "Cannot traverse path because \"%s\""
-                                               (clojure.string/join "/" (:longest-path result)))
-                                       "matches more than one item:")
-                              (doseq [ambiguous-item (->> (:ambiguous-matches result)
-                                                          (keys)
-                                                          (map keyword->str))]
-                                (print-indent 1)
-                                (println ambiguous-item)))
+                            (print-ambiguous-walk-result result)
 
                             :else
                             (:found-item result)))
@@ -545,14 +573,81 @@
             ;; We've successfully navigated to an object
             ;; This might be a piece of data in the character sheet or a list of partially matched result
             ;; for some structure represented as a map
-            (print-object matched-obj)
-        ))))))
+            (print-object matched-obj)))))))
+
+
+(defn coerce-to-type
+  "Given an value as a string, return the value after coercing it to the correct type."
+  [val-str type]
+
+  (cond
+    ;; If the caller asked to convert the value to a string,
+    ;; we don't have to do anything because the value should already be a string
+    (= java.lang.String type)
+    val-str
+
+    (= java.lang.Float type)
+    (Float/parseFloat val-str)
+
+    (= java.lang.Integer type)
+    (Integer/parseInt val-str)))
+
+
+(defn set-handler
+  [[input tokens]]
+
+  (cond
+    ;; If the character hasn't been loaded...
+    ;; Move to the character selection screen first
+    (not (character-loaded?))
+    (character-selection-screen!)
+
+    (not= (count tokens) 2)
+    (println "Usage: show <path> <new-value>")
+
+    :else
+    (do
+      ;; Split a path into components.
+      ;; We're going to use these as keys to navigate into the character sheet
+      (let [path-keys (string/split (first tokens) #"/")
+            walk-result (walk-structure @globals/character path-keys)
+            {:keys [status]} walk-result
+            ]
+
+        (cond
+          (= status :not-found)
+          (println "No matches found")
+
+          (= status :too-many-matches)
+          (print-ambiguous-walk-result walk-result)
+
+          (= status :found)
+          (do
+            ;; We found the value the user wanted to update
+            (let [value (:found-item walk-result)
+                  ;; What is the type of the value? We'll have to coerce the supplied new value
+                  ;; to the same type first.
+                  newval (coerce-to-type (second tokens) (type value))]
+
+              ;; Set the new value into the character sheet
+              (reset! globals/character
+                      (update-in @globals/character (:actual-path walk-result) (fn [oldval] newval)))
+              nil
+              ))
+
+          :else
+          (throw (Throwable. "Unhandled case")))
+        ))))
 
 
 #_(choose-character-handler [nil nil])
+#_(show-handler [nil nil])
 #_(show-handler [nil ["stash"]])
 #_(show-handler [nil ["stash-items"]])
 #_(show-handler [nil ["stash/50"]])
 #_(show-handler [nil ["stash-items/50"]])
 #_(show-handler [nil ["stash-items/50/basename"]])
 #_(show-handler [nil ["skillsets"]])
+
+#_(set-handler [nil ["skillpoints" "12"]])
+#_(set-handler [nil ["stashitems/50/basename" "123"]])
