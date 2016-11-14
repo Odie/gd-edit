@@ -7,7 +7,9 @@
             [jansi-clj.core :refer :all]
             [clojure.string :as string]
             [clojure.java.io :as io]
-            [gd-edit.globals :as globals]))
+            [clojure.pprint :as pp]
+            [gd-edit.globals :as globals])
+  (:import  [java.io StringWriter]))
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -248,7 +250,8 @@
   (not (.startsWith (str (first kv-pair)) ":meta-")))
 
 (defn print-character
-  [character-map]
+  [character-map & {:keys [skip-item-count]
+                    :or {skip-item-count false}}]
 
   ;; We want to be able to show a nice, easy to read list...
   ;; To do this, we first need to figure out how long the keyname is
@@ -280,7 +283,7 @@
        ;; Print the value
        (cond
          (coll? value)
-         "[collection]"
+         (format "collection of %d items" (count value))
 
          (and (string? value) (empty? value))
          "\"\""
@@ -288,20 +291,147 @@
          :else
          (yellow value))))
 
-    (println " ")
-    (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "items")))
+    (when-not skip-item-count
+      (newline)
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "items"))))
+
+(def print-map print-character)
+
+(defn- partially-match-key
+  "Given a map and a partial key, return a list of pairs that partially matches the key"
+  [m k]
+
+  (into {}
+        (->> m
+             (filter without-meta-fields)
+             (filter (fn [[key value]]
+                       (-> key
+                           (keyword->str)
+                           (u/ci-match k)))))))
+
+(defn- coerce-to-int
+  [input]
+
+  (cond
+    (number? input)
+    (int input)
+
+    (string? input)
+    (Integer/parseInt input)
+
+    :else
+    (throw (Throwable. "Can't deal with input"))))
+
+(defn- nav-into
+  [coll key]
+
+  (cond
+    ;; If we're looking at a sequential collection, try to interpret key as an index
+    (sequential? coll)
+    (get coll (coerce-to-int key))
+
+    (associative? coll)
+    (get coll key)
+
+    :else
+    (throw (Throwable. "Can't deal with coll with type: " (type coll)))))
+
+(defn get-in-partial-match
+  ([m ks]
+   (get-in-partial-match m ks :not-found))
+
+  ([m ks-all not-found]
+
+   ;; For each item in the specified ks
+   ;; Try to iterate a level deeper using the next key
+   (loop [cursor m
+          ks ks-all]
+
+     ;; Which key are we trying to navigate to?
+     (let [k (first ks)]
+       (cond
+         ;; Did we try navigating into a location that doesn't exist?
+         (nil? cursor)
+         not-found
+
+         ;; Did we exhaust all the keys?
+         ;; If so, we're done navigating into the hierarchy.
+         ;; The cursor should be pointing at the item the user wants
+         (nil? k)
+         cursor
+
+         ;; If we have a sequential collection, just try to navigate into
+         ;; the collection with the key
+         (sequential? cursor)
+         (recur (nav-into cursor k) (rest ks))
+
+         ;; If we're looking at an associative collection, then we want to
+         ;; perform partial matching on the current key
+         (associative? cursor)
+         (let [matches (partially-match-key m k)]
+           (cond
+             ;; If we can't get a match at all, we cannot navigate to the key
+             (= (count matches) 0)
+             not-found
+
+             ;; If we have more than one match, tell the caller we cannot
+             ;; resolve this ambiguity.
+             (> (count matches) 1)
+             :too-many-matches
+
+             :else
+             (recur (second (first matches)) (rest ks)))))))))
 
 
-(defn- partially-match-fields
-  [path coll]
+(defn print-details
+  [data]
 
-  (->> coll
-       (filter without-meta-fields)
-       (filter (fn [[key value]]
-                 (-> key
-                     (keyword->str)
-                     (u/ci-match path))))
-       ))
+  (assert (associative? data))
+  (assert (= (count data) 1))
+
+  (let [[key value] (first data)]
+    (println (format "%s:" (keyword->str key)))
+
+    (cond
+      (or (number? value) (string? value))
+      (do
+        (print "        ")
+        (println value))
+
+      (sequential? value)
+      (do
+        (u/doseq-indexed i [item value]
+                         (println i ":")
+                         (cond
+                           (associative? item)
+                           (do
+                             (print-map item :skip-item-count true)
+                             (if-not (= item (last value))
+                               (newline)))
+
+                           :else
+                           (throw (Throwable. "Don't know how to print details for a sequence of this type yet!")))
+                         )))))
+
+(defn print-match-result
+  [data]
+
+  ;; How many items do we have?
+  (cond
+    (= (count data) 0)
+    (println "No matches found")
+
+    ;; If there is only one, this means the user targetted a specific
+    ;; field in the character sheet to be show.
+    ;; Show the contents.
+    (= (count data) 1)
+    (print-details data)
+
+    ;; If there is more than one item, then the user is exploring the
+    ;; character sheet.
+    ;; Show all the matched items without expanding the contents
+    :else
+    (print-map data)))
 
 (defn show-handler
   [[input tokens]]
@@ -319,10 +449,49 @@
 
     :else
     (do
-      (let [path (first tokens)]
-        ;; (partially-match-fields path @globals/character)))))
-        (print-character (partially-match-fields path @globals/character))))))
+      ;; Split a path into components.
+      ;; We're going to use these as keys to navigate into the character sheet
+      (let [path-keys (string/split (first tokens) #"/")]
+        (cond
+          ;; If we only have a single item, show all items that partially match
+          ;; the root item
+          (= (count path-keys) 1)
+          (print-match-result (partially-match-key @globals/character (first path-keys)))
+
+          ;; We have more than one path-key?
+          ;; Try to navigate the path by partially matching the keys for all but the last key.
+          ;; With the last key, we list all partial matches again.
+          ;;
+          ;; This allows the user to avoid having to type the entire path exactly, while
+          ;; still being able to explore and navigate the data structure.
+          :else
+          (let [item (get-in-partial-match @globals/character (butlast path-keys))
+
+                ;; If we arrived at some kind of sequence, navigate one more level in
+                result (cond
+                         (= item :not-found)
+                         (println "No matches found")
+
+                         (= item :too-many-matches)
+                         (println "Cannot walk the path because it's ambiguous")
+
+                         (sequential? item)
+                         (nav-into item (last path-keys))
+
+                         (associative? item)
+                         (partially-match-key item (last path-keys))
+
+                         :else
+                         (throw (Throwable. "Don't know how to handle this case")))]
+
+            (if-not (nil? result)
+              (print-match-result result))
+            ))))))
 
 
 #_(choose-character-handler [nil nil])
-#_(show-handler [nil ["level"]])
+#_(show-handler [nil ["stash"]])
+#_(show-handler [nil ["stash-items"]])
+#_(show-handler [nil ["stash/50"]])
+#_(show-handler [nil ["stash-items/50"]])
+#_(show-handler [nil ["stash-items/50/basename"]])

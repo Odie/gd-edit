@@ -198,3 +198,5 @@
   (repl))
 
 #_(initialize)
+#_(time  (reset! gd-edit.globals/character
+                 (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
