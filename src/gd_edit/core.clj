@@ -3,15 +3,15 @@
             [gd-edit.arz-reader :as arz-reader]
             [gd-edit.arc-reader :as arc-reader]
             [gd-edit.utils :as utils]
-            [gd-edit.globals]
+            [gd-edit.globals :as globals]
             [gd-edit.command-handlers :as handlers]
             [gd-edit.jline :as jl]
+            [gd-edit.game-dirs :as dirs]
             [clojure.string :as string]
             [jansi-clj.core :refer :all])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel])
-  (:gen-class))
+            [java.nio.channels FileChannel]))
 
 
 (defn- tokenize-input
@@ -39,6 +39,8 @@
    ["qn"] (fn [input] (handlers/query-show-handler input))
    ["db"] (fn [input] (handlers/db-show-handler input))
    ["db" "show"] (fn [input] (handlers/db-show-handler input))
+   ["show"] (fn [input] (handlers/show-handler input))
+   ["load"] (fn [input] (handlers/choose-character-handler input))
    })
 
 (defn- find-command
@@ -67,6 +69,46 @@
    []
    tokens))
 
+(defn- find-menu-command
+  "Returns a menu item that matches the given target string, or nil"
+  [target-str menu]
+
+  (let [matched-menu-items (filter
+                            (fn [[cmd-str]]
+                              (= cmd-str target-str))
+
+                            (:choice-map menu))]
+
+    ;; If we can find a match, return the first match
+    ;; This means if some menu items have the same command string,
+    ;; only the first one will ever be picked
+    (if-not (empty? matched-menu-items)
+      (first matched-menu-items)
+      nil)))
+
+(defn- repl-print-menu
+  "Print the given menu.
+
+  A menu is a hashmap that has the following fields:
+
+  :display-fn => called without parameters when available
+  :choice-map => vector of [command-str display-string choice-function]
+
+  Together, these fields are used to help the repl dynamically present
+  information and alter the command map in a stateful manner. "
+  [menu]
+
+  (let [{:keys [display-fn choice-map]} menu]
+    ;; Run the display function if available
+    (if-not (nil? display-fn)
+      (display-fn))
+
+    ;; Display the choice-map
+    (if-not (empty? choice-map)
+      (do
+        (doseq [[cmd-str disp-str] choice-map]
+          (println (format "%s) %s" cmd-str disp-str)))
+        (println)))))
 
 (defn- repl-eval
   [[input tokens :as input-vec] command-map]
@@ -76,25 +118,39 @@
   ;; This means we can put command handlers like "q" and "q show"
   ;; directly in the command map and figure out which one should be
   ;; called
-  (let [command (find-command tokens command-map)
-        handler (command-map command)]
+  (let [menu-cmd (find-menu-command (first tokens) @globals/menu)
+        menu-handler (if-not (nil? menu-cmd)
+                       (nth menu-cmd 2)
+                       nil)
 
-    (if (nil? handler)
-      (println "Don't know how to handle this command")
+        command (find-command tokens command-map)
+        command-handler (command-map command)]
 
+    (cond
+      ;; if the entered command matches a menu item, run the handler function
+      (not (nil? menu-handler))
+      (menu-handler)
+
+      ;; Otherwise, if the tokens can match something in the global command map,
+      ;; run that.
+      ;;
       ;; Remove the tokens that represent the command itself
       ;; They shouldn't be passed to the command handlers
+      (not (nil? command-handler))
       (let [param-tokens (drop (count command) tokens)
             command-input-string (string/join " " param-tokens)]
-        (handler [command-input-string param-tokens])))))
+        (command-handler [command-input-string param-tokens]))
+
+      :else
+      (println "Don't know how to handle this command"))))
 
 (defn- repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"
   []
 
+  (repl-print-menu @globals/menu)
   (repl-eval (repl-read) command-map)
   (println))
-
 
 (defn- repl
   []
@@ -103,33 +159,19 @@
     (repl-iter)))
 
 
-(defn- get-db-filepath
-  []
-
-  (if (= (System/getProperty "os.name") "Mac OS X")
-    "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"
-    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\database\\database.arz"))
-
-(defn- get-localization-filepath
-  []
-
-  (if (= (System/getProperty "os.name") "Mac OS X")
-    "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"
-    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn\\resources\\text_en.arc"))
-
 (defn- initialize
   []
 
   (let [[localization-load-time localization-table]
         (utils/timed
-         (arc-reader/load-localization-table (get-localization-filepath)))
+         (arc-reader/load-localization-table (dirs/get-localization-filepath)))
 
         [db-load-time db]
         (utils/timed
-         (arz-reader/load-game-db (get-db-filepath)
+         (arz-reader/load-game-db (dirs/get-db-filepath)
                                   localization-table))]
 
-    (reset! gd-edit.globals/db db)
+    (reset! globals/db db)
 
     (println (count localization-table)
              "localization strings loaded in"
@@ -156,3 +198,7 @@
   (repl))
 
 #_(initialize)
+#_(time (do
+          (reset! gd-edit.globals/character
+                  (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+          nil))
