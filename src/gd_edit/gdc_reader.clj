@@ -176,7 +176,7 @@
     :stash-items  (s/variable-count StashItem)))
 
 (def UID
-  (s/string :ascii :length 16))
+  (s/string :bytes :length 16))
 
 
 (def Block5
@@ -392,8 +392,6 @@
   (if (= (type val) java.lang.Integer)
     (Integer/toUnsignedLong val)
     val))
-
-(def byte-array-type (Class/forName "[B"))
 
 (defn enc-next-state-with-byte
   "Given a byte array, the current encryption state, and an encryption table, return the next enc state"

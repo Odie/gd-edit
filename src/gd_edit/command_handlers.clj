@@ -299,16 +299,15 @@
 
 (defn- partially-match-key
   "Given a map and a partial key, return a list of pairs that partially matches the key"
-  [m k]
+  [m search-target]
 
   (into {}
         (->> m
              (filter without-meta-fields)
              (filter (fn [[key value]]
-                       (-> key
-                           (keyword->str)
-                           (string/replace "-" "")
-                           (u/ci-match k)))))))
+                       (let [k-str (keyword->str key)]
+                         (or (u/ci-match k-str search-target)
+                             (u/ci-match (string/replace k-str "-" "") search-target))))))))
 
 (defn- coerce-to-int
   [input]
@@ -337,7 +336,7 @@
     :else
     (throw (Throwable. "Can't deal with coll with type: " (type coll)))))
 
-(defn get-in-partial-match
+(defn walk-structure
   [m ks-all]
 
   (letfn [;; We want to return a slightly more complex set of data to the caller.
@@ -414,6 +413,10 @@
         (u/doseq-indexed i [item value]
                          (println i ":")
                          (cond
+                           (sequential? item)
+                           (println
+                            (format "collection of %d items" (count item)))
+
                            (associative? item)
                            (do
                              (print-map item :skip-item-count true)
@@ -424,31 +427,54 @@
                            (throw (Throwable. "Don't know how to print details for a sequence of this type yet!")))
                          )))))
 
-(defn print-match-result
-  [data]
-
-  ;; How many items do we have?
-  (cond
-    (= (count data) 0)
-    (println "No matches found")
-
-    ;; If there is only one, this means the user targetted a specific
-    ;; field in the character sheet to be show.
-    ;; Show the contents.
-    (= (count data) 1)
-    (print-details data)
-
-    ;; If there is more than one item, then the user is exploring the
-    ;; character sheet.
-    ;; Show all the matched items without expanding the contents
-    :else
-    (print-map data)))
 
 (defn print-indent
   [indent-level]
 
   (dotimes [i indent-level]
     (print "    ")))
+
+(defn print-object
+  [obj]
+
+  (let [t (type obj)]
+    (cond
+      (or (number? obj) (string? obj))
+      (do
+        (println obj))
+
+      (sequential? obj)
+      (u/doseq-indexed i [item obj]
+                       (print (format
+                               (format "%%%dd: " (-> (count obj)
+                                                     (Math/log10)
+                                                     (Math/ceil)
+                                                     (int)))
+                               i))
+                       (let [item-type (type item)]
+                         (cond
+                           (= u/byte-array-type item-type)
+                           (println "byte array of size" (count item))
+
+                           (associative? item)
+                           (do
+                             (newline)
+                             (print-map item :skip-item-count true)
+                             ;; (println i)
+                             ;; (println (count obj))
+                             (if-not (= i (dec (count obj)))
+                               (newline))
+                             )
+
+                           :else
+                           (println item))))
+
+      (associative? obj)
+      (print-map obj)
+
+      :else
+      (throw (Throwable. "Unhandled case"))
+      )))
 
 (defn show-handler
   [[input tokens]]
@@ -468,54 +494,59 @@
     (do
       ;; Split a path into components.
       ;; We're going to use these as keys to navigate into the character sheet
-      (let [path-keys (string/split (first tokens) #"/")]
-        (cond
-          ;; If we only have a single item, show all items that partially match
-          ;; the root item
-          (= (count path-keys) 1)
-          (print-match-result (partially-match-key @globals/character (first path-keys)))
+      (let [path-keys (string/split (first tokens) #"/")
+            base-obj (if-not (> (count path-keys) 1)
+                        @globals/character
 
-          ;; We have more than one path-key?
-          ;; Try to navigate the path by partially matching the keys for all but the last key.
-          ;; With the last key, we list all partial matches again.
-          ;;
-          ;; This allows the user to avoid having to type the entire path exactly, while
-          ;; still being able to explore and navigate the data structure.
-          :else
-          (let [result (get-in-partial-match @globals/character (butlast path-keys))
-                {:keys [status found-item]} result]
+                        ;; If the user supplied a long path, we should try to walk the
+                        ;; data structure first and arrive at a base object
+                        (let [result (walk-structure @globals/character (butlast path-keys))
+                              {:keys [status found-item]} result]
 
-            (cond
-              (= status :not-found)
-              (println "No matches found")
+                          (cond
+                            (= status :not-found)
+                            (println "No matches found")
 
-              (= status :too-many-matches)
-              (do
-                (println (format "Cannot traverse path because \"%s\""
-                                 (clojure.string/join "/" (:longest-path result)))
-                         "matches more than one item:")
-                (doseq [ambiguous-item (->> (:ambiguous-matches result)
-                                            (keys)
-                                            (map keyword->str))]
-                  (print-indent 1)
-                  (println ambiguous-item)))
+                            (= status :too-many-matches)
+                            (do
+                              (println (format "Cannot traverse path because \"%s\""
+                                               (clojure.string/join "/" (:longest-path result)))
+                                       "matches more than one item:")
+                              (doseq [ambiguous-item (->> (:ambiguous-matches result)
+                                                          (keys)
+                                                          (map keyword->str))]
+                                (print-indent 1)
+                                (println ambiguous-item)))
 
-              (= status :found)
-              (do
-                (cond
-                  ;; If we arrived at some kind of sequence, navigate one more level in
-                  (sequential? found-item)
-                  (print-match-result (nav-into found-item (last path-keys)))
+                            :else
+                            (:found-item result)))
+              )]
 
-                  ;; Otherwise, try to do a match on the last path component
-                  ;; We allow multiple matches so the user can explore the data structure further
-                  (associative? found-item)
-                  (print-match-result (partially-match-key found-item (last path-keys)))
+        ;; Now that we've found a base object to navigate into...
+        (when-not (nil? base-obj)
+          ;; Walk into it one more level...
+          (let [result (walk-structure base-obj [(last path-keys)])
+                {:keys [status]} result
 
-                  :else
-                  (throw (Throwable. "Don't know how to handle this case"))))
-                )
-              ))))))
+                matched-obj (cond
+                              (= status :not-found)
+                              (println "No matches found")
+
+                              (= status :too-many-matches)
+                              (:ambiguous-matches result)
+
+                              (= status :found)
+                              (:found-item result)
+
+                              :else
+                              (throw (Throwable. "Unhandled case")))
+                ]
+
+            ;; We've successfully navigated to an object
+            ;; This might be a piece of data in the character sheet or a list of partially matched result
+            ;; for some structure represented as a map
+            (print-object matched-obj)
+        ))))))
 
 
 #_(choose-character-handler [nil nil])
@@ -524,3 +555,4 @@
 #_(show-handler [nil ["stash/50"]])
 #_(show-handler [nil ["stash-items/50"]])
 #_(show-handler [nil ["stash-items/50/basename"]])
+#_(show-handler [nil ["skillsets"]])

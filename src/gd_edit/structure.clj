@@ -342,7 +342,9 @@
     (if (:transform-bytes! prim-specs)
       ((:transform-bytes! prim-specs) buffer context))
 
-    (String. ^bytes buffer ^String (valid-encodings requested-encoding))))
+    (if (= :bytes requested-encoding)
+      buffer
+      (String. ^bytes buffer ^String (valid-encodings requested-encoding)))))
 
 
 (defn seq->bytes

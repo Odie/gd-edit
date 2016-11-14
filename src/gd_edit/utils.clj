@@ -47,3 +47,5 @@
   `(doseq [[~item-sym ~index-sym]
            (map vector ~coll (range))]
      ~@body))
+
+(def byte-array-type (Class/forName "[B"))
