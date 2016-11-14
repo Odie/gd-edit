@@ -337,50 +337,60 @@
     (throw (Throwable. "Can't deal with coll with type: " (type coll)))))
 
 (defn get-in-partial-match
-  ([m ks]
-   (get-in-partial-match m ks :not-found))
+  [m ks-all]
 
-  ([m ks-all not-found]
+  (letfn [;; We want to return a slightly more complex set of data to the caller.
+          ;; This helper function helps us construct the return map so we don't have
+          ;; to sprinkle this everywhere.
+          (return-result [result end-ks & others]
+            (merge {;; Report the result the caller said to report
+                    :status result
 
-   ;; For each item in the specified ks
-   ;; Try to iterate a level deeper using the next key
-   (loop [cursor m
-          ks ks-all]
+                    ;; Calculate the longest path traversed
+                    :longest-path (take (- (count ks-all) (count end-ks)) ks-all)
+                    }
 
-     ;; Which key are we trying to navigate to?
-     (let [k (first ks)]
-       (cond
-         ;; Did we try navigating into a location that doesn't exist?
-         (nil? cursor)
-         not-found
+                   (first others))
+            )]
+    ;; For each item in the specified ks
+    ;; Try to iterate a level deeper using the next key
+    (loop [cursor m
+           ks ks-all]
 
-         ;; Did we exhaust all the keys?
-         ;; If so, we're done navigating into the hierarchy.
-         ;; The cursor should be pointing at the item the user wants
-         (nil? k)
-         cursor
+      ;; Which key are we trying to navigate to?
+      (let [k (first ks)]
+        (cond
+          ;; Did we try navigating into a location that doesn't exist?
+          (nil? cursor)
+          (return-result :not-found ks)
 
-         ;; If we have a sequential collection, just try to navigate into
-         ;; the collection with the key
-         (sequential? cursor)
-         (recur (nav-into cursor k) (rest ks))
+          ;; Did we exhaust all the keys?
+          ;; If so, we're done navigating into the hierarchy.
+          ;; The cursor should be pointing at the item the user wants
+          (nil? k)
+          (return-result :found ks {:found-item cursor})
 
-         ;; If we're looking at an associative collection, then we want to
-         ;; perform partial matching on the current key
-         (associative? cursor)
-         (let [matches (partially-match-key m k)]
-           (cond
-             ;; If we can't get a match at all, we cannot navigate to the key
-             (= (count matches) 0)
-             not-found
+          ;; If we have a sequential collection, just try to navigate into
+          ;; the collection with the key
+          (sequential? cursor)
+          (recur (nav-into cursor k) (rest ks))
 
-             ;; If we have more than one match, tell the caller we cannot
-             ;; resolve this ambiguity.
-             (> (count matches) 1)
-             :too-many-matches
+          ;; If we're looking at an associative collection, then we want to
+          ;; perform partial matching on the current key
+          (associative? cursor)
+          (let [matches (partially-match-key m k)]
+            (cond
+              ;; If we can't get a match at all, we cannot navigate to the key
+              (= (count matches) 0)
+              (return-result :not-found (rest ks))
 
-             :else
-             (recur (second (first matches)) (rest ks)))))))))
+              ;; If we have more than one match, tell the caller we cannot
+              ;; resolve this ambiguity.
+              (> (count matches) 1)
+              (return-result :too-many-matches (rest ks) {:ambiguous-matches matches})
+
+              :else
+              (recur (second (first matches)) (rest ks)))))))))
 
 
 (defn print-details
@@ -433,6 +443,12 @@
     :else
     (print-map data)))
 
+(defn print-indent
+  [indent-level]
+
+  (dotimes [i indent-level]
+    (print "    ")))
+
 (defn show-handler
   [[input tokens]]
 
@@ -465,28 +481,40 @@
           ;; This allows the user to avoid having to type the entire path exactly, while
           ;; still being able to explore and navigate the data structure.
           :else
-          (let [item (get-in-partial-match @globals/character (butlast path-keys))
+          (let [result (get-in-partial-match @globals/character (butlast path-keys))
+                {:keys [status found-item]} result]
 
-                ;; If we arrived at some kind of sequence, navigate one more level in
-                result (cond
-                         (= item :not-found)
-                         (println "No matches found")
+            (cond
+              (= status :not-found)
+              (println "No matches found")
 
-                         (= item :too-many-matches)
-                         (println "Cannot walk the path because it's ambiguous")
+              (= status :too-many-matches)
+              (do
+                (println (format "Cannot traverse path because \"%s\""
+                                 (clojure.string/join "/" (:longest-path result)))
+                         "matches more than one item:")
+                (doseq [ambiguous-item (->> (:ambiguous-matches result)
+                                            (keys)
+                                            (map keyword->str))]
+                  (print-indent 1)
+                  (println ambiguous-item)))
 
-                         (sequential? item)
-                         (nav-into item (last path-keys))
+              (= status :found)
+              (do
+                (cond
+                  ;; If we arrived at some kind of sequence, navigate one more level in
+                  (sequential? found-item)
+                  (print-match-result (nav-into found-item (last path-keys)))
 
-                         (associative? item)
-                         (partially-match-key item (last path-keys))
+                  ;; Otherwise, try to do a match on the last path component
+                  ;; We allow multiple matches so the user can explore the data structure further
+                  (associative? found-item)
+                  (print-match-result (partially-match-key found-item (last path-keys)))
 
-                         :else
-                         (throw (Throwable. "Don't know how to handle this case")))]
-
-            (if-not (nil? result)
-              (print-match-result result))
-            ))))))
+                  :else
+                  (throw (Throwable. "Don't know how to handle this case"))))
+                )
+              ))))))
 
 
 #_(choose-character-handler [nil nil])
