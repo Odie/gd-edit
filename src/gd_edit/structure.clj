@@ -183,6 +183,8 @@
       (zipmap (take-nth 2 spec) values))
     ))
 
+
+
 (defn read-spec-sequential
   [spec bb prim-specs context]
 
@@ -371,3 +373,30 @@
   (-> seq
       seq->bytes
       bytes->bytebuffer))
+
+(defn write-struct
+  [spec data ^ByteBuffer bb prim-specs context]
+
+  ;; We're going to loop and process all the specs until we are done
+  (loop [spec-remaining spec]
+
+    ;; If we're written the entire spec, we're done.
+    ;; Return the byte buffer
+    (if (empty? spec-remaining)
+      bb
+
+      ;; Otherwise, grab the next value to be written
+      (let [[key type] spec-remaining
+
+            ;; Look up the value to be written
+            val (key data)
+
+            ;; Look up how we're supposed to write this kind of primitive
+            write-fn (nth (type prim-specs) 3)]
+
+        ;; Write it by running whatever function we looked up
+        (write-fn bb val context)
+
+        ;; Continue to process the next spec
+        (recur (drop 2 spec-remaining))
+        ))))

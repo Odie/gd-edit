@@ -1,8 +1,10 @@
 (ns gd-edit.gdc-reader
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as utils]
-            [clojure.string :as string])
-  (:import  [java.nio ByteBuffer]))
+            [clojure.string :as string]
+            [clojure.java.io :as io])
+  (:import  [java.nio ByteBuffer ByteOrder]
+            [java.io FileOutputStream]))
 
 ;;(set! *warn-on-reflection* true)
 (set! *unchecked-math* true)
@@ -466,6 +468,10 @@
 
     [buffer (decrypt-bytes! buffer context)]))
 
+(defn- write-bytes-
+  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  (throw (Throwable. "Not implemented yet")))
+
 (defn- buffer-size-for-string
   [length encoding]
 
@@ -512,6 +518,10 @@
   (let [enc-val (.get bb)]
     [(short (bit-and 0x00000000000000ff (bit-xor enc-val enc-state))) (enc-next-state enc-val enc-state enc-table)]))
 
+(defn- write-byte-
+  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  (throw (Throwable. "Not implemented yet")))
+
 (defn decrypt-int
   [val enc-state]
 
@@ -530,6 +540,8 @@
       ;; turn the value back into an int
       (int)))
 
+(def encrypt-int decrypt-int)
+
 (defn- read-int-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
@@ -544,11 +556,33 @@
     ;; Return [decrypted-value next-enc-state] pair
     [(decrypt-int enc-val enc-state) (enc-next-state byte-data enc-state enc-table)]))
 
+
+(defn- write-int-
+  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+
+  ;; Encrypt the value and write it
+  (let [enc-val (encrypt-int data enc-state)
+        _ (.putInt bb enc-val)
+
+        ;; Use the updated value to update the encryption state
+        byte-data (-> (ByteBuffer/allocate 4)
+                      (.order ByteOrder/LITTLE_ENDIAN)
+                      (.putInt enc-val)
+                      (.array))
+
+        next-enc-state (enc-next-state byte-data enc-state enc-table)]
+
+    next-enc-state))
+
 (defn- read-bool-
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
 
   (let [[val next-enc-state] (read-byte- bb context)]
     [(= val 1) next-enc-state]))
+
+(defn- write-bool-
+  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  (throw (Throwable. "Not implemented yet")))
 
 (defn- read-float-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -574,6 +608,9 @@
 
      (enc-next-state byte-data enc-state enc-table)]))
 
+(defn- write-float-
+  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  (throw (Throwable. "Not implemented yet")))
 
 (defn read-and-update-context
   [read-fn ^ByteBuffer bb context & rest]
@@ -593,6 +630,24 @@
 (def read-int!   (partial read-and-update-context read-int-))
 (def read-float! (partial read-and-update-context read-float-))
 
+(defn write-and-update-context
+  [write-fn ^ByteBuffer bb data context & rest]
+
+  ;; Run the write function
+  (let [new-enc-state (apply write-fn bb data @context rest)]
+
+    ;; Update the enc-state
+    (reset! context (assoc @context :enc-state new-enc-state))
+
+    ;; Return the read value
+    val))
+
+(def write-bytes! (partial write-and-update-context write-bytes-))
+(def write-byte!  (partial write-and-update-context write-byte-))
+(def write-bool!  (partial write-and-update-context write-bool-))
+(def write-int!   (partial write-and-update-context write-int-))
+(def write-float! (partial write-and-update-context write-float-))
+
 (defn make-enc-context
   [enc-state enc-table]
 
@@ -602,10 +657,10 @@
 
          ;; Specs table for the structure lib
          :primitive-specs {:transform-bytes! transform-bytes!
-                           :byte   [:byte    1 read-byte! ]
-                           :bool   [:byte    1 read-bool! ]
-                           :int32  [:int32   4 read-int!  ]
-                           :float  [:float   4 read-float!]}
+                           :byte   [:byte    1 read-byte!  write-byte! ]
+                           :bool   [:byte    1 read-bool!  write-bool! ]
+                           :int32  [:int32   4 read-int!   write-int!  ]
+                           :float  [:float   4 read-float! write-float!]}
          }))
 
 (defn generate-encryption-table
@@ -647,7 +702,6 @@
   (if (or (not= (:magic preamble) 0x58434447)
           (not= (:version preamble) 1))
     (throw (Throwable. "I don't understand this gdc format!"))))
-
 
 
 (defn read-block
@@ -697,12 +751,10 @@
 (defn block-strip-meta-info-fields
   [block]
 
-
   (->> block
        (filter (fn [[key value]]
                  (not (contains? #{:version :block-id} key))))
-       (into {}))
-  )
+       (into {})))
 
 (defn load-character-file
   [filepath]
@@ -718,7 +770,7 @@
         _ (validate-preamble preamble)
 
 
-        header (s/read-struct Header bb enc-context)
+        header (assoc (s/read-struct Header bb enc-context) :block-id :header)
 
         header-checksum (Integer/toUnsignedLong (.getInt bb))
         _ (assert (= header-checksum (:enc-state @enc-context)))
@@ -729,21 +781,69 @@
 
         mystery-field (read-bytes! bb enc-context 16)
 
+        fileinfo {:seed seed
+                  :preamble preamble
+                  :data-version data-version
+                  :mystery-field mystery-field}
+
         ;; Keep reading more blocks until we've reached the end of the file
-        block-list (-> (loop [block-list (transient [])]
-                         (if (= (.remaining bb) 0)
-                           (persistent! block-list)
+        block-list (->> (loop [block-list (transient [])]
+                          (if (= (.remaining bb) 0)
+                            (persistent! block-list)
 
-                           (recur (conj! block-list (read-block bb enc-context)))))
+                            (recur (conj! block-list (read-block bb enc-context)))))
 
-                       ;; Append the header block when we're done reading
-                       (conj header))
+                        ;; Append the header block when we're done reading
+                        (into [header]))
 
         ;; Try to merge all the block lists into one giant character sheet
         character (assoc (apply merge (map block-strip-meta-info-fields block-list))
-                         :meta-block-list block-list)
+                         :meta-block-list block-list
+                         :meta-fileinfo fileinfo)
         ]
     character))
 
+(defn write-to-file
+  [bb filepath]
+
+  (-> (clojure.java.io/file filepath)
+      (FileOutputStream.)
+      (.getChannel)
+      (.write bb)))
+
+(defn get-block
+  [block-list block-id]
+
+  (filter #(= (:block-id %1) block-id) block-list))
+
+(defn write-character-file
+  [character savepath]
+
+  (let [bb (ByteBuffer/allocate (* 512 1024))
+        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
+
+        block-list (:meta-block-list character)
+        fileinfo (:meta-fileinfo character)
+
+        seed (:seed fileinfo)
+        enc-table (generate-encryption-table seed)
+        enc-context (make-enc-context seed enc-table)
+
+        _ (.putInt bb (bit-xor seed 1431655765))
+        b (s/write-struct FilePreamble (:preamble fileinfo) bb (:primitive-specs @enc-context) enc-context)
+
+        ]
+
+
+
+    (.flip bb)
+
+    (write-to-file bb savepath)))
+
 #_(def r (time (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
-#_(time  (reset! gd-edit.globals/character (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
+#_(time (do
+          (reset! gd-edit.globals/character
+                  (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+          nil))
+
+#_(write-character-file @gd-edit.globals/character "/tmp/player.gdc")
