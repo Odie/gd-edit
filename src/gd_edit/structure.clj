@@ -416,11 +416,18 @@
          length-prefix :struct/length-prefix
          requested-encoding :struct/string-encoding} (meta spec)
 
-        charset (-> (requested-encoding valid-encodings)
-                    (java.nio.charset.Charset/forName))
 
         ;; Grab the string's byte representation
-        str-bytes (.getBytes data charset)]
+        str-bytes (if (= requested-encoding :bytes)
+
+                    ;; If we're just looking at some raw bytes, we don't have to do anything...
+                    #dbg (bytes data)
+
+                    ;; Otherwise, we're looking at some kind of string
+                    ;; Get the raw bytes after converting the string to the right encoding
+                    (->> (requested-encoding valid-encodings)
+                         (java.nio.charset.Charset/forName)
+                         (.getBytes data)))]
 
     ;; Write out the length of the string itself, unless it is of a static length,
     ;; in which case, we'll say the length is implicit.
@@ -456,23 +463,32 @@
 (defn write-struct
   [spec ^ByteBuffer bb data prim-specs context]
 
-  ;; We're going to loop and process all the specs until we are done
-  (loop [spec-remaining spec]
+  (cond
+    ;; If the spec looks like it is describing fields of a map...
+    (ordered-map? spec)
+    (do
+      ;; We're going to loop and process all the fields until we are done
+      (loop [spec-remaining spec]
 
-    ;; If we're written the entire spec, we're done.
-    ;; Return the byte buffer
-    (if (empty? spec-remaining)
-      bb
+        ;; If we're written the entire spec, we're done.
+        ;; Return the byte buffer
+        (if (empty? spec-remaining)
+          bb
 
-      ;; Otherwise, grab the next value to be written
-      (let [[key type] spec-remaining
+          ;; Otherwise, grab the next value to be written
+          (do
+            (let [[key type] spec-remaining
 
-            ;; Look up the value to be written
-            val (key data)]
+                  ;; Look up the value to be written
+                  val (key data)]
 
-        ;; Write out the item according to the spec
-        (write-spec type bb val prim-specs context)
+              ;; Write out the item according to the spec
+              (write-spec type bb val prim-specs context)
 
-        ;; Continue to process the next spec
-        (recur (drop 2 spec-remaining))
-        ))))
+              ;; Continue to process the next pair
+              (recur (drop 2 spec-remaining)))))))
+
+    ;; Otherwise, let our multi-method's default handling do it's thing
+    :else
+    #dbg
+    (write-spec spec bb data prim-specs context)))

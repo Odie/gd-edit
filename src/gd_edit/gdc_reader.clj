@@ -526,7 +526,8 @@
 (defn- write-bytes-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
 
-  (let [next-enc-state (encrypt-bytes! data context)]
+  (let [decrypted-data (byte-array data)
+        next-enc-state (encrypt-bytes! decrypted-data context)]
     (.put bb data 0 (count data))
     next-enc-state))
 
@@ -964,6 +965,8 @@
         _ (write-block bb (nth block-list 1) enc-context)
         _ (write-block bb (nth block-list 2) enc-context)
         _ (write-block bb (nth block-list 3) enc-context)
+        _ (write-block bb (nth block-list 4) enc-context)
+        _ (write-block bb (nth block-list 5) enc-context)
         ;;block-list (filter #(not= (:block-id %1) :header) (:meta-block-list character))
 
         ]
