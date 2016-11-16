@@ -647,7 +647,13 @@
 
 (defn- write-float-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
-  (throw (Throwable. "Not implemented yet")))
+
+  (write-int- bb
+              (-> (ByteBuffer/allocate 4)
+                  (.putFloat data)
+                  (.flip)
+                  (.getInt))
+              context))
 
 (defn read-and-update-context
   [read-fn ^ByteBuffer bb context & rest]
@@ -926,6 +932,7 @@
         _ (write-bytes! bb (byte-array 16) enc-context)
 
         _ (write-block bb (nth block-list 1) enc-context)
+        _ (write-block bb (nth block-list 2) enc-context)
         ;;block-list (filter #(not= (:block-id %1) :header) (:meta-block-list character))
 
         ]
