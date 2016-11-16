@@ -10,7 +10,8 @@
 ;;(set! *warn-on-reflection* true)
 (set! *unchecked-math* true)
 
-(declare read-block read-byte! read-int! read-bool! read-float! read-bytes! read-string!)
+(declare read-block  read-byte!  read-int!  read-bool!  read-float!  read-bytes!  read-string!
+         write-block write-byte! write-int! write-bool! write-float! write-bytes! write-string!)
 
 (defn merge-meta
   "Merges the provided map into the meta map of the provided object."
@@ -170,6 +171,35 @@
      :alternate1-set    alternate1-set
      :alternate2        alternate2
      :alternate2-set    alternate2-set}))
+
+(defn write-block3
+  [^ByteBuffer bb block context]
+
+  (write-int! bb (:version block) context)
+  (write-bool! bb (:has-data block) context)
+  (write-int! bb (:sack-count block) context)
+  (write-int! bb (:focused-sack block) context)
+  (write-int! bb (:selected-sack block) context)
+
+  (assert (= (:sack-count block) (count (:inventory-sacks block))))
+  (doseq [sack (:inventory-sacks block)]
+    (write-block bb sack context))
+
+  (write-bool! bb (:use-alt-weaponset block) context)
+
+  (assert (=  (count (:equipment block)) 12))
+  (doseq [item (:equipment block)]
+    (s/write-struct EquipmentItem bb item (:primitive-specs @context) context))
+
+  (write-bool! bb (:alternate1 block) context)
+  (assert (=  (count (:alternate1-set block)) 2))
+  (doseq [item (:alternate1-set block)]
+    (s/write-struct EquipmentItem bb item (:primitive-specs @context) context))
+
+  (write-bool! bb (:alternate2 block) context)
+  (assert (= (count (:alternate2-set block)) 2))
+  (doseq [item (:alternate2-set block)]
+    (s/write-struct EquipmentItem bb item (:primitive-specs @context) context)))
 
 (def Block4
   (s/ordered-map
@@ -933,6 +963,7 @@
 
         _ (write-block bb (nth block-list 1) enc-context)
         _ (write-block bb (nth block-list 2) enc-context)
+        _ (write-block bb (nth block-list 3) enc-context)
         ;;block-list (filter #(not= (:block-id %1) :header) (:meta-block-list character))
 
         ]

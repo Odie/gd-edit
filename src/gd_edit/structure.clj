@@ -379,7 +379,28 @@
   [prim-specs type]
   (nth (prim-specs type) 3))
 
+(declare write-struct)
+
 (defmulti write-spec spec-type)
+
+(defmethod write-spec :variable-count
+  [spec ^ByteBuffer bb data prim-specs context]
+
+  (let [;; Destructure fields in the attached meta info
+        {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
+
+        ;; Write out the spec if we're not dealing with a sequence with a static/implied length
+        _ (if (= static-length -1)
+            ;; Write out the length of the sequence first
+            (let [write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+              (write-fn bb (count data) context)))
+
+        ;; Unwrap the spec so we can read it
+        unwrapped-spec (first spec)]
+
+    ;; Write out each item in the sequence
+    (doseq [item data]
+      (write-struct unwrapped-spec bb item (:primitive-specs @context) context))))
 
 (defmethod write-spec :string
   [spec ^ByteBuffer bb data prim-specs context]
