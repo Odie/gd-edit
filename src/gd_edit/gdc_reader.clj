@@ -3,7 +3,8 @@
             [gd-edit.utils :as utils]
             [clojure.string :as string]
             [clojure.java.io :as io]
-            [gd-edit.utils :as u])
+            [gd-edit.utils :as u]
+            [gd-edit.globals :as globals])
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
@@ -507,13 +508,15 @@
   "Decrypts the given byte array in place while updating the encryption context"
   [buffer context-atom]
 
-  (let [transform-fn (if (= :write (:direction @context-atom))
-                       encrypt-bytes!
-                       decrypt-bytes!)
-        next-enc-state (transform-fn buffer @context-atom)]
+  (let [[transform-fn transform-buffer] (if (= :write (:direction @context-atom))
+                                          [encrypt-bytes! (byte-array buffer)]
+                                          [decrypt-bytes! buffer])
+        next-enc-state (transform-fn transform-buffer @context-atom)]
 
     ;; Update the context with the new state
-    (reset! context-atom (assoc  @context-atom :enc-state next-enc-state))))
+    (reset! context-atom (assoc  @context-atom :enc-state next-enc-state))
+
+    transform-buffer))
 
 (defn- read-bytes-
   [^ByteBuffer bb {:keys [enc-state enc-table] :as context} byte-count]
@@ -967,7 +970,7 @@
         _ (write-block bb (nth block-list 3) enc-context)
         _ (write-block bb (nth block-list 4) enc-context)
         _ (write-block bb (nth block-list 5) enc-context)
-        ;;block-list (filter #(not= (:block-id %1) :header) (:meta-block-list character))
+        _ (write-block bb (nth block-list 6) enc-context)
 
         ]
 
@@ -982,3 +985,12 @@
           nil))
 
 #_(write-character-file @gd-edit.globals/character "/tmp/player.gdc")
+
+
+#_(map #(format "0x%02x" %1)
+       (-> @gd-edit.globals/character
+           (:meta-block-list)
+           (nth 5)
+           (:spawn-points)
+           (first)
+           (first)))

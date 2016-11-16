@@ -427,19 +427,20 @@
                     ;; Get the raw bytes after converting the string to the right encoding
                     (->> (requested-encoding valid-encodings)
                          (java.nio.charset.Charset/forName)
-                         (.getBytes data)))]
+                         (.getBytes data)))
 
-    ;; Write out the length of the string itself, unless it is of a static length,
-    ;; in which case, we'll say the length is implicit.
-    (if (= static-length -1)
-      ;; What is the string length we're writing out to file?
-      (let [claimed-str-length (count data)
-            write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
-        (write-fn bb claimed-str-length context)))
+        ;; Write out the length of the string itself, unless it is of a static length,
+        ;; in which case, we'll say the length is implicit.
+        _ (if (= static-length -1)
+            ;; What is the string length we're writing out to file?
+            (let [claimed-str-length (count data)
+                  write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+              (write-fn bb claimed-str-length context)))
 
-    ;; If the context asked for bytes to be transformed, do it now
-    (if (:transform-bytes! prim-specs)
-      ((:transform-bytes! prim-specs) str-bytes context))
+        ;; If the context asked for bytes to be transformed, do it now
+        str-bytes (if (:transform-bytes! prim-specs)
+                    ((:transform-bytes! prim-specs) str-bytes context))
+        ]
 
     ;; The string has now been converted to the right encoding and transformed.
     ;; Write it out now.
