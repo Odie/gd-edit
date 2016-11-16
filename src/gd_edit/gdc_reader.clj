@@ -2,7 +2,8 @@
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as utils]
             [clojure.string :as string]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [gd-edit.utils :as u])
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
@@ -422,7 +423,8 @@
   [byte-data enc-state enc-table]
 
   ;; Dispatch by byte-data type
-  (if (sequential? byte-data)
+  (if (or (sequential? byte-data)
+          (= u/byte-array-type (type byte-data)))
 
     (enc-next-state-with-byte-array byte-data enc-state enc-table)
 
@@ -433,8 +435,7 @@
   (loop [i 0
          limit (count buffer)
          enc-state (:enc-state context)
-         enc-table (:enc-table context)
-         ]
+         enc-table (:enc-table context)]
 
     ;; Finished transforming the byte array?
     (if (>= i limit)
@@ -451,11 +452,35 @@
         (recur (inc i) limit (enc-next-state enc-val enc-state enc-table) enc-table)
         ))))
 
+(defn encrypt-bytes!
+  [^bytes buffer context]
+  (loop [i 0
+         limit (count buffer)
+         enc-state (:enc-state context)
+         enc-table (:enc-table context)]
+
+    ;; Finished transforming the byte array?
+    (if (>= i limit)
+      ;; Return the new enc-state
+      enc-state
+
+      ;; Not done?
+      ;; Grab the next byte, decrypt it, store it back in the same spot
+      (let [val (aget buffer i)
+            enc-val (byte ^long (bit-and 0x00000000000000ff (bit-xor val enc-state)))]
+
+        (aset buffer i enc-val)
+        (recur (inc i) limit (enc-next-state enc-val enc-state enc-table) enc-table)
+        ))))
+
 (defn transform-bytes!
   "Decrypts the given byte array in place while updating the encryption context"
   [buffer context-atom]
 
-  (let [next-enc-state (decrypt-bytes! buffer @context-atom)]
+  (let [transform-fn (if (= :write (:direction @context-atom))
+                       encrypt-bytes!
+                       decrypt-bytes!)
+        next-enc-state (transform-fn buffer @context-atom)]
 
     ;; Update the context with the new state
     (reset! context-atom (assoc  @context-atom :enc-state next-enc-state))))
@@ -520,7 +545,14 @@
 
 (defn- write-byte-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
-  (throw (Throwable. "Not implemented yet")))
+
+  ;; encrypt the value and write it
+  (let [enc-val (byte (bit-and 0x00000000000000ff (bit-xor data enc-state)))
+        _ (.put bb enc-val)
+
+        next-enc-state (enc-next-state enc-val enc-state enc-table)]
+
+    next-enc-state))
 
 (defn decrypt-int
   [val enc-state]
@@ -560,11 +592,11 @@
 (defn- write-int-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
 
-  ;; Encrypt the value and write it
+  ;; encrypt the value and write it
   (let [enc-val (encrypt-int data enc-state)
         _ (.putInt bb enc-val)
 
-        ;; Use the updated value to update the encryption state
+        ;; use the updated value to update the encryption state
         byte-data (-> (ByteBuffer/allocate 4)
                       (.order ByteOrder/LITTLE_ENDIAN)
                       (.putInt enc-val)
@@ -582,7 +614,9 @@
 
 (defn- write-bool-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
-  (throw (Throwable. "Not implemented yet")))
+
+  (assert (or (= data true) (= data false)))
+  (write-byte- bb (if data 1 0) context))
 
 (defn- read-float-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -649,19 +683,20 @@
 (def write-float! (partial write-and-update-context write-float-))
 
 (defn make-enc-context
-  [enc-state enc-table]
+  [enc-state enc-table & [options-map]]
 
-  (atom {;; Mutable state
-         :enc-state enc-state
-         :enc-table enc-table
+  (atom (merge options-map
+         {;; Mutable state
+          :enc-state enc-state
+          :enc-table enc-table
 
-         ;; Specs table for the structure lib
-         :primitive-specs {:transform-bytes! transform-bytes!
-                           :byte   [:byte    1 read-byte!  write-byte! ]
-                           :bool   [:byte    1 read-bool!  write-bool! ]
-                           :int32  [:int32   4 read-int!   write-int!  ]
-                           :float  [:float   4 read-float! write-float!]}
-         }))
+          ;; Specs table for the structure lib
+          :primitive-specs {:transform-bytes! transform-bytes!
+                            :byte   [:byte    1 read-byte!  write-byte! ]
+                            :bool   [:byte    1 read-bool!  write-bool! ]
+                            :int32  [:int32   4 read-int!   write-int!  ]
+                            :float  [:float   4 read-float! write-float!]}
+          })))
 
 (defn generate-encryption-table
   "Return a sequence of 256 elements, each being an 4 byte quantity, derived from the given seed"
@@ -814,7 +849,7 @@
 (defn get-block
   [block-list block-id]
 
-  (filter #(= (:block-id %1) block-id) block-list))
+  (first (filter #(= (:block-id %1) block-id) block-list)))
 
 (defn write-character-file
   [character savepath]
@@ -830,11 +865,10 @@
         enc-context (make-enc-context seed enc-table)
 
         _ (.putInt bb (bit-xor seed 1431655765))
-        b (s/write-struct FilePreamble (:preamble fileinfo) bb (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct FilePreamble (:preamble fileinfo) bb (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct Header (get-block block-list :header) bb (:primitive-specs @enc-context) enc-context)
 
         ]
-
-
 
     (.flip bb)
 

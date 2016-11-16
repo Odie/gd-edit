@@ -374,6 +374,68 @@
       seq->bytes
       bytes->bytebuffer))
 
+
+(defn- prim-spec-get-write-fn
+  [prim-specs type]
+  (nth (prim-specs type) 3))
+
+(defmulti write-spec spec-type)
+
+(defmethod write-spec :string
+  [spec ^ByteBuffer bb data prim-specs context]
+
+  (let [valid-encodings {:ascii "US-ASCII"
+                         :utf-8 "UTF-8"
+                         :utf-16-le "UTF-16LE"}
+
+        ;; Destructure fields in the attached meta info
+        {static-length :struct/length
+         length-prefix :struct/length-prefix
+         requested-encoding :struct/string-encoding} (meta spec)
+
+        charset (-> (requested-encoding valid-encodings)
+                    (java.nio.charset.Charset/forName))
+
+        ;; Grab the string's byte representation
+        str-bytes (.getBytes data charset)
+
+        ;; What is the length (in bytes) of the string we want to write?
+        ;; length (if (not= static-length -1)
+        ;;          static-length
+        ;;          (buffer-size-for-string (count data) requested-encoding))]
+        ]
+
+    ;; Write out the length of the string itself, unless it is of a static length,
+    ;; in which case, we'll say the length is implicit.
+    (if (= static-length -1)
+      ;; What is the string length we're writing out to file?
+      (let [claimed-str-length (count data)
+            write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+        (write-fn bb claimed-str-length context)))
+
+    ;; If the context asked for bytes to be transformed, do it now
+    (if (:transform-bytes! prim-specs)
+      ((:transform-bytes! prim-specs) str-bytes context))
+
+    ;; The string has now been converted to the right encoding and transformed.
+    ;; Write it out now.
+    (.put bb str-bytes)))
+
+(defmethod write-spec :default
+  [spec ^ByteBuffer bb data prim-specs context]
+
+  ;; Look up how we're supposed to deal with this primitive
+  (let [primitives-spec (prim-specs spec)]
+
+    ;; If the primitive is found...
+    (if primitives-spec
+
+      ;; Execute the read function now
+      ((nth primitives-spec 3) bb data context)
+
+      ;; Otherwise, give up
+      (throw (Throwable. (str "Cannot handle spec:" spec))))))
+
 (defn write-struct
   [spec data ^ByteBuffer bb prim-specs context]
 
@@ -389,13 +451,10 @@
       (let [[key type] spec-remaining
 
             ;; Look up the value to be written
-            val (key data)
+            val (key data)]
 
-            ;; Look up how we're supposed to write this kind of primitive
-            write-fn (nth (type prim-specs) 3)]
-
-        ;; Write it by running whatever function we looked up
-        (write-fn bb val context)
+        ;; Write out the item according to the spec
+        (write-spec type bb val prim-specs context)
 
         ;; Continue to process the next spec
         (recur (drop 2 spec-remaining))
