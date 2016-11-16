@@ -384,6 +384,8 @@
 (defmethod write-spec :string
   [spec ^ByteBuffer bb data prim-specs context]
 
+  (assert (not (nil? data)))
+
   (let [valid-encodings {:ascii "US-ASCII"
                          :utf-8 "UTF-8"
                          :utf-16-le "UTF-16LE"}
@@ -397,13 +399,7 @@
                     (java.nio.charset.Charset/forName))
 
         ;; Grab the string's byte representation
-        str-bytes (.getBytes data charset)
-
-        ;; What is the length (in bytes) of the string we want to write?
-        ;; length (if (not= static-length -1)
-        ;;          static-length
-        ;;          (buffer-size-for-string (count data) requested-encoding))]
-        ]
+        str-bytes (.getBytes data charset)]
 
     ;; Write out the length of the string itself, unless it is of a static length,
     ;; in which case, we'll say the length is implicit.
@@ -437,7 +433,7 @@
       (throw (Throwable. (str "Cannot handle spec:" spec))))))
 
 (defn write-struct
-  [spec data ^ByteBuffer bb prim-specs context]
+  [spec ^ByteBuffer bb data prim-specs context]
 
   ;; We're going to loop and process all the specs until we are done
   (loop [spec-remaining spec]

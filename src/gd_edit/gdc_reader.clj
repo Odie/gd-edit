@@ -495,7 +495,10 @@
 
 (defn- write-bytes-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
-  (throw (Throwable. "Not implemented yet")))
+
+  (let [next-enc-state (encrypt-bytes! data context)]
+    (.put bb data 0 (count data))
+    next-enc-state))
 
 (defn- buffer-size-for-string
   [length encoding]
@@ -739,6 +742,16 @@
     (throw (Throwable. "I don't understand this gdc format!"))))
 
 
+(defn- get-block-spec
+  "Retrieve a block spec by id number"
+  [id]
+
+  (let [block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))]
+    (if-not (nil? block-spec-var)
+      (var-get block-spec-var)
+      nil)))
+
+
 (defn read-block
   [^ByteBuffer bb context]
 
@@ -746,10 +759,7 @@
         id (read-int! bb context)
 
         ;; Try to fetch the block spec by name
-        block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))
-        block-spec (if-not (nil? block-spec-var)
-                     (var-get block-spec-var)
-                     nil)
+        block-spec (get-block-spec id)
 
         ;; Try to fetch a custom read function by name
         block-read-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "read-block" id)))
@@ -782,6 +792,50 @@
         ]
 
     (assoc block-data :block-id id)))
+
+(defn write-block
+  [^ByteBuffer bb block context]
+
+  (let [{:keys [block-id]} block
+
+        block-spec (get-block-spec block-id)
+
+        ;; Try to fetch a custom write function by name
+        block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" block-id)))
+        block-write-fn (if-not (nil? block-write-fn-var)
+                        (var-get block-write-fn-var)
+                        nil)
+
+        ;; If neither a block spec or a custom read function can be found...
+        ;; We don't know how to write this block
+        _ (if (and (nil? block-spec) (nil? block-write-fn))
+            (throw (Throwable. "Don't know how to write block " block-id)))
+
+        ;; Write the id of the block
+        _ (write-int! bb block-id context)
+
+        ;; Write a dummy block length
+        ;; We'll come back and fill it back in when we know how long the block is
+        length-field-pos (.position bb)
+        length-field-enc-state (:enc-state @context)
+        _ (.putInt bb 0)
+
+        ;; Write the block using either a custom write function or the block spec
+        _ (if-not (nil? block-write-fn)
+            (block-write-fn bb block context)
+            (s/write-struct block-spec bb block (:primitive-specs @context) context))
+
+        ;; Write out the real length of the block
+        block-end-pos (.position bb)
+        block-length (- (.position bb) length-field-pos 4)
+        _ (.position bb length-field-pos)
+        _ (.putInt bb (int (bit-and 0x00000000ffffffff (bit-xor block-length length-field-enc-state))))
+        _ (.position bb block-end-pos)
+
+        ;; Write the checksum to end the block
+        _ (.putInt bb (int (bit-and 0x00000000ffffffff (:enc-state @context))))]
+    )
+  )
 
 (defn block-strip-meta-info-fields
   [block]
@@ -862,11 +916,17 @@
 
         seed (:seed fileinfo)
         enc-table (generate-encryption-table seed)
-        enc-context (make-enc-context seed enc-table)
+        enc-context (make-enc-context seed enc-table {:direction :write})
 
         _ (.putInt bb (bit-xor seed 1431655765))
-        _ (s/write-struct FilePreamble (:preamble fileinfo) bb (:primitive-specs @enc-context) enc-context)
-        _ (s/write-struct Header (get-block block-list :header) bb (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct FilePreamble bb (:preamble fileinfo) (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct Header bb (get-block block-list :header) (:primitive-specs @enc-context) enc-context)
+        _ (.putInt bb (int ^long (:enc-state @enc-context)))
+        _ (write-int! bb (:data-version fileinfo) enc-context)
+        _ (write-bytes! bb (byte-array 16) enc-context)
+
+        _ (write-block bb (nth block-list 1) enc-context)
+        ;;block-list (filter #(not= (:block-id %1) :header) (:meta-block-list character))
 
         ]
 
