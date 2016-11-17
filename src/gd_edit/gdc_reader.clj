@@ -558,9 +558,9 @@
 (defn- write-bytes-
   [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
 
-  (let [decrypted-data (byte-array data)
-        next-enc-state (encrypt-bytes! decrypted-data context)]
-    (.put bb data 0 (count data))
+  (let [encrypted-data (byte-array data)
+        next-enc-state (encrypt-bytes! encrypted-data context)]
+    (.put bb encrypted-data 0 (count encrypted-data))
     next-enc-state))
 
 (defn- buffer-size-for-string
@@ -1036,10 +1036,7 @@
         _ (s/write-struct Header bb (get-block block-list :header) (:primitive-specs @enc-context) enc-context)
         _ (.putInt bb (int ^long (:enc-state @enc-context)))
         _ (write-int! bb (:data-version fileinfo) enc-context)
-        _ (write-bytes! bb (byte-array 16) enc-context)
-
-
-        ]
+        _ (write-bytes! bb (byte-array 16) enc-context)]
 
     (doseq [block (->> block-list
                        (filter #(not= (:block-id %1) :header)))]
