@@ -173,15 +173,22 @@
                  (read-fn bb context)
                  (read-spec stripped-spec bb primitive-specs context))]
 
-    ;; We've read all the values
-    ;; If the user didn't ask for a map back, then we're done
-    (if (not (ordered-map? spec))
+    (cond
+      ;; If the value was read using a read function, return it as is
+      (not (nil? read-fn))
       values
 
+      ;; If the user didn't ask a map back, return the data as is
+      (not (ordered-map? spec))
+      values
+
+      :else
       ;; The user did ask for a map back
       ;; Construct a map using the fieldnames in the spec as the key and the read value as the value
       (zipmap (take-nth 2 spec) values))
-    ))
+      ))
+
+
 
 (defn read-spec-sequential
   [spec bb prim-specs context]
@@ -270,17 +277,20 @@
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
-        ]
 
-    ;; Read the spec "length" number of times and accumulate the result into a vector
-    ;; We're abusing reduce here by producing a lazy sequence to control the number of
-    ;; iterations we run.
-    (reduce
-     (fn [accum i]
-       ;; Read another one out
-       (conj accum (read-struct unwrapped-spec bb context)))
-     []
-     (range length))))
+        ;; Read the spec "length" number of times and accumulate the result into a vector
+        ;; We're abusing reduce here by producing a lazy sequence to control the number of
+        ;; iterations we run.
+        coll (reduce
+         (fn [accum i]
+           ;; Read another one out
+           (conj accum (read-struct unwrapped-spec bb context)))
+         []
+         (range length))
+
+        ]
+    coll
+    ))
 
 
 (defn string
@@ -371,3 +381,129 @@
   (-> seq
       seq->bytes
       bytes->bytebuffer))
+
+
+(defn- prim-spec-get-write-fn
+  [prim-specs type]
+  (nth (prim-specs type) 3))
+
+(declare write-struct)
+
+(defmulti write-spec spec-type)
+
+(defmethod write-spec :variable-count
+  [spec ^ByteBuffer bb data prim-specs context]
+
+  (let [;; Destructure fields in the attached meta info
+        {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
+
+        ;; Write out the spec if we're not dealing with a sequence with a static/implied length
+        _ (if (= static-length -1)
+            ;; Write out the length of the sequence first
+            (let [write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+              (write-fn bb (count data) context)))
+
+        ;; Unwrap the spec so we can read it
+        unwrapped-spec (first spec)]
+
+    ;; Write out each item in the sequence
+    (doseq [item data]
+      (write-struct unwrapped-spec bb item (:primitive-specs @context) context))))
+
+(defmethod write-spec :string
+  [spec ^ByteBuffer bb data prim-specs context]
+
+  (assert (not (nil? data)))
+
+  (let [valid-encodings {:ascii "US-ASCII"
+                         :utf-8 "UTF-8"
+                         :utf-16-le "UTF-16LE"}
+
+        ;; Destructure fields in the attached meta info
+        {static-length :struct/length
+         length-prefix :struct/length-prefix
+         requested-encoding :struct/string-encoding} (meta spec)
+
+
+        ;; Grab the string's byte representation
+        str-bytes (if (= requested-encoding :bytes)
+
+                    ;; If we're just looking at some raw bytes, we don't have to do anything...
+                    (bytes data)
+
+                    ;; Otherwise, we're looking at some kind of string
+                    ;; Get the raw bytes after converting the string to the right encoding
+                    (->> (requested-encoding valid-encodings)
+                         (java.nio.charset.Charset/forName)
+                         (.getBytes data)))
+
+        ;; Write out the length of the string itself, unless it is of a static length,
+        ;; in which case, we'll say the length is implicit.
+        _ (if (= static-length -1)
+            ;; What is the string length we're writing out to file?
+            (let [claimed-str-length (count data)
+                  write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+              (write-fn bb claimed-str-length context)))
+
+        ;; If the context asked for bytes to be transformed, do it now
+        str-bytes (if (:transform-bytes! prim-specs)
+                    ((:transform-bytes! prim-specs) str-bytes context))
+        ]
+
+    ;; The string has now been converted to the right encoding and transformed.
+    ;; Write it out now.
+    (.put bb str-bytes)))
+
+(defmethod write-spec :default
+  [spec ^ByteBuffer bb data prim-specs context]
+
+  ;; Look up how we're supposed to deal with this primitive
+  (let [primitives-spec (prim-specs spec)]
+
+    ;; If the primitive is found...
+    (if primitives-spec
+
+      ;; Execute the read function now
+      ((nth primitives-spec 3) bb data context)
+
+      ;; Otherwise, give up
+      (throw (Throwable. (str "Cannot handle spec:" spec))))))
+
+(defn write-struct
+  [spec ^ByteBuffer bb data prim-specs context]
+  {:pre [(not (nil? data))]}
+
+  (cond
+    ;; Did the spec attach a write function?
+    ;; If so, call it now
+    (not (nil? (:struct/write (meta spec))))
+    (do
+      ((:struct/write (meta spec)) bb data context))
+
+    ;; If the spec looks like it is describing fields of a map...
+    (ordered-map? spec)
+    (do
+      ;; We're going to loop and process all the fields until we are done
+      (loop [spec-remaining spec]
+
+        ;; If we're written the entire spec, we're done.
+        ;; Return the byte buffer
+        (if (empty? spec-remaining)
+          bb
+
+          ;; Otherwise, grab the next value to be written
+          (do
+            (let [[key type] spec-remaining
+
+                  ;; Look up the value to be written
+                  val (key data)]
+
+              ;; Write out the item according to the spec
+              (write-spec type bb val prim-specs context)
+
+              ;; Continue to process the next pair
+              (recur (drop 2 spec-remaining)))))))
+
+    ;; Otherwise, let our multi-method's default handling do it's thing
+    :else
+    (write-spec spec bb data prim-specs context)))
