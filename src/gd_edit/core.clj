@@ -11,7 +11,8 @@
             [jansi-clj.core :refer :all])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel]))
+            [java.nio.channels FileChannel])
+  (:gen-class))
 
 
 (defn- tokenize-input
