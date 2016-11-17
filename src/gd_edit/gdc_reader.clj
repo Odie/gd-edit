@@ -1042,10 +1042,8 @@
         ]
 
     (doseq [block (->> block-list
-                       (filter #(not= (:block-id %1) :header))
-                       (take 12))]
+                       (filter #(not= (:block-id %1) :header)))]
       (write-block bb block enc-context))
-    ;; _ (write-block bb (nth block-list 12) enc-context)
 
     (.flip bb)
 

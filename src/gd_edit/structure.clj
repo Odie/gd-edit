@@ -471,7 +471,7 @@
 
 (defn write-struct
   [spec ^ByteBuffer bb data prim-specs context]
-  {:pre (not (nil? data))}
+  {:pre [(not (nil? data))]}
 
   (cond
     ;; Did the spec attach a write function?
