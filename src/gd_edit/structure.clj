@@ -173,15 +173,20 @@
                  (read-fn bb context)
                  (read-spec stripped-spec bb primitive-specs context))]
 
-    ;; We've read all the values
-    ;; If the user didn't ask for a map back, then we're done
-    (if (not (ordered-map? spec))
+    (cond
+      ;; If the value was read using a read function, return it as is
+      (not (nil? read-fn))
       values
 
+      ;; If the user didn't ask a map back, return the data as is
+      (not (ordered-map? spec))
+      values
+
+      :else
       ;; The user did ask for a map back
       ;; Construct a map using the fieldnames in the spec as the key and the read value as the value
       (zipmap (take-nth 2 spec) values))
-    ))
+      ))
 
 
 
@@ -272,17 +277,20 @@
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
-        ]
 
-    ;; Read the spec "length" number of times and accumulate the result into a vector
-    ;; We're abusing reduce here by producing a lazy sequence to control the number of
-    ;; iterations we run.
-    (reduce
-     (fn [accum i]
-       ;; Read another one out
-       (conj accum (read-struct unwrapped-spec bb context)))
-     []
-     (range length))))
+        ;; Read the spec "length" number of times and accumulate the result into a vector
+        ;; We're abusing reduce here by producing a lazy sequence to control the number of
+        ;; iterations we run.
+        coll (reduce
+         (fn [accum i]
+           ;; Read another one out
+           (conj accum (read-struct unwrapped-spec bb context)))
+         []
+         (range length))
+
+        ]
+    coll
+    ))
 
 
 (defn string
@@ -463,8 +471,16 @@
 
 (defn write-struct
   [spec ^ByteBuffer bb data prim-specs context]
+  {:pre (not (nil? data))}
 
   (cond
+    ;; Did the spec attach a write function?
+    ;; If so, call it now
+    (not (nil? (:struct/write (meta spec))))
+    (do
+      #dbg
+      ((:struct/write (meta spec)) bb data context))
+
     ;; If the spec looks like it is describing fields of a map...
     (ordered-map? spec)
     (do

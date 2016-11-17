@@ -308,6 +308,7 @@
 (defn read-hotslot
   [^ByteBuffer bb context]
 
+  #dbg
   (let [type (read-int! bb context)]
     (cond
       (= type 0)
@@ -319,12 +320,38 @@
        }
 
       (= type 4)
-      {type type
+      {:type type
        :item-name (read-string! bb context)
        :bitmap-up (read-string! bb context)
        :bitmap-down (read-string! bb context)
        :default-text (read-string! bb context {:encoding :utf-16-le})
-       })))
+       }
+
+      :else
+      {:type type}
+      )))
+
+(defn write-hotslot
+  [^ByteBuffer bb hotslot context]
+
+  (let [type (:type hotslot)]
+    (write-int! bb type context)
+
+    (cond
+      (= type 0)
+      (do
+        (write-string! bb (:skill-name hotslot) context)
+        (write-bool! bb (:is-item-skill hotslot) context)
+        (write-string! bb (:item-name hotslot) context)
+        (write-int! bb (:item-equip-location hotslot)context))
+
+      (= type 4)
+      (do
+        (write-string! bb (:item-name hotslot) context)
+        (write-string! bb (:bitmap-up hotslot) context)
+        (write-string! bb (:bitmap-down hotslot) context)
+        (write-string! bb (:default-text hotslot) context {:encoding :utf-16-le})
+        ))))
 
 (def HotSlot
   (merge-meta
@@ -337,7 +364,8 @@
     :type                :int32
     :item-equip-location :int32
     :is-item-skill       :bool)
-   {:struct/read read-hotslot}))
+   {:struct/read read-hotslot
+    :struct/write write-hotslot}))
 
 (def Block14
   (s/ordered-map
@@ -354,7 +382,8 @@
                             :length 5)
 
    :hotslots                (s/variable-count HotSlot :length 36)
-   :camera-distance        :float))
+   :camera-distance        :float
+   ))
 
 (def Block15
   (s/ordered-map
@@ -572,6 +601,45 @@
 
      ;; Read the bytes and turn it into a string
      (String. ^bytes (read-bytes! bb context byte-count) ^String (valid-encodings encoding)))))
+
+
+(defn write-string!
+  ([^ByteBuffer bb data context]
+   (write-string! bb data context {:static-length -1 :encoding :ascii}))
+
+  ([^ByteBuffer bb data context {:keys [static-length encoding]}]
+
+   (assert (not (nil? data)))
+
+   (let [valid-encodings {:ascii "US-ASCII"
+                          :utf-8 "UTF-8"
+                          :utf-16-le "UTF-16LE"}
+
+         ;; Grab the string's byte representation
+         str-bytes (if (= encoding :bytes)
+
+                     ;; If we're just looking at some raw bytes, we don't have to do anything...
+                     (bytes data)
+
+                     ;; Otherwise, we're looking at some kind of string
+                     ;; Get the raw bytes after converting the string to the right encoding
+                     (->> (encoding valid-encodings)
+                          (java.nio.charset.Charset/forName)
+                          (.getBytes data)))
+
+         ;; Write out the length of the string itself, unless it is of a static length,
+         ;; in which case, we'll say the length is implicit.
+         _ (if (= static-length -1)
+             ;; What is the string length we're writing out to file?
+             (let [claimed-str-length (count data)]
+               (write-int! bb claimed-str-length context)))
+
+         ;; If the context asked for bytes to be transformed, do it now
+         str-bytes (transform-bytes! str-bytes context)]
+
+     ;; The string has now been converted to the right encoding and transformed.
+     ;; Write it out now.
+     (.put bb str-bytes))))
 
 (defn- read-byte-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
@@ -798,6 +866,8 @@
   (let [;; Read the block id
         id (read-int! bb context)
 
+        #dbg ^{:break/when (= id 14)}
+
         ;; Try to fetch the block spec by name
         block-spec (get-block-spec id)
 
@@ -835,10 +905,13 @@
 
 (defn write-block
   [^ByteBuffer bb block context]
+  {:pre [(not (nil? block))]}
 
   (let [{:keys [block-id]} block
 
         block-spec (get-block-spec block-id)
+
+        _ (println "writing block:" block-id)
 
         ;; Try to fetch a custom write function by name
         block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" block-id)))
@@ -863,7 +936,7 @@
         ;; Write the block using either a custom write function or the block spec
         _ (if-not (nil? block-write-fn)
             (block-write-fn bb block context)
-            (s/write-struct block-spec bb block (:primitive-specs @context) context))
+            #dbg (s/write-struct block-spec bb block (:primitive-specs @context) context))
 
         ;; Write out the real length of the block
         block-end-pos (.position bb)
@@ -965,14 +1038,14 @@
         _ (write-int! bb (:data-version fileinfo) enc-context)
         _ (write-bytes! bb (byte-array 16) enc-context)
 
-        _ (write-block bb (nth block-list 1) enc-context)
-        _ (write-block bb (nth block-list 2) enc-context)
-        _ (write-block bb (nth block-list 3) enc-context)
-        _ (write-block bb (nth block-list 4) enc-context)
-        _ (write-block bb (nth block-list 5) enc-context)
-        _ (write-block bb (nth block-list 6) enc-context)
 
         ]
+
+    (doseq [block (->> block-list
+                       (filter #(not= (:block-id %1) :header))
+                       (take 12))]
+      (write-block bb block enc-context))
+    ;; _ (write-block bb (nth block-list 12) enc-context)
 
     (.flip bb)
 
@@ -984,13 +1057,6 @@
                   (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
           nil))
 
+#_(reset! gd-edit.globals/character nil)
+
 #_(write-character-file @gd-edit.globals/character "/tmp/player.gdc")
-
-
-#_(map #(format "0x%02x" %1)
-       (-> @gd-edit.globals/character
-           (:meta-block-list)
-           (nth 5)
-           (:spawn-points)
-           (first)
-           (first)))
