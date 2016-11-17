@@ -27,7 +27,7 @@
  bin {:jvm-opt #{"-Xms128m" "-Xmx512m"}}
  exe {:jvm-opt #{"-Xms128m" "-Xmx512m"}
       :name      project
-      :main      'gd-edit.core
+      :main      'gd_edit.core
       :version   "0.1.0"
       :desc      "GrimDawn save game editor"
       :copyright "2016"}
