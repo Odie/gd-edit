@@ -195,6 +195,21 @@
 
   (last (clojure.string/split path #"[/\\]")))
 
+(declare load-character-file
+         write-character-file
+         character-selection-screen!
+         character-manipulation-screen!)
+
+(defn- character-manipulation-screen
+  []
+
+  {:display-fn
+   (fn []
+     (println "Character: " (:character-name @globals/character)))
+
+   :choice-map [["r" "reload" (fn [] (load-character-file @globals/last-character-load-path))]
+                ["w" "write" (fn[] (write-character-file @globals/character))]]})
+
 (defn- character-selection-screen
   []
 
@@ -205,30 +220,30 @@
                        (filter #(.isDirectory %1))
                        (filter #(.exists (io/file %1 "player.gdc"))))]
 
-    (reset! gd-edit.globals/menu
-            {:display-fn
-             (fn []
-               (println "Please choose a character to load:"))
+    {:display-fn
+     (fn []
+       (println "Please choose a character to load:"))
 
-             ;; generate the menu choices
-             ;; reduce over save-dirs with each item being [index save-dir-item]
-             :choice-map (reduce
-                          (fn [accum [idx dir]]
-                            (let [display-idx (inc idx)]
+     ;; generate the menu choices
+     ;; reduce over save-dirs with each item being [index save-dir-item]
+     :choice-map (reduce
+                  (fn [accum [idx dir]]
+                    (let [display-idx (inc idx)]
 
-                              (conj accum
-                                    [(str display-idx)                    ; command string
-                                     (last-path-component (.getPath dir)) ; menu display string
-                                     (fn []                               ; function to run when selected
-                                       (reset! globals/character
-                                               (gdc/load-character-file (.getPath (io/file dir "player.gdc"))))
-                                       (reset! globals/menu {})
-                                       )])))
-                          []
-                          (map-indexed vector save-dirs))
-             })))
+                      (conj accum
+                            [(str display-idx)                    ; command string
+                             (last-path-component (.getPath dir)) ; menu display string
+                             (fn []                               ; function to run when selected
+                               (let [savepath (.getPath (io/file dir "player.gdc"))]
+                                 (load-character-file savepath)
+                                 (character-manipulation-screen!))
+                               )])))
+                  []
+                  (map-indexed vector save-dirs))
+     }))
 
 (defn character-selection-screen! [] (reset! gd-edit.globals/menu (character-selection-screen)))
+(defn character-manipulation-screen! [] (reset! gd-edit.globals/menu (character-manipulation-screen)))
 
 (defn choose-character-handler
   [[input tokens]]
@@ -639,6 +654,62 @@
           (throw (Throwable. "Unhandled case")))
         ))))
 
+(defn- get-savepath
+  [character-name]
+  (io/file (dirs/get-save-dir) (format "_%s" character-name) "player.gdc"))
+
+(defn- get-new-backup-path
+  [character-name]
+
+  ;; Grab all sibling files of the character save path
+  (let [sibling-files (-> (get-savepath character-name)
+                          (.getParentFile)
+                          (.listFiles))
+
+        save-backups (->> sibling-files
+                          (filter #(.isFile %1))
+                          (filter #(not (nil? (re-matches #"player\.gdc\..*$" (.getName %1))))))]
+
+    (format "%s.bak%d" (get-savepath character-name) (count save-backups))))
+
+(defn- load-character-file
+  [savepath]
+
+  (reset! globals/character
+          (gdc/load-character-file savepath))
+  (reset! globals/last-character-load-path
+          savepath))
+
+(defn- write-character-file
+  [character]
+
+  ;; Figure out where we're going to write to
+  (let [character-name (:character-name character)
+        savepath (get-savepath character-name)
+
+        ;; In case the user renamed the character, the save path may not exist at all
+        ;; Make sure all parent directories are created
+        _ (io/make-parents savepath)
+
+        backup-path (io/file (get-new-backup-path character-name))]
+
+    ;; Backup the current save file
+    (when (.exists savepath)
+      (.renameTo savepath backup-path))
+
+    ;; Write the new character file
+    (gd-edit.gdc-reader/write-character-file character (.getCanonicalPath savepath))))
+
+(defn write-handler
+  [[input tokens]]
+
+  (if (not (character-loaded?))
+    (println "Don't have a character loaded yet!")
+
+    (write-character-file @globals/character)))
+
+
+#_(write-handler [nil nil])
 
 #_(choose-character-handler [nil nil])
 #_(show-handler [nil nil])
