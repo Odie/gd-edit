@@ -429,7 +429,7 @@
         str-bytes (if (= requested-encoding :bytes)
 
                     ;; If we're just looking at some raw bytes, we don't have to do anything...
-                    #dbg (bytes data)
+                    (bytes data)
 
                     ;; Otherwise, we're looking at some kind of string
                     ;; Get the raw bytes after converting the string to the right encoding
@@ -478,7 +478,6 @@
     ;; If so, call it now
     (not (nil? (:struct/write (meta spec))))
     (do
-      #dbg
       ((:struct/write (meta spec)) bb data context))
 
     ;; If the spec looks like it is describing fields of a map...
@@ -507,5 +506,4 @@
 
     ;; Otherwise, let our multi-method's default handling do it's thing
     :else
-    #dbg
     (write-spec spec bb data prim-specs context)))

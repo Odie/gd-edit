@@ -308,7 +308,6 @@
 (defn read-hotslot
   [^ByteBuffer bb context]
 
-  #dbg
   (let [type (read-int! bb context)]
     (cond
       (= type 0)
@@ -866,8 +865,6 @@
   (let [;; Read the block id
         id (read-int! bb context)
 
-        #dbg ^{:break/when (= id 14)}
-
         ;; Try to fetch the block spec by name
         block-spec (get-block-spec id)
 
@@ -911,8 +908,6 @@
 
         block-spec (get-block-spec block-id)
 
-        _ (println "writing block:" block-id)
-
         ;; Try to fetch a custom write function by name
         block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" block-id)))
         block-write-fn (if-not (nil? block-write-fn-var)
@@ -936,7 +931,7 @@
         ;; Write the block using either a custom write function or the block spec
         _ (if-not (nil? block-write-fn)
             (block-write-fn bb block context)
-            #dbg (s/write-struct block-spec bb block (:primitive-specs @context) context))
+            (s/write-struct block-spec bb block (:primitive-specs @context) context))
 
         ;; Write out the real length of the block
         block-end-pos (.position bb)
