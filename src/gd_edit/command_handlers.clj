@@ -3,12 +3,15 @@
             [gd-edit.globals :as g]
             [gd-edit.utils :as u]
             [gd-edit.game-dirs :as dirs]
+            [gd-edit.arc-reader :as arc-reader]
+            [gd-edit.arz-reader :as arz-reader]
             [gd-edit.gdc-reader :as gdc]
             [jansi-clj.core :refer :all]
             [clojure.string :as string]
             [clojure.java.io :as io]
             [clojure.pprint :as pp]
-            [gd-edit.globals :as globals])
+            [gd-edit.globals :as globals]
+            [gd-edit.utils :as utils])
   (:import  [java.io StringWriter]))
 
 (defn paginate-next
@@ -104,11 +107,17 @@
 (defn query-comand-handler
   [[input tokens]]
 
-  (if (empty? input)
-      (println
-"usage: q <target> <op> <value>
+  (cond
+    (empty? input)
+    (println
+     "usage: q <target> <op> <value>
        <target> can be \"recordname\", \"value\", or \"key\"")
-      (run-query input)))
+
+    (not (realized? globals/db))
+    (println "db not yet loaded")
+
+    :else
+    (run-query input)))
 
 (defn string-first-n-path-components
   "Given a path, return a path with the first n path components"
@@ -708,6 +717,35 @@
 
     (write-character-file @globals/character)))
 
+
+(defn load-db
+  []
+
+  (let [[localization-load-time localization-table]
+        (utils/timed
+         (arc-reader/load-localization-table (dirs/get-localization-filepath)))
+
+        [db-load-time db]
+        (utils/timed
+         (arz-reader/load-game-db (dirs/get-db-filepath)
+                                  localization-table))]
+
+    ;; (println (count localization-table)
+    ;;          "localization strings loaded in"
+    ;;          (format "%.3f" (utils/nanotime->secs localization-load-time))
+    ;;          "seconds")
+
+    ;; (println (count db)
+    ;;          "records loaded in"
+    ;;          (format "%.3f" (utils/nanotime->secs db-load-time))
+    ;;          "seconds")
+
+    ;; (println)
+    ;; (println "Ready to rock!")
+    ;; (println)
+
+    db
+  ))
 
 #_(write-handler [nil nil])
 

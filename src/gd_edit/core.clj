@@ -164,33 +164,8 @@
 (defn- initialize
   []
 
-  (let [[localization-load-time localization-table]
-        (utils/timed
-         (arc-reader/load-localization-table (dirs/get-localization-filepath)))
-
-        [db-load-time db]
-        (utils/timed
-         (arz-reader/load-game-db (dirs/get-db-filepath)
-                                  localization-table))]
-
-    (reset! globals/db db)
-
-    (println (count localization-table)
-             "localization strings loaded in"
-             (format "%.3f" (utils/nanotime->secs localization-load-time))
-             "seconds")
-
-    (println (count db)
-             "records loaded in"
-             (format "%.3f" (utils/nanotime->secs db-load-time))
-             "seconds")
-
-    (println)
-    (println "Ready to rock!")
-    (println)
-
-    (handlers/character-selection-screen!)
-  ))
+  (intern 'gd-edit.globals 'db (future (handlers/load-db)))
+  (handlers/character-selection-screen!))
 
 
 (defn -main
