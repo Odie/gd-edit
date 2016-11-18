@@ -1,5 +1,6 @@
 (ns gd-edit.utils
-  (:require [clojure.string :as string])
+  (:require [clojure.string :as string]
+            [clojure.set :refer [intersection]])
   (:import  [java.nio ByteBuffer]
             [java.nio.channels FileChannel]))
 
@@ -49,3 +50,16 @@
      ~@body))
 
 (def byte-array-type (Class/forName "[B"))
+
+(defn bigrams [s]
+  (->> (split s #"\s+")
+       (mapcat #(partition 2 1 %))
+       (set)))
+
+(defn string-similarity [a b]
+  (let [a-pairs (bigrams a)
+        b-pairs (bigrams b)
+        total-count (+ (count a-pairs) (count b-pairs))
+        match-count (count (intersection a-pairs b-pairs))
+        similarity (/ (* 2 match-count) total-count)]
+    similarity))

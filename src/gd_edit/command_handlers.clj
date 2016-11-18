@@ -861,10 +861,130 @@
          (filter #(not (nil? %1)))
          (string/join " "))))
 
+(defn name-idx-best-matches
+  [name-idx target-name]
+
+      ;; [base-record (->> name-idx
+
+      ;;                    ;; Score and sort the item name index
+      ;;                    ;; First, we rank by the name's overall similiarity
+      ;;                    ;; This should help to filter out items that are not at all similar
+      ;;                    (map (fn [[item-name item-record]]
+      ;;                           [(metrics/jaccard (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
+      ;;                    (sort-by first)
+
+
+      ;;                    ;; Take the top 10 results (most similar) and rank them again using shortest editing distance
+      ;;                    (take 10)
+      ;;                    (map (fn [[score item-name item-record]]
+      ;;                           [(metrics/levenshtein (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
+      ;;                    (sort-by first)
+      ;;                    (first)
+      ;;                    (drop 1)
+      ;;                    )]
+
+  (->> name-idx
+
+       ;; Score and sort the item name index
+       ;; First, we rank by the name's overall similiarity
+       ;; This should help to filter out items that are not at all similar
+       (map (fn [[item-name item-record]]
+              [(u/string-similarity (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
+       (sort-by first >)
+       ))
+
+(defn item-name-remove-suffix
+  [item-name]
+
+  (string/split item-name #" of "))
+
+(defn idx-best-match
+  "Take the index and an array of 'tokenized' item name, try to find the best match.
+  Returns [score candidate matched-name matched-records]]"
+  [idx item-name-tokens]
+
+  (let [;; Build a list of candidates to attempt matching against know prefixes
+        candidates (->> item-name-tokens
+                        (reduce (fn [results token]
+                                  (conj results (conj (last results) token)))
+
+                                [[]]
+                                )
+                        (drop 1))
+
+        ;; Try to locate a best match by ranking all candidates
+        best-match (->> candidates
+                        (map (fn [candidate]
+                               ;; For each candidate, return a pair [best-match, candidate]
+                               (let [[score matched-name matched-records] (->> (clojure.string/join " " candidate)
+                                                                               (name-idx-best-matches idx)
+                                                                               (first))]
+                                 [score candidate matched-name matched-records])))
+                        (sort-by first >)
+                        (first))]
+
+    ;; Does the best match seem "good enough"?
+    (if (and (not (nil? best-match))
+             (> (nth best-match 0) 0.85))
+      best-match
+      nil)))
+
+(defn analyze-item-name
+  [item-name-idx prefix-name-idx suffix-name-idx item-name]
+
+  (let [tokens (clojure.string/split item-name #" ")
+        tokens-cursor tokens
+
+        ;; See if we can match part of the item name against the prefix index
+        prefix-best-match (idx-best-match prefix-name-idx tokens-cursor)
+        prefix-record (if (nil? prefix-best-match)
+                        nil
+                        (do
+                          (get-in prefix-best-match [3 0])))
+
+        ;; Advance the tokens cursor if possible
+        tokens-cursor (if (not (nil? prefix-best-match))
+                        (drop (count (nth prefix-best-match 1)) tokens-cursor)
+                        tokens-cursor)
+
+        ;; See if we can match part of the item name against the item name index
+        base-best-match (idx-best-match item-name-idx tokens-cursor)
+        base-record (if (nil? base-best-match)
+                      nil
+                      (do
+                        (get-in base-best-match [3 0])))
+
+        ;; Advance the tokens cursor if possible
+        tokens-cursor (if (not (nil? base-best-match))
+                        (drop (count (nth base-best-match 1)) tokens-cursor)
+                        tokens-cursor
+                        )
+
+        ;; See if we can match part of the item name against the suffix name index
+        suffix-best-match (idx-best-match suffix-name-idx tokens-cursor)
+        suffix-record (if (nil? suffix-best-match)
+                      nil
+                      (do
+                        (get-in suffix-best-match [3 0])))
+
+        ;; Advance the tokens cursor if possible
+        tokens-cursor (if (not (nil? suffix-best-match))
+                        (drop (count (nth suffix-best-match 1)) tokens-cursor)
+                        tokens-cursor)
+        ]
+
+    {:base base-record
+     :prefix prefix-record
+     :suffix suffix-record
+     :remaining-tokens tokens-cursor
+     }))
+
 (defn construct-item
   [target-name db]
 
   ;; Build a list of base item names with their quality name
+  ;; The index takes the form of: item-name => [item-records]
+  ;; Multiple records may have the same name, but differ in strength
   (let [item-records (filter (fn [record]
                                (some #(string/starts-with? (:recordname record) %1)
                                      #{"records/items/gearaccessories/"
@@ -876,37 +996,38 @@
                                        "records/items/gearshoulders/"
                                        "records/items/geartorso/"
                                        "records/items/gearweapons/"
-                                       "records/items/gearmateria/"}))
+                                       "records/items/materia/"}))
                              db)
 
-        ;; Build an index of item-name => item-record
-        item-name-idx (reduce (fn [m item-record]
-                                (assoc m (item-base-record-get-name item-record) item-record))
-                              {}
-                              item-records)
+        item-name-idx (group-by #(item-base-record-get-name %1) item-records)
 
-        base-record (->> item-name-idx
+        ;; Build a prefix index
+        prefix-records (->> db
+                            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/prefix/"))
+                            (filter #(-> (:recordname %1)
+                                         (string/split #"/")
+                                         (count)
+                                         (= 5))))
 
-                         ;; Score and sort the item name index
-                         ;; First, we rank by the name's overall similiarity
-                         ;; This should help to filter out items that are not at all similar
-                         (map (fn [[item-name item-record]]
-                                [(metrics/jaccard (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
-                         (sort-by first)
+        prefix-name-idx (group-by #(%1 "lootRandomizerName") prefix-records)
+
+        ;; Build a suffix index
+        suffix-records (->> db
+                            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/suffix/"))
+                            (filter #(-> (:recordname %1)
+                                         (string/split #"/")
+                                         (count)
+                                         (= 5))))
+
+        suffix-name-idx (group-by #(%1 "lootRandomizerName") suffix-records)
 
 
-                         ;; Take the top 10 results (most similar) and rank them again using shortest editing distance
-                         (take 10)
-                         (map (fn [[score item-name item-record]]
-                                [(metrics/levenshtein (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
-                         (sort-by first)
-                         (first)
-                         (last)
-                         )]
+        results (analyze-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
+        ]
 
-    {:basename       (:recordname base-record)
-     :prefix-name    ""
-     :suffix-name    ""
+    {:basename       (get-in results [:base :recordname])
+     :prefix-name    (get-in results [:prefix :recordname])
+     :suffix-name    (get-in results [:suffix :recordname])
      :modifier-name  ""
      :transmute-name ""
      :seed           (rand-int Integer/MAX_VALUE)
@@ -921,7 +1042,8 @@
 
      :var1        0
      :stack-count 1}
-    ))
+    )
+  )
 
 #_(write-handler [nil nil])
 
@@ -942,5 +1064,45 @@
 
 #_(show-item-handler [nil ["equipment/1"]])
 
-#_(def r (construct-item "Ulto's Cuirass" @gd-edit.globals/db))
+#_(def r (construct-item "Skull Fetish" @gd-edit.globals/db))
 #_(show-item r)
+
+
+
+;; Prefix index
+(def p (->> @gd-edit.globals/db
+            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/prefix/"))
+            (filter #(-> (:recordname %1)
+                         (string/split #"/")
+                         (count)
+                         (= 5)))
+
+            (group-by #(%1 "lootRandomizerName"))))
+
+;; Item record index
+(def ir (->> @gd-edit.globals/db
+             (filter (fn [record]
+                       (some #(string/starts-with? (:recordname record) %1)
+                             #{"records/items/gearaccessories/"
+                               "records/items/gearfeet/"
+                               "records/items/gearhands/"
+                               "records/items/gearhead/"
+                               "records/items/gearlegs/"
+                               "records/items/gearrelic/"
+                               "records/items/gearshoulders/"
+                               "records/items/geartorso/"
+                               "records/items/gearweapons/"
+                               "records/items/gearmateria/"}))
+                     )
+             (group-by #(item-base-record-get-name %1)))
+
+(def sr (->> @gd-edit.globals/db
+             (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/suffix/"))
+             (filter #(-> (:recordname %1)
+                          (string/split #"/")
+                          (count)
+                          (= 5)))
+
+             (group-by #(%1 "lootRandomizerName") )))
+
+(def q (name-idx-best-match p "vamp"))
