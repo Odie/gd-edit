@@ -128,6 +128,7 @@
                        nil)
 
         command (find-command tokens command-map)
+        _ (newline)
         command-handler (command-map command)]
 
     (cond

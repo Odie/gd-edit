@@ -767,20 +767,68 @@
 
     related-records))
 
+(defn- item-name
+  [item db]
+
+  (let [related-records (related-db-records item db)
+        base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
+                        (first))
+
+        base-name (or (get base-record "itemNameTag") (-> (get base-record "description")
+                                                          (string/replace "^k" "")))
+
+        is-set-item (some #(contains? %1 "itemSetName") related-records)]
+
+    ;; If we can't find a base name for the item, this is not a valid item
+    ;; We can't generate a name for an invalid item
+    (if (not (nil? base-name))
+
+      ;; If we've found an item with a unique name, just return the name without any
+      ;; prefix or suffix
+      (if is-set-item
+             base-name
+
+             ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
+             ;; of the item
+             (let [prefix-name (-> (filter #(string/includes? (:recordname %1) "/prefix/") related-records)
+                                   (first)
+                                   (get "lootRandomizerName"))
+                   suffix-name (-> (filter #(string/includes? (:recordname %1) "/suffix/") related-records)
+                                   (first)
+                                   (get "lootRandomizerName"))
+                   quality-name (base-record "itemQualityTag")
+                   ]
+
+               (->> [prefix-name quality-name base-name suffix-name]
+                    (filter #(not (nil? %1)))
+                    (string/join " "))
+               ))
+      )))
+
 (defn- show-item
   "Print all related records for an item"
   [item]
 
-  (if (or (not (associative? item))
-          (not (contains? item :basename)))
+  (cond
+
+    (or (not (associative? item))
+        (not (contains? item :basename)))
     (println "Sorry, this doesn't look like an item")
 
-    (let [related-records (related-db-records item @gd-edit.globals/db)]
+    (empty? (:basename item))
+    (println "This isn't a valid item (no basename)")
+
+    :else
+    (let [related-records (related-db-records item @gd-edit.globals/db)
+          name (item-name item @gd-edit.globals/db)
+          ]
+      (when (not (nil? name))
+        (println (yellow name))
+        (newline))
       (print-map item :skip-item-count true)
       (newline)
       (print-result-records related-records)
-      ))
-  )
+      )))
 
 (defn show-item-handler
   [[input tokens]]
@@ -815,5 +863,7 @@
 #_(set-handler [nil ["skillpoints" "12"]])
 #_(set-handler [nil ["stashitems/50/basename" "123"]])
 
-#_(show-item (get-in @gd-edit.globals/character [:equipment 11]))
-#_(show-item-handler [nil ["equipment/11"]])
+#_(let [is-set-item (some #(contains? %1 "itemSetName") r)]
+    is-set-item)
+
+#_(show-item-handler [nil ["stashitems/41"]])
