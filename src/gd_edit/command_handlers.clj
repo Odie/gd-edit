@@ -1065,26 +1065,33 @@
                           )
                      (into {}))]
 
-    ;; Create a hashmap that represents the item
-    {:basename       (get-in results [:base :recordname])
-     :prefix-name    (get-in results [:prefix :recordname])
-     :suffix-name    (get-in results [:suffix :recordname])
-     :modifier-name  ""
-     :transmute-name ""
-     :seed           (rand-int Integer/MAX_VALUE)
+    ;; An item must have a basename, which should refer to a item record
+    ;; If we could not find one that satisfies the target-name, then return nothing.
+    (if (nil? (:base results))
+      nil
 
-     :relic-name     ""
-     :relic-bonus    ""
-     :relic-seed     ""
+      ;; Otherwise, create a hashmap that represents the item
+      {:basename       (get-in results [:base :recordname])
+       :prefix-name    (get-in results [:prefix :recordname])
+       :suffix-name    (get-in results [:suffix :recordname])
+       :modifier-name  ""
+       :transmute-name ""
+       :seed           (rand-int Integer/MAX_VALUE)
 
-     :augment-name   ""
-     :unknown        0
-     :augment-seed   0
+       :relic-name     ""
+       :relic-bonus    ""
+       :relic-seed     ""
 
-     :var1        0
-     :stack-count 1}
+       :augment-name   ""
+       :unknown        0
+       :augment-seed   0
+
+       :var1        0
+       :stack-count 1})
     )
   )
+
+(def select-values (comp vals select-keys))
 
 #_(write-handler [nil nil])
 
