@@ -11,7 +11,8 @@
             [clojure.java.io :as io]
             [clojure.pprint :as pp]
             [gd-edit.globals :as globals]
-            [gd-edit.utils :as utils])
+            [gd-edit.utils :as utils]
+            [clj-fuzzy.metrics :as metrics])
   (:import  [java.io StringWriter]))
 
 (defn paginate-next
@@ -848,6 +849,79 @@
       (show-item (:found-item result))
       )))
 
+(defn- item-base-record-get-name
+  [item-base-record]
+
+  (let [base-name (or (get item-base-record "itemNameTag") (get item-base-record "description"))
+        base-name (string/replace base-name "^k" "")
+
+        quality-name (item-base-record "itemQualityTag")]
+
+    (->> [quality-name base-name]
+         (filter #(not (nil? %1)))
+         (string/join " "))))
+
+(defn construct-item
+  [target-name db]
+
+  ;; Build a list of base item names with their quality name
+  (let [item-records (filter (fn [record]
+                               (some #(string/starts-with? (:recordname record) %1)
+                                     #{"records/items/gearaccessories/"
+                                       "records/items/gearfeet/"
+                                       "records/items/gearhands/"
+                                       "records/items/gearhead/"
+                                       "records/items/gearlegs/"
+                                       "records/items/gearrelic/"
+                                       "records/items/gearshoulders/"
+                                       "records/items/geartorso/"
+                                       "records/items/gearweapons/"
+                                       "records/items/gearmateria/"}))
+                             db)
+
+        ;; Build an index of item-name => item-record
+        item-name-idx (reduce (fn [m item-record]
+                                (assoc m (item-base-record-get-name item-record) item-record))
+                              {}
+                              item-records)
+
+        base-record (->> item-name-idx
+
+                         ;; Score and sort the item name index
+                         ;; First, we rank by the name's overall similiarity
+                         ;; This should help to filter out items that are not at all similar
+                         (map (fn [[item-name item-record]]
+                                [(metrics/jaccard (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
+                         (sort-by first)
+
+
+                         ;; Take the top 10 results (most similar) and rank them again using shortest editing distance
+                         (take 10)
+                         (map (fn [[score item-name item-record]]
+                                [(metrics/levenshtein (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
+                         (sort-by first)
+                         (first)
+                         (last)
+                         )]
+
+    {:basename       (:recordname base-record)
+     :prefix-name    ""
+     :suffix-name    ""
+     :modifier-name  ""
+     :transmute-name ""
+     :seed           (rand-int Integer/MAX_VALUE)
+
+     :relic-name     ""
+     :relic-bonus    ""
+     :relic-seed     ""
+
+     :augment-name   ""
+     :unknown        0
+     :augment-seed   0
+
+     :var1        0
+     :stack-count 1}
+    ))
 
 #_(write-handler [nil nil])
 
@@ -866,4 +940,7 @@
 #_(let [is-set-item (some #(contains? %1 "itemSetName") r)]
     is-set-item)
 
-#_(show-item-handler [nil ["stashitems/41"]])
+#_(show-item-handler [nil ["equipment/1"]])
+
+#_(def r (construct-item "Ulto's Cuirass" @gd-edit.globals/db))
+#_(show-item r)
