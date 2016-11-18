@@ -89,14 +89,14 @@
 (def InventoryItem
   (into Item
         (s/ordered-map
-         :X :float
-         :Y :float)))
+         :X :int32
+         :Y :int32)))
 
 (def StashItem
   (into Item
         (s/ordered-map
-         :X :float
-         :Y :float)))
+         :X :int32
+         :Y :int32)))
 
 (def EquipmentItem
   (into Item

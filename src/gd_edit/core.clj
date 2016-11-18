@@ -43,6 +43,7 @@
    ["show"] (fn [input] (handlers/show-handler input))
    ["show" "item"] (fn [input] (handlers/show-item-handler input))
    ["set"] (fn [input] (handlers/set-handler input))
+   ["set" "item"] (fn [input] (handlers/set-item-handler input))
    ["load"] (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
    })

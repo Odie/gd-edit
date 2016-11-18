@@ -1092,6 +1092,48 @@
     )
   )
 
+(defn set-item-handler
+  [[input tokens]]
+
+  (let [path-keys (string/split (first tokens) #"/")
+        result (walk-structure @gd-edit.globals/character path-keys)
+        {:keys [status found-item actual-path]} result
+        target-name (second tokens)]
+
+    (cond
+      (= status :not-found)
+      (println "The path does not specify an item")
+
+      (= status :too-many-matches)
+      (print-ambiguous-walk-result result)
+
+      (not (contains? found-item :basename))
+      (println "Something was found at the path, but it does not look like an item")
+
+      :else
+      ;; Try to construct the requested item
+      (let [item (construct-item target-name @globals/db (:character-level @globals/character))]
+        ;; If construction was not successful, inform the user and abort
+        (cond
+          (nil? item)
+          (println "Sorry, the item could not be constructed")
+
+          (not (> (u/string-similarity target-name (item-name item)) 0.8))
+          (do
+            (show-item item)
+            (println "Sorry, the item generated doesn't look like the item you asked for.")
+            (println (red "Item not altered")))
+
+          ;; Otherwise, put the item into the character sheet
+          :else
+          (do
+            (swap! globals/character assoc-in (:actual-path result)
+                   (merge (get-in @globals/character actual-path) item))
+
+            ;; Show the user what was constructed and placed
+            (show-item (get-in @globals/character actual-path))))
+        ))))
+
 #_(write-handler [nil nil])
 
 #_(choose-character-handler [nil nil])
@@ -1109,7 +1151,8 @@
 #_(let [is-set-item (some #(contains? %1 "itemSetName") r)]
     is-set-item)
 
-#_(show-item-handler [nil ["equipment/1"]])
 
 #_(def r (construct-item "Skull Fetish" @gd-edit.globals/db))
 #_(show-item r)
+#_(show-item-handler [nil ["stashitems/0"]])
+#_(set-item-handler  [nil ["stashitems/0" "legion warhammer of valor"]])
