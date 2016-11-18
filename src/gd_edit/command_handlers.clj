@@ -849,6 +849,10 @@
       (show-item (:found-item result))
       )))
 
+(defn- affix-record-get-name
+  [affix-record]
+  (affix-record "lootRandomizerName"))
+
 (defn- item-base-record-get-name
   [item-base-record]
 
@@ -860,6 +864,11 @@
     (->> [quality-name base-name]
          (filter #(not (nil? %1)))
          (string/join " "))))
+
+(defn item-or-affix-get-name
+  [record]
+
+  (or (affix-record-get-name record) (item-base-record-get-name record)))
 
 (defn name-idx-best-matches
   [name-idx target-name]
@@ -892,11 +901,6 @@
               [(u/string-similarity (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
        (sort-by first >)
        ))
-
-(defn item-name-remove-suffix
-  [item-name]
-
-  (string/split item-name #" of "))
 
 (defn idx-best-match
   "Take the index and an array of 'tokenized' item name, try to find the best match.
@@ -979,8 +983,21 @@
      :remaining-tokens tokens-cursor
      }))
 
+(defn name-idx-highest-level-by-name
+  [idx name level-cap]
+
+  ;; Grab the records referenced by the name
+  (let [records (idx name)]
+
+    ;; Locate the highest level item that does not exceed the level-cap
+    (->> records
+         (filter #(>= level-cap (or (%1 "levelRequirement") (%1 "itemLevel") 0)))
+         (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
+         (first))))
+
+
 (defn construct-item
-  [target-name db]
+  [target-name db level-cap]
 
   ;; Build a list of base item names with their quality name
   ;; The index takes the form of: item-name => [item-records]
@@ -1022,9 +1039,33 @@
         suffix-name-idx (group-by #(%1 "lootRandomizerName") suffix-records)
 
 
-        results (analyze-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
-        ]
+        ;; Try to decompose the complete item name into its prefix, base, and suffix
+        analysis (analyze-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
 
+        ;; Now that we know what the item is composed of, try to bring up the strength/level of each part
+        ;; as the level cap allows
+        ;; For example, there are 16 different suffixes all named "of Potency". Which one do we choose?
+        ;; We choose highest level one that is less or equal to the level cap
+        results (->> (select-keys analysis [:base :prefix :suffix])
+                     (map (fn [[key record]]
+                            [key
+
+                             (if (nil? record)
+                               nil
+                               (name-idx-highest-level-by-name
+                                (cond
+                                  (= key :base)
+                                  item-name-idx
+                                  (= key :prefix)
+                                  prefix-name-idx
+                                  (= key :suffix)
+                                  suffix-name-idx)
+                                (item-or-affix-get-name record)
+                                level-cap))])
+                          )
+                     (into {}))]
+
+    ;; Create a hashmap that represents the item
     {:basename       (get-in results [:base :recordname])
      :prefix-name    (get-in results [:prefix :recordname])
      :suffix-name    (get-in results [:suffix :recordname])
@@ -1066,43 +1107,3 @@
 
 #_(def r (construct-item "Skull Fetish" @gd-edit.globals/db))
 #_(show-item r)
-
-
-
-;; Prefix index
-(def p (->> @gd-edit.globals/db
-            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/prefix/"))
-            (filter #(-> (:recordname %1)
-                         (string/split #"/")
-                         (count)
-                         (= 5)))
-
-            (group-by #(%1 "lootRandomizerName"))))
-
-;; Item record index
-(def ir (->> @gd-edit.globals/db
-             (filter (fn [record]
-                       (some #(string/starts-with? (:recordname record) %1)
-                             #{"records/items/gearaccessories/"
-                               "records/items/gearfeet/"
-                               "records/items/gearhands/"
-                               "records/items/gearhead/"
-                               "records/items/gearlegs/"
-                               "records/items/gearrelic/"
-                               "records/items/gearshoulders/"
-                               "records/items/geartorso/"
-                               "records/items/gearweapons/"
-                               "records/items/gearmateria/"}))
-                     )
-             (group-by #(item-base-record-get-name %1)))
-
-(def sr (->> @gd-edit.globals/db
-             (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/suffix/"))
-             (filter #(-> (:recordname %1)
-                          (string/split #"/")
-                          (count)
-                          (= 5)))
-
-             (group-by #(%1 "lootRandomizerName") )))
-
-(def q (name-idx-best-match p "vamp"))

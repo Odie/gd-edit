@@ -52,7 +52,7 @@
 (def byte-array-type (Class/forName "[B"))
 
 (defn bigrams [s]
-  (->> (split s #"\s+")
+  (->> (clojure.string/split s #"\s+")
        (mapcat #(partition 2 1 %))
        (set)))
 
