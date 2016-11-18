@@ -1013,7 +1013,8 @@
                                        "records/items/gearshoulders/"
                                        "records/items/geartorso/"
                                        "records/items/gearweapons/"
-                                       "records/items/materia/"}))
+                                       "records/items/materia/"
+                                       "records/items/faction/"}))
                              db)
 
         item-name-idx (group-by #(item-base-record-get-name %1) item-records)
@@ -1090,8 +1091,6 @@
        :stack-count 1})
     )
   )
-
-(def select-values (comp vals select-keys))
 
 #_(write-handler [nil nil])
 
