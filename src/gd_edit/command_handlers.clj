@@ -57,6 +57,8 @@
 
 (defn print-result-records
   [results]
+  {:pre [(sequential? results)]}
+
   (doseq [kv-map results]
     (println (:recordname kv-map))
     (doseq [[key value] (->> kv-map
@@ -66,7 +68,7 @@
 
       (println (format "\t%s: %s" key (yellow value))))
 
-    (println)))
+    (newline)))
 
 
 (defn print-paginated-result
@@ -266,20 +268,23 @@
 
 (defn- keyword->str
   [k]
-  (subs (str k) 1))
+  (if (keyword? k)
+    (subs (str k) 1)
+    k))
 
 (defn- without-meta-fields
   [kv-pair]
 
   (not (.startsWith (str (first kv-pair)) ":meta-")))
 
-(defn print-character
+(defn- without-recordname
+  [[key value]]
+  (not= key :recordname))
+
+(defn print-map
   [character-map & {:keys [skip-item-count]
                     :or {skip-item-count false}}]
 
-  ;; We want to be able to show a nice, easy to read list...
-  ;; To do this, we first need to figure out how long the keyname is
-  ;; Once we determine this, we can pad the keynames.
   (let [character (->> character-map
                        (filter without-meta-fields)
                        (sort-by first))
@@ -318,8 +323,6 @@
     (when-not skip-item-count
       (newline)
       (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
-
-(def print-map print-character)
 
 (defn str-without-dash
   [str]
@@ -548,7 +551,7 @@
     ;; The character is loaded
     ;; If there aren't any filter conditions, just display all the character fields
     (= (count tokens) 0)
-    (print-character @globals/character)
+    (print-map @globals/character)
 
     :else
     (do
@@ -747,6 +750,57 @@
     db
   ))
 
+(defn related-db-records
+  [record db]
+
+  (let [;; Collect all values in the record that look like a db record
+        related-recordnames (->> record
+                                 (reduce (fn [coll [key value]]
+                                           (if (and (string? value) (.startsWith value "records/"))
+                                             (conj coll value)
+                                             coll
+                                             ))
+                                         #{}))
+
+        ;; Retrieve all related records by name
+        related-records (filter #(contains? related-recordnames (:recordname %1)) db)]
+
+    related-records))
+
+(defn- show-item
+  "Print all related records for an item"
+  [item]
+
+  (if (or (not (associative? item))
+          (not (contains? item :basename)))
+    (println "Sorry, this doesn't look like an item")
+
+    (let [related-records (related-db-records item @gd-edit.globals/db)]
+      (print-map item :skip-item-count true)
+      (newline)
+      (print-result-records related-records)
+      ))
+  )
+
+(defn show-item-handler
+  [[input tokens]]
+
+  (let [path-keys (string/split (first tokens) #"/")
+        result (walk-structure @gd-edit.globals/character path-keys)
+        {:keys [status found-item]} result]
+
+    (cond
+      (= status :not-found)
+      (println "The path does not specify an item")
+
+      (= status :too-many-matches)
+      (print-ambiguous-walk-result result)
+
+      :else
+      (show-item (:found-item result))
+      )))
+
+
 #_(write-handler [nil nil])
 
 #_(choose-character-handler [nil nil])
@@ -760,3 +814,6 @@
 
 #_(set-handler [nil ["skillpoints" "12"]])
 #_(set-handler [nil ["stashitems/50/basename" "123"]])
+
+#_(show-item (get-in @gd-edit.globals/character [:equipment 11]))
+#_(show-item-handler [nil ["equipment/11"]])

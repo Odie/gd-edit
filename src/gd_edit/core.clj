@@ -41,6 +41,7 @@
    ["db"] (fn [input] (handlers/db-show-handler input))
    ["db" "show"] (fn [input] (handlers/db-show-handler input))
    ["show"] (fn [input] (handlers/show-handler input))
+   ["show" "item"] (fn [input] (handlers/show-item-handler input))
    ["set"] (fn [input] (handlers/set-handler input))
    ["load"] (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
@@ -182,3 +183,40 @@
           (reset! gd-edit.globals/character
                   (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
           nil))
+
+;; Walk each db record
+;; (def r
+;;   (->> @gd-edit.globals/db
+;;        (filter #(.startsWith (:recordname %1) "records/items/gearweapons"))
+;;        (reduce (fn [set db-record]
+
+;;                  (into set (keys db-record)))
+
+;;                #{}
+;;                )
+;;        (filter #(not= :recordname %1))
+;;        (filter #(.startsWith %1 "offensive"))
+;;        (sort)
+;;        ))
+
+;; (def v
+;;   (->> r
+;;        (reduce (fn [set word]
+;;                  (into set (clojure.string/split word #"(?=[A-Z])")))
+;;                #{}
+;;                )
+
+;;        (filter #(> (count %1) 1))
+;;        (map clojure.string/lower-case)
+;;        (into #{})
+;;        (sort)
+;;        ))
+
+;; (def s
+;;   (->> r
+;;        (filter #(-> (clojure.string/lower-case %1)
+;;                     (.contains "leech")
+;;                      )
+;;        )))
+
+;; (nth @gd-edit.globals/db 1)
