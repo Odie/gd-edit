@@ -935,7 +935,7 @@
       best-match
       nil)))
 
-(defn analyze-item-name
+(defn analyze-multipart-item-name
   [item-name-idx prefix-name-idx suffix-name-idx item-name]
 
   (let [tokens (clojure.string/split item-name #" ")
@@ -985,6 +985,23 @@
      :remaining-tokens tokens-cursor
      }))
 
+(defn analyze-item-name
+  [item-name-idx prefix-name-idx suffix-name-idx item-name]
+
+  (let [tokens (clojure.string/split item-name #" ")
+        tokens-cursor tokens
+
+        ;; Check if we can match against the whole item name directly
+        whole-item-match (idx-best-match item-name-idx tokens-cursor)]
+
+    ;; If we can find a whole item name match, return that result
+    (if-not (nil? whole-item-match)
+      {:base (get-in whole-item-match [3 0])}
+
+      ;; Otherwise, try to break the name down into prefix, base, and suffix
+      (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx item-name)
+      )))
+
 (defn name-idx-highest-level-by-name
   [idx name level-cap]
 
@@ -998,13 +1015,10 @@
          (first))))
 
 
-(defn construct-item
-  [target-name db level-cap]
-
-  ;; Build a list of base item names with their quality name
-  ;; The index takes the form of: item-name => [item-records]
-  ;; Multiple records may have the same name, but differ in strength
-  (let [item-records (filter (fn [record]
+(defn build-item-name-idx
+  [db]
+  (let [
+        item-records (filter (fn [record]
                                (some #(string/starts-with? (:recordname record) %1)
                                      #{"records/items/gearaccessories/"
                                        "records/items/gearfeet/"
@@ -1019,7 +1033,17 @@
                                        "records/items/faction/"}))
                              db)
 
-        item-name-idx (group-by #(item-base-record-get-name %1) item-records)
+        item-name-idx (group-by #(item-base-record-get-name %1) item-records)]
+    item-name-idx
+    ))
+
+(defn construct-item
+  [target-name db level-cap]
+
+  ;; Build a list of base item names with their quality name
+  ;; The index takes the form of: item-name => [item-records]
+  ;; Multiple records may have the same name, but differ in strength
+  (let [item-name-idx (build-item-name-idx @globals/db)
 
         ;; Build a prefix index
         prefix-records (->> db
