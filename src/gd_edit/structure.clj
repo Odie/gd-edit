@@ -498,7 +498,6 @@
                   ;; Look up the value to be written
                   val (key data)]
 
-              (println "writing value for key:" key)
               ;; Write out the item according to the spec
               (write-spec type bb val prim-specs context)
 

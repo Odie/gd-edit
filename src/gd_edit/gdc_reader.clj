@@ -898,18 +898,18 @@
         _ (assert (= checksum (:enc-state @context)))
         ]
 
-    (assoc block-data :block-id id)))
+    (assoc block-data :meta-block-id id)))
 
 (defn write-block
   [^ByteBuffer bb block context]
   {:pre [(not (nil? block))]}
 
-  (let [{:keys [block-id]} block
+  (let [{:keys [meta-block-id]} block
 
-        block-spec (get-block-spec block-id)
+        block-spec (get-block-spec meta-block-id)
 
         ;; Try to fetch a custom write function by name
-        block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" block-id)))
+        block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" meta-block-id)))
         block-write-fn (if-not (nil? block-write-fn-var)
                         (var-get block-write-fn-var)
                         nil)
@@ -917,10 +917,10 @@
         ;; If neither a block spec or a custom read function can be found...
         ;; We don't know how to write this block
         _ (if (and (nil? block-spec) (nil? block-write-fn))
-            (throw (Throwable. "Don't know how to write block " block-id)))
+            (throw (Throwable. "Don't know how to write block " meta-block-id)))
 
         ;; Write the id of the block
-        _ (write-int! bb block-id context)
+        _ (write-int! bb meta-block-id context)
 
         ;; Write a dummy block length
         ;; We'll come back and fill it back in when we know how long the block is
@@ -950,7 +950,7 @@
 
   (->> block
        (filter (fn [[key value]]
-                 (not (contains? #{:version :block-id} key))))
+                 (not (contains? #{:version :meta-block-id} key))))
        (into {})))
 
 (defn load-character-file
@@ -967,7 +967,7 @@
         _ (validate-preamble preamble)
 
 
-        header (assoc (s/read-struct Header bb enc-context) :block-id :header)
+        header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
 
         header-checksum (Integer/toUnsignedLong (.getInt bb))
         _ (assert (= header-checksum (:enc-state @enc-context)))
@@ -1014,7 +1014,7 @@
 (defn get-block
   [block-list block-id]
 
-  (first (filter #(= (:block-id %1) block-id) block-list)))
+  (first (filter #(= (:meta-block-id %1) block-id) block-list)))
 
 (defn write-character-file
   [character savepath]
@@ -1063,7 +1063,7 @@
         ]
 
     (doseq [block (->> updated-block-list
-                       (filter #(not= (:block-id %1) :header)))]
+                       (filter #(not= (:meta-block-id %1) :header)))]
       (write-block bb block enc-context))
 
     (.flip bb)
