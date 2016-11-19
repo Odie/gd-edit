@@ -1007,7 +1007,9 @@
                                (FileOutputStream.)
                                (.getChannel))]
     (.write file-channel bb)
-    (.force file-channel true)))
+    (.force file-channel true)
+    (.close file-channel)
+    ))
 
 (defn get-block
   [block-list block-id]
@@ -1020,7 +1022,31 @@
   (let [bb (ByteBuffer/allocate (* 512 1024))
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
+        ;; Grab the original block list
+        ;; This was kept when we loaded the save file in the order
+        ;; the blocks were read
         block-list (:meta-block-list character)
+
+        ;; Create a new block list when the updated contents
+        ;; The character sheet was created using the block-list by merging
+        ;; all blocks into a giant dictionary.
+        ;; To re-create the block list from a character sheet then, we need to
+        ;; update the top level kv pair of every block to the current value in
+        ;; the character sheet.
+        updated-block-list (map (fn [block]
+                                  ;; Map over every kv in the blocks
+                                  (->> block
+                                       (map (fn [[key value :as kv-pair]]
+                                              ;; Look up the updated value in the character sheet
+                                              (if (contains? character key)
+                                                [key (character key)]
+                                                kv-pair)
+                                              )
+                                            )
+                                       ;; Put the pairs back into a map
+                                       (into {})))
+                                block-list)
+
         fileinfo (:meta-fileinfo character)
 
         seed (:seed fileinfo)
@@ -1029,12 +1055,14 @@
 
         _ (.putInt bb (bit-xor seed 1431655765))
         _ (s/write-struct FilePreamble bb (:preamble fileinfo) (:primitive-specs @enc-context) enc-context)
-        _ (s/write-struct Header bb (get-block block-list :header) (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct Header bb (get-block updated-block-list :header) (:primitive-specs @enc-context) enc-context)
         _ (.putInt bb (int ^long (:enc-state @enc-context)))
         _ (write-int! bb (:data-version fileinfo) enc-context)
-        _ (write-bytes! bb (byte-array 16) enc-context)]
+        _ (write-bytes! bb (byte-array 16) enc-context)
 
-    (doseq [block (->> block-list
+        ]
+
+    (doseq [block (->> updated-block-list
                        (filter #(not= (:block-id %1) :header)))]
       (write-block bb block enc-context))
 
@@ -1045,7 +1073,7 @@
 #_(def r (time (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file (io/file (gd-edit.game-dirs/get-save-dir) "_Hetzer/player.gdc")))
+                  (gd-edit.gdc-reader/load-character-file (io/file (gd-edit.game-dirs/get-save-dir) "_Blank Slate/player.gdc")))
           nil))
 
 #_(reset! gd-edit.globals/character nil)

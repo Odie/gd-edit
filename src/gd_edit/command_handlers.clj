@@ -502,6 +502,7 @@
                                (format "%%%dd: " (-> (count obj)
                                                      (Math/log10)
                                                      (Math/ceil)
+                                                     (max 1)
                                                      (int)))
                                i))
                        (let [item-type (type item)]
@@ -683,7 +684,7 @@
                           (filter #(.isFile %1))
                           (filter #(not (nil? (re-matches #"player\.gdc\..*$" (.getName %1))))))]
 
-    (format "%s.bak%d" (get-savepath character-name) (count save-backups))))
+    (format "%s.bak%d" (get-savepath character-name) (inc (count save-backups)))))
 
 (defn- load-character-file
   [savepath]
@@ -1072,16 +1073,16 @@
       nil
 
       ;; Otherwise, create a hashmap that represents the item
-      {:basename       (get-in results [:base :recordname])
-       :prefix-name    (get-in results [:prefix :recordname])
-       :suffix-name    (get-in results [:suffix :recordname])
+      {:basename       (or (get-in results [:base :recordname]) "")
+       :prefix-name    (or (get-in results [:prefix :recordname]) "")
+       :suffix-name    (or (get-in results [:suffix :recordname]) "")
        :modifier-name  ""
        :transmute-name ""
        :seed           (rand-int Integer/MAX_VALUE)
 
        :relic-name     ""
        :relic-bonus    ""
-       :relic-seed     ""
+       :relic-seed     0
 
        :augment-name   ""
        :unknown        0
@@ -1093,12 +1094,16 @@
   )
 
 (defn set-item-handler
-  [[input tokens]]
+  [[input [path target-name level-cap-str]]]
 
-  (let [path-keys (string/split (first tokens) #"/")
+  (let [path-keys (string/split path #"/")
         result (walk-structure @gd-edit.globals/character path-keys)
         {:keys [status found-item actual-path]} result
-        target-name (second tokens)]
+
+        level-cap (if-not (nil? level-cap-str)
+                    (Integer/parseInt level-cap-str)
+                    (:character-level @globals/character))
+        ]
 
     (cond
       (= status :not-found)
@@ -1112,7 +1117,7 @@
 
       :else
       ;; Try to construct the requested item
-      (let [item (construct-item target-name @globals/db (:character-level @globals/character))]
+      (let [item (construct-item target-name @globals/db level-cap)]
         ;; If construction was not successful, inform the user and abort
         (cond
           (nil? item)
@@ -1122,11 +1127,7 @@
           (do
             (show-item item)
             (println "Sorry, the item generated doesn't look like the item you asked for.")
-            (println (red "Item not altered"))
-            (println "similarity score:"
-                     (u/string-similarity (string/lower-case target-name) (string/lower-case (item-name item @globals/db)))
-                     )
-            )
+            (println (red "Item not altered")))
 
           ;; Otherwise, put the item into the character sheet
           :else
@@ -1158,5 +1159,6 @@
 
 #_(def r (construct-item "Skull Fetish" @gd-edit.globals/db))
 #_(show-item r)
-#_(show-item-handler [nil ["stashitems/0"]])
-#_(set-item-handler  [nil ["stashitems/0" "legion warhammer of valor"]])
+#_(show-handler [nil ["inv/0/items"]])
+#_(set-item-handler  [nil ["inv/0/items/0" "legion warhammer of valor" "64"]])
+#_(write-handler  [nil nil])
