@@ -277,7 +277,7 @@
       ;; If it is a vector, we're going to recursively process that node and append the results
       (sequential? (first ast))
       (recur (drop 1 ast)
-             (update result :predicates conj (query-ast->query-predicates (first ast))))
+             (update result :predicates conj (:predicates (query-ast->query-predicates (first ast)))))
       )))
 
 (defn tokens->query-ast
