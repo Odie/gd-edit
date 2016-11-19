@@ -107,7 +107,7 @@
 (def InventorySack
   (s/ordered-map
    :unused :bool
-   :invetory-items (s/variable-count InventoryItem)))
+   :inventory-items (s/variable-count InventoryItem)))
 
 (def Block0 InventorySack)
 
