@@ -956,7 +956,7 @@
 (defn load-character-file
   [filepath]
 
-  (let [bb ^ByteBuffer (utils/mmap filepath)
+  (let [bb ^ByteBuffer (utils/file-contents filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         seed (bit-xor (.getInt bb) 1431655765)
@@ -1003,10 +1003,11 @@
 (defn write-to-file
   [bb filepath]
 
-  (-> (clojure.java.io/file filepath)
-      (FileOutputStream.)
-      (.getChannel)
-      (.write bb)))
+  (with-open [file-channel (-> (io/file filepath)
+                               (FileOutputStream.)
+                               (.getChannel))]
+    (.write file-channel bb)
+    (.force file-channel true)))
 
 (defn get-block
   [block-list block-id]
@@ -1044,7 +1045,7 @@
 #_(def r (time (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+                  (gd-edit.gdc-reader/load-character-file (io/file (gd-edit.game-dirs/get-save-dir) "_Hetzer/player.gdc")))
           nil))
 
 #_(reset! gd-edit.globals/character nil)

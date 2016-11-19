@@ -1118,11 +1118,15 @@
           (nil? item)
           (println "Sorry, the item could not be constructed")
 
-          (not (> (u/string-similarity target-name (item-name item)) 0.8))
+          (not (> (u/string-similarity (string/lower-case target-name) (string/lower-case (item-name item @globals/db))) 0.8))
           (do
             (show-item item)
             (println "Sorry, the item generated doesn't look like the item you asked for.")
-            (println (red "Item not altered")))
+            (println (red "Item not altered"))
+            (println "similarity score:"
+                     (u/string-similarity (string/lower-case target-name) (string/lower-case (item-name item @globals/db)))
+                     )
+            )
 
           ;; Otherwise, put the item into the character sheet
           :else

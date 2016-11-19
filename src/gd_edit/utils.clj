@@ -7,11 +7,19 @@
 (defn mmap
   [filepath]
 
-  (with-open [db-file (java.io.RandomAccessFile. filepath "r")]
-    (let [file-channel (.getChannel db-file)
-          file-size (.size file-channel)]
+  (with-open [db-file (java.io.RandomAccessFile. filepath "r")
+              file-channel (.getChannel db-file)]
+    (let [file-size (.size file-channel)]
 
       (.map file-channel java.nio.channels.FileChannel$MapMode/READ_ONLY 0 file-size))))
+
+(defn file-contents
+  [filepath]
+
+  (with-open [file-channel (.getChannel (java.io.RandomAccessFile. filepath "r"))]
+    (let [bb (ByteBuffer/allocate (.size file-channel))]
+      (.read file-channel bb)
+      (.rewind bb))))
 
 (defn hexify [s]
   (apply str

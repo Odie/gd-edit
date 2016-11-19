@@ -1,7 +1,7 @@
 (def project 'gd-edit)
 (def version "0.1.0-SNAPSHOT")
 
-(set-env! :resource-paths #{"resources" "src"}
+(set-env! :resource-paths #{"src"}
           :source-paths   #{"test"}
           :dependencies   '[[org.clojure/clojure "RELEASE"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
