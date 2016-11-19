@@ -162,8 +162,13 @@
   []
 
   (while true
-    (repl-iter)))
-
+    (try
+      (repl-iter)
+      (catch Exception e
+        (do
+          (println "caught exception: " (.getMessage e))
+          (clojure.stacktrace/print-stack-trace e)
+          (newline))))))
 
 (defn- initialize
   []
