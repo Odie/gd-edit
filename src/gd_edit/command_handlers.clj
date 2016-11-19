@@ -590,7 +590,7 @@
                               (println "No matches found")
 
                               (= status :too-many-matches)
-                              (:ambiguous-matches result)
+                              (print-ambiguous-walk-result result)
 
                               (= status :found)
                               (:found-item result)
@@ -602,7 +602,8 @@
             ;; We've successfully navigated to an object
             ;; This might be a piece of data in the character sheet or a list of partially matched result
             ;; for some structure represented as a map
-            (print-object matched-obj)))))))
+            (if-not (nil? matched-obj)
+              (print-object matched-obj))))))))
 
 
 (defn coerce-to-type
