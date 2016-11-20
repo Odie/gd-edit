@@ -227,8 +227,8 @@
   by the query function"
   [[target op query-val & rest]]
 
-  (if-not (valid-target? target)
-    (throw (Throwable. (format "\"%s\" is not a valid target" target))))
+  ;; (if-not (valid-target? target)
+  ;;   (throw (Throwable. (format "\"%s\" is not a valid target" target))))
   (if (nil? op)
     (throw (Throwable. "No op supplied")))
   (if-not (valid-op? op)
@@ -238,12 +238,19 @@
 
   (let [coerced-val (coerce-query-val query-val)]
     (cond
+
       (= target "key")
       (qpred (query-compare op key coerced-val))
 
       (= target "value")
       (qpred (query-compare op value coerced-val))
 
+      ;; If the target doesn't look like a valid target,
+      ;; we assume that the user is trying to target a key/value pair.
+      ;; This case was originally used to handle "recordname ~ <some value>".
+      ;; However, we can also use this to handle cases such as:
+      ;;   "levelreq = 65"
+      ;; This makes queries less verbose.
       :else
       (qand  (u/ci-match key target)
              (query-compare op value coerced-val)))))
