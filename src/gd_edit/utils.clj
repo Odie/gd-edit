@@ -1,16 +1,25 @@
 (ns gd-edit.utils
-  (:require [clojure.string :as string])
+  (:require [clojure.string :as string]
+            [clojure.set :refer [intersection]])
   (:import  [java.nio ByteBuffer]
             [java.nio.channels FileChannel]))
 
 (defn mmap
   [filepath]
 
-  (with-open [db-file (java.io.RandomAccessFile. filepath "r")]
-    (let [file-channel (.getChannel db-file)
-          file-size (.size file-channel)]
+  (with-open [db-file (java.io.RandomAccessFile. filepath "r")
+              file-channel (.getChannel db-file)]
+    (let [file-size (.size file-channel)]
 
       (.map file-channel java.nio.channels.FileChannel$MapMode/READ_ONLY 0 file-size))))
+
+(defn file-contents
+  [filepath]
+
+  (with-open [file-channel (.getChannel (java.io.RandomAccessFile. filepath "r"))]
+    (let [bb (ByteBuffer/allocate (.size file-channel))]
+      (.read file-channel bb)
+      (.rewind bb))))
 
 (defn hexify [s]
   (apply str
@@ -49,3 +58,16 @@
      ~@body))
 
 (def byte-array-type (Class/forName "[B"))
+
+(defn bigrams [s]
+  (->> (clojure.string/split s #"\s+")
+       (mapcat #(partition 2 1 %))
+       (set)))
+
+(defn string-similarity [a b]
+  (let [a-pairs (bigrams a)
+        b-pairs (bigrams b)
+        total-count (+ (count a-pairs) (count b-pairs))
+        match-count (count (intersection a-pairs b-pairs))
+        similarity (/ (* 2 match-count) total-count)]
+    similarity))

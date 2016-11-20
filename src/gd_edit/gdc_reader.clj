@@ -89,14 +89,14 @@
 (def InventoryItem
   (into Item
         (s/ordered-map
-         :X :float
-         :Y :float)))
+         :X :int32
+         :Y :int32)))
 
 (def StashItem
   (into Item
         (s/ordered-map
-         :X :float
-         :Y :float)))
+         :X :int32
+         :Y :int32)))
 
 (def EquipmentItem
   (into Item
@@ -107,7 +107,7 @@
 (def InventorySack
   (s/ordered-map
    :unused :bool
-   :invetory-items (s/variable-count InventoryItem)))
+   :inventory-items (s/variable-count InventoryItem)))
 
 (def Block0 InventorySack)
 
@@ -898,18 +898,18 @@
         _ (assert (= checksum (:enc-state @context)))
         ]
 
-    (assoc block-data :block-id id)))
+    (assoc block-data :meta-block-id id)))
 
 (defn write-block
   [^ByteBuffer bb block context]
   {:pre [(not (nil? block))]}
 
-  (let [{:keys [block-id]} block
+  (let [{:keys [meta-block-id]} block
 
-        block-spec (get-block-spec block-id)
+        block-spec (get-block-spec meta-block-id)
 
         ;; Try to fetch a custom write function by name
-        block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" block-id)))
+        block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" meta-block-id)))
         block-write-fn (if-not (nil? block-write-fn-var)
                         (var-get block-write-fn-var)
                         nil)
@@ -917,10 +917,10 @@
         ;; If neither a block spec or a custom read function can be found...
         ;; We don't know how to write this block
         _ (if (and (nil? block-spec) (nil? block-write-fn))
-            (throw (Throwable. "Don't know how to write block " block-id)))
+            (throw (Throwable. "Don't know how to write block " meta-block-id)))
 
         ;; Write the id of the block
-        _ (write-int! bb block-id context)
+        _ (write-int! bb meta-block-id context)
 
         ;; Write a dummy block length
         ;; We'll come back and fill it back in when we know how long the block is
@@ -950,13 +950,13 @@
 
   (->> block
        (filter (fn [[key value]]
-                 (not (contains? #{:version :block-id} key))))
+                 (not (contains? #{:version :meta-block-id} key))))
        (into {})))
 
 (defn load-character-file
   [filepath]
 
-  (let [bb ^ByteBuffer (utils/mmap filepath)
+  (let [bb ^ByteBuffer (utils/file-contents filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         seed (bit-xor (.getInt bb) 1431655765)
@@ -967,7 +967,7 @@
         _ (validate-preamble preamble)
 
 
-        header (assoc (s/read-struct Header bb enc-context) :block-id :header)
+        header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
 
         header-checksum (Integer/toUnsignedLong (.getInt bb))
         _ (assert (= header-checksum (:enc-state @enc-context)))
@@ -1003,15 +1003,18 @@
 (defn write-to-file
   [bb filepath]
 
-  (-> (clojure.java.io/file filepath)
-      (FileOutputStream.)
-      (.getChannel)
-      (.write bb)))
+  (with-open [file-channel (-> (io/file filepath)
+                               (FileOutputStream.)
+                               (.getChannel))]
+    (.write file-channel bb)
+    (.force file-channel true)
+    (.close file-channel)
+    ))
 
 (defn get-block
   [block-list block-id]
 
-  (first (filter #(= (:block-id %1) block-id) block-list)))
+  (first (filter #(= (:meta-block-id %1) block-id) block-list)))
 
 (defn write-character-file
   [character savepath]
@@ -1019,7 +1022,31 @@
   (let [bb (ByteBuffer/allocate (* 512 1024))
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
+        ;; Grab the original block list
+        ;; This was kept when we loaded the save file in the order
+        ;; the blocks were read
         block-list (:meta-block-list character)
+
+        ;; Create a new block list when the updated contents
+        ;; The character sheet was created using the block-list by merging
+        ;; all blocks into a giant dictionary.
+        ;; To re-create the block list from a character sheet then, we need to
+        ;; update the top level kv pair of every block to the current value in
+        ;; the character sheet.
+        updated-block-list (map (fn [block]
+                                  ;; Map over every kv in the blocks
+                                  (->> block
+                                       (map (fn [[key value :as kv-pair]]
+                                              ;; Look up the updated value in the character sheet
+                                              (if (contains? character key)
+                                                [key (character key)]
+                                                kv-pair)
+                                              )
+                                            )
+                                       ;; Put the pairs back into a map
+                                       (into {})))
+                                block-list)
+
         fileinfo (:meta-fileinfo character)
 
         seed (:seed fileinfo)
@@ -1028,13 +1055,15 @@
 
         _ (.putInt bb (bit-xor seed 1431655765))
         _ (s/write-struct FilePreamble bb (:preamble fileinfo) (:primitive-specs @enc-context) enc-context)
-        _ (s/write-struct Header bb (get-block block-list :header) (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct Header bb (get-block updated-block-list :header) (:primitive-specs @enc-context) enc-context)
         _ (.putInt bb (int ^long (:enc-state @enc-context)))
         _ (write-int! bb (:data-version fileinfo) enc-context)
-        _ (write-bytes! bb (byte-array 16) enc-context)]
+        _ (write-bytes! bb (byte-array 16) enc-context)
 
-    (doseq [block (->> block-list
-                       (filter #(not= (:block-id %1) :header)))]
+        ]
+
+    (doseq [block (->> updated-block-list
+                       (filter #(not= (:meta-block-id %1) :header)))]
       (write-block bb block enc-context))
 
     (.flip bb)
@@ -1044,7 +1073,7 @@
 #_(def r (time (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+                  (gd-edit.gdc-reader/load-character-file (io/file (gd-edit.game-dirs/get-save-dir) "_Blank Slate/player.gdc")))
           nil))
 
 #_(reset! gd-edit.globals/character nil)

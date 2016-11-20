@@ -14,7 +14,15 @@
 
   (if (= (System/getProperty "os.name") "Mac OS X")
     (u/expand-home "~/Dropbox/Public/GrimDawn/main")
-    "C:\\Program Files (x86)\\Steam\\userdata\\219990\\remote\\save\\main"))
+    (do
+      (let [userdata-dir "C:\\Program Files (x86)\\Steam\\userdata\\"
+            user-profile-dir (->> (io/file userdata-dir)
+                                  (.listFiles)
+                                  (filter #(.isDirectory %1))
+                                  (first))
+
+            ]
+        (.getPath (io/file user-profile-dir "219990\\remote\\save\\main"))))))
 
 (defn get-db-filepath
   []

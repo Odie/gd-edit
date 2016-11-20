@@ -41,7 +41,9 @@
    ["db"] (fn [input] (handlers/db-show-handler input))
    ["db" "show"] (fn [input] (handlers/db-show-handler input))
    ["show"] (fn [input] (handlers/show-handler input))
+   ["show" "item"] (fn [input] (handlers/show-item-handler input))
    ["set"] (fn [input] (handlers/set-handler input))
+   ["set" "item"] (fn [input] (handlers/set-item-handler input))
    ["load"] (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
    })
@@ -127,6 +129,7 @@
                        nil)
 
         command (find-command tokens command-map)
+        _ (newline)
         command-handler (command-map command)]
 
     (cond
@@ -159,8 +162,13 @@
   []
 
   (while true
-    (repl-iter)))
-
+    (try
+      (repl-iter)
+      (catch Exception e
+        (do
+          (println "caught exception: " (.getMessage e))
+          (clojure.stacktrace/print-stack-trace e)
+          (newline))))))
 
 (defn- initialize
   []
@@ -180,5 +188,5 @@
 #_(initialize)
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (gd-edit.game-dirs/get-save-dir) "_Hetzer/player.gdc"))))
           nil))

@@ -11,7 +11,8 @@
             [clojure.java.io :as io]
             [clojure.pprint :as pp]
             [gd-edit.globals :as globals]
-            [gd-edit.utils :as utils])
+            [gd-edit.utils :as utils]
+            [clj-fuzzy.metrics :as metrics])
   (:import  [java.io StringWriter]))
 
 (defn paginate-next
@@ -57,6 +58,8 @@
 
 (defn print-result-records
   [results]
+  {:pre [(sequential? results)]}
+
   (doseq [kv-map results]
     (println (:recordname kv-map))
     (doseq [[key value] (->> kv-map
@@ -66,7 +69,7 @@
 
       (println (format "\t%s: %s" key (yellow value))))
 
-    (println)))
+    (newline)))
 
 
 (defn print-paginated-result
@@ -266,20 +269,23 @@
 
 (defn- keyword->str
   [k]
-  (subs (str k) 1))
+  (if (keyword? k)
+    (subs (str k) 1)
+    k))
 
 (defn- without-meta-fields
   [kv-pair]
 
   (not (.startsWith (str (first kv-pair)) ":meta-")))
 
-(defn print-character
+(defn- without-recordname
+  [[key value]]
+  (not= key :recordname))
+
+(defn print-map
   [character-map & {:keys [skip-item-count]
                     :or {skip-item-count false}}]
 
-  ;; We want to be able to show a nice, easy to read list...
-  ;; To do this, we first need to figure out how long the keyname is
-  ;; Once we determine this, we can pad the keynames.
   (let [character (->> character-map
                        (filter without-meta-fields)
                        (sort-by first))
@@ -318,8 +324,6 @@
     (when-not skip-item-count
       (newline)
       (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
-
-(def print-map print-character)
 
 (defn str-without-dash
   [str]
@@ -498,6 +502,7 @@
                                (format "%%%dd: " (-> (count obj)
                                                      (Math/log10)
                                                      (Math/ceil)
+                                                     (max 1)
                                                      (int)))
                                i))
                        (let [item-type (type item)]
@@ -548,7 +553,7 @@
     ;; The character is loaded
     ;; If there aren't any filter conditions, just display all the character fields
     (= (count tokens) 0)
-    (print-character @globals/character)
+    (print-map @globals/character)
 
     :else
     (do
@@ -585,7 +590,7 @@
                               (println "No matches found")
 
                               (= status :too-many-matches)
-                              (:ambiguous-matches result)
+                              (print-ambiguous-walk-result result)
 
                               (= status :found)
                               (:found-item result)
@@ -597,7 +602,8 @@
             ;; We've successfully navigated to an object
             ;; This might be a piece of data in the character sheet or a list of partially matched result
             ;; for some structure represented as a map
-            (print-object matched-obj)))))))
+            (if-not (nil? matched-obj)
+              (print-object matched-obj))))))))
 
 
 (defn coerce-to-type
@@ -679,7 +685,7 @@
                           (filter #(.isFile %1))
                           (filter #(not (nil? (re-matches #"player\.gdc\..*$" (.getName %1))))))]
 
-    (format "%s.bak%d" (get-savepath character-name) (count save-backups))))
+    (format "%s.bak%d" (get-savepath character-name) (inc (count save-backups)))))
 
 (defn- load-character-file
   [savepath]
@@ -747,6 +753,398 @@
     db
   ))
 
+(defn related-db-records
+  [record db]
+
+  (let [;; Collect all values in the record that look like a db record
+        related-recordnames (->> record
+                                 (reduce (fn [coll [key value]]
+                                           (if (and (string? value) (.startsWith value "records/"))
+                                             (conj coll value)
+                                             coll
+                                             ))
+                                         #{}))
+
+        ;; Retrieve all related records by name
+        related-records (filter #(contains? related-recordnames (:recordname %1)) db)]
+
+    related-records))
+
+(defn- item-name
+  [item db]
+
+  (let [related-records (related-db-records item db)
+        base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
+                        (first))
+
+        base-name (or (get base-record "itemNameTag") (-> (get base-record "description")
+                                                          (string/replace "^k" "")))
+
+        is-set-item (some #(contains? %1 "itemSetName") related-records)]
+
+    ;; If we can't find a base name for the item, this is not a valid item
+    ;; We can't generate a name for an invalid item
+    (if (not (nil? base-name))
+
+      ;; If we've found an item with a unique name, just return the name without any
+      ;; prefix or suffix
+      (if is-set-item
+             base-name
+
+             ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
+             ;; of the item
+             (let [prefix-name (-> (filter #(string/includes? (:recordname %1) "/prefix/") related-records)
+                                   (first)
+                                   (get "lootRandomizerName"))
+                   suffix-name (-> (filter #(string/includes? (:recordname %1) "/suffix/") related-records)
+                                   (first)
+                                   (get "lootRandomizerName"))
+                   quality-name (base-record "itemQualityTag")
+                   ]
+
+               (->> [prefix-name quality-name base-name suffix-name]
+                    (filter #(not (nil? %1)))
+                    (string/join " "))
+               ))
+      )))
+
+(defn- show-item
+  "Print all related records for an item"
+  [item]
+
+  (cond
+
+    (or (not (associative? item))
+        (not (contains? item :basename)))
+    (println "Sorry, this doesn't look like an item")
+
+    (empty? (:basename item))
+    (println "This isn't a valid item (no basename)")
+
+    :else
+    (let [related-records (related-db-records item @gd-edit.globals/db)
+          name (item-name item @gd-edit.globals/db)
+          ]
+      (when (not (nil? name))
+        (println (yellow name))
+        (newline))
+      (print-map item :skip-item-count true)
+      (newline)
+      (print-result-records related-records)
+      )))
+
+(defn show-item-handler
+  [[input tokens]]
+
+  (let [path-keys (string/split (first tokens) #"/")
+        result (walk-structure @gd-edit.globals/character path-keys)
+        {:keys [status found-item]} result]
+
+    (cond
+      (= status :not-found)
+      (println "The path does not specify an item")
+
+      (= status :too-many-matches)
+      (print-ambiguous-walk-result result)
+
+      :else
+      (show-item (:found-item result))
+      )))
+
+(defn- affix-record-get-name
+  [affix-record]
+  (affix-record "lootRandomizerName"))
+
+(defn- item-base-record-get-name
+  [item-base-record]
+
+  (let [base-name (or (get item-base-record "itemNameTag") (get item-base-record "description"))
+        base-name (string/replace base-name "^k" "")
+
+        quality-name (item-base-record "itemQualityTag")]
+
+    (->> [quality-name base-name]
+         (filter #(not (nil? %1)))
+         (string/join " "))))
+
+(defn item-or-affix-get-name
+  [record]
+
+  (or (affix-record-get-name record) (item-base-record-get-name record)))
+
+(defn name-idx-best-matches
+  [name-idx target-name]
+
+  (->> name-idx
+
+       ;; Score and sort the item name index
+       ;; First, we rank by the name's overall similiarity
+       ;; This should help to filter out items that are not at all similar
+       (map (fn [[item-name item-record]]
+              [(u/string-similarity (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
+       (sort-by first >)
+       ))
+
+(defn idx-best-match
+  "Take the index and an array of 'tokenized' item name, try to find the best match.
+  Returns [score candidate matched-name matched-records]]"
+  [idx item-name-tokens]
+
+  (let [;; Build a list of candidates to attempt matching against know prefixes
+        candidates (->> item-name-tokens
+                        (reduce (fn [results token]
+                                  (conj results (conj (last results) token)))
+
+                                [[]]
+                                )
+                        (drop 1))
+
+        ;; Try to locate a best match by ranking all candidates
+        best-match (->> candidates
+                        (map (fn [candidate]
+                               ;; For each candidate, return a pair [best-match, candidate]
+                               (let [[score matched-name matched-records] (->> (clojure.string/join " " candidate)
+                                                                               (name-idx-best-matches idx)
+                                                                               (first))]
+                                 [score candidate matched-name matched-records])))
+                        (sort-by first >)
+                        (first))]
+
+    ;; Does the best match seem "good enough"?
+    (if (and (not (nil? best-match))
+             (> (nth best-match 0) 0.85))
+      best-match
+      nil)))
+
+(defn analyze-multipart-item-name
+  [item-name-idx prefix-name-idx suffix-name-idx item-name]
+
+  (let [tokens (clojure.string/split item-name #" ")
+        tokens-cursor tokens
+
+        ;; See if we can match part of the item name against the prefix index
+        prefix-best-match (idx-best-match prefix-name-idx tokens-cursor)
+        prefix-record (if (nil? prefix-best-match)
+                        nil
+                        (do
+                          (get-in prefix-best-match [3 0])))
+
+        ;; Advance the tokens cursor if possible
+        tokens-cursor (if (not (nil? prefix-best-match))
+                        (drop (count (nth prefix-best-match 1)) tokens-cursor)
+                        tokens-cursor)
+
+        ;; See if we can match part of the item name against the item name index
+        base-best-match (idx-best-match item-name-idx tokens-cursor)
+        base-record (if (nil? base-best-match)
+                      nil
+                      (do
+                        (get-in base-best-match [3 0])))
+
+        ;; Advance the tokens cursor if possible
+        tokens-cursor (if (not (nil? base-best-match))
+                        (drop (count (nth base-best-match 1)) tokens-cursor)
+                        tokens-cursor
+                        )
+
+        ;; See if we can match part of the item name against the suffix name index
+        suffix-best-match (idx-best-match suffix-name-idx tokens-cursor)
+        suffix-record (if (nil? suffix-best-match)
+                      nil
+                      (do
+                        (get-in suffix-best-match [3 0])))
+
+        ;; Advance the tokens cursor if possible
+        tokens-cursor (if (not (nil? suffix-best-match))
+                        (drop (count (nth suffix-best-match 1)) tokens-cursor)
+                        tokens-cursor)
+        ]
+
+    {:base base-record
+     :prefix prefix-record
+     :suffix suffix-record
+     :remaining-tokens tokens-cursor
+     }))
+
+(defn analyze-item-name
+  [item-name-idx prefix-name-idx suffix-name-idx item-name]
+
+  (let [tokens (clojure.string/split item-name #" ")
+        tokens-cursor tokens
+
+        ;; Check if we can match against the whole item name directly
+        whole-item-match (idx-best-match item-name-idx tokens-cursor)]
+
+    ;; If we can find a whole item name match, return that result
+    (if-not (nil? whole-item-match)
+      {:base (get-in whole-item-match [3 0])}
+
+      ;; Otherwise, try to break the name down into prefix, base, and suffix
+      (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx item-name)
+      )))
+
+(defn name-idx-highest-level-by-name
+  [idx name level-cap]
+
+  ;; Grab the records referenced by the name
+  (let [records (idx name)]
+
+    ;; Locate the highest level item that does not exceed the level-cap
+    (->> records
+         (filter #(>= level-cap (or (%1 "levelRequirement") (%1 "itemLevel") 0)))
+         (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
+         (first))))
+
+
+(defn build-item-name-idx
+  [db]
+  (let [
+        item-records (filter (fn [record]
+                               (some #(string/starts-with? (:recordname record) %1)
+                                     #{"records/items/gearaccessories/"
+                                       "records/items/gearfeet/"
+                                       "records/items/gearhands/"
+                                       "records/items/gearhead/"
+                                       "records/items/gearlegs/"
+                                       "records/items/gearrelic/"
+                                       "records/items/gearshoulders/"
+                                       "records/items/geartorso/"
+                                       "records/items/gearweapons/"
+                                       "records/items/materia/"
+                                       "records/items/faction/"}))
+                             db)
+
+        item-name-idx (group-by #(item-base-record-get-name %1) item-records)]
+    item-name-idx
+    ))
+
+(defn construct-item
+  [target-name db level-cap]
+
+  ;; Build a list of base item names with their quality name
+  ;; The index takes the form of: item-name => [item-records]
+  ;; Multiple records may have the same name, but differ in strength
+  (let [item-name-idx (build-item-name-idx @globals/db)
+
+        ;; Build a prefix index
+        prefix-records (->> db
+                            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/prefix/"))
+                            (filter #(-> (:recordname %1)
+                                         (string/split #"/")
+                                         (count)
+                                         (= 5))))
+
+        prefix-name-idx (group-by #(%1 "lootRandomizerName") prefix-records)
+
+        ;; Build a suffix index
+        suffix-records (->> db
+                            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/suffix/"))
+                            (filter #(-> (:recordname %1)
+                                         (string/split #"/")
+                                         (count)
+                                         (= 5))))
+
+        suffix-name-idx (group-by #(%1 "lootRandomizerName") suffix-records)
+
+
+        ;; Try to decompose the complete item name into its prefix, base, and suffix
+        analysis (analyze-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
+
+        ;; Now that we know what the item is composed of, try to bring up the strength/level of each part
+        ;; as the level cap allows
+        ;; For example, there are 16 different suffixes all named "of Potency". Which one do we choose?
+        ;; We choose highest level one that is less or equal to the level cap
+        results (->> (select-keys analysis [:base :prefix :suffix])
+                     (map (fn [[key record]]
+                            [key
+
+                             (if (nil? record)
+                               nil
+                               (name-idx-highest-level-by-name
+                                (cond
+                                  (= key :base)
+                                  item-name-idx
+                                  (= key :prefix)
+                                  prefix-name-idx
+                                  (= key :suffix)
+                                  suffix-name-idx)
+                                (item-or-affix-get-name record)
+                                level-cap))])
+                          )
+                     (into {}))]
+
+    ;; An item must have a basename, which should refer to a item record
+    ;; If we could not find one that satisfies the target-name, then return nothing.
+    (if (nil? (:base results))
+      nil
+
+      ;; Otherwise, create a hashmap that represents the item
+      {:basename       (or (get-in results [:base :recordname]) "")
+       :prefix-name    (or (get-in results [:prefix :recordname]) "")
+       :suffix-name    (or (get-in results [:suffix :recordname]) "")
+       :modifier-name  ""
+       :transmute-name ""
+       :seed           (rand-int Integer/MAX_VALUE)
+
+       :relic-name     ""
+       :relic-bonus    ""
+       :relic-seed     0
+
+       :augment-name   ""
+       :unknown        0
+       :augment-seed   0
+
+       :var1        0
+       :stack-count 1})
+    )
+  )
+
+(defn set-item-handler
+  [[input [path target-name level-cap-str]]]
+
+  (let [path-keys (string/split path #"/")
+        result (walk-structure @gd-edit.globals/character path-keys)
+        {:keys [status found-item actual-path]} result
+
+        level-cap (if-not (nil? level-cap-str)
+                    (Integer/parseInt level-cap-str)
+                    (:character-level @globals/character))
+        ]
+
+    (cond
+      (= status :not-found)
+      (println "The path does not specify an item")
+
+      (= status :too-many-matches)
+      (print-ambiguous-walk-result result)
+
+      (not (contains? found-item :basename))
+      (println "Something was found at the path, but it does not look like an item")
+
+      :else
+      ;; Try to construct the requested item
+      (let [item (construct-item target-name @globals/db level-cap)]
+        ;; If construction was not successful, inform the user and abort
+        (cond
+          (nil? item)
+          (println "Sorry, the item could not be constructed")
+
+          (not (> (u/string-similarity (string/lower-case target-name) (string/lower-case (item-name item @globals/db))) 0.8))
+          (do
+            (show-item item)
+            (println "Sorry, the item generated doesn't look like the item you asked for.")
+            (println (red "Item not altered")))
+
+          ;; Otherwise, put the item into the character sheet
+          :else
+          (do
+            (swap! globals/character assoc-in (:actual-path result)
+                   (merge (get-in @globals/character actual-path) item))
+
+            ;; Show the user what was constructed and placed
+            (show-item (get-in @globals/character actual-path))))
+        ))))
+
 #_(write-handler [nil nil])
 
 #_(choose-character-handler [nil nil])
@@ -760,3 +1158,14 @@
 
 #_(set-handler [nil ["skillpoints" "12"]])
 #_(set-handler [nil ["stashitems/50/basename" "123"]])
+
+#_(let [is-set-item (some #(contains? %1 "itemSetName") r)]
+    is-set-item)
+
+
+#_(def r (construct-item "Skull Fetish" @gd-edit.globals/db))
+#_(show-item r)
+#_(show-handler [nil ["inv/0/items"]])
+#_(set-item-handler  [nil ["inv/0/items/0" "legion warhammer of valor" "64"]])
+#_(write-handler  [nil nil])
+#_(run-query "recordname~gearweapons value~legendary levelreq <= 65")

@@ -1,7 +1,7 @@
 (def project 'gd-edit)
 (def version "0.1.0-SNAPSHOT")
 
-(set-env! :resource-paths #{"resources" "src"}
+(set-env! :resource-paths #{"src"}
           :source-paths   #{"test"}
           :dependencies   '[[org.clojure/clojure "RELEASE"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
@@ -33,6 +33,18 @@
       :copyright "2016"}
  )
 
+(deftask cider "CIDER profile"
+  []
+  (require 'boot.repl)
+  (swap! @(resolve 'boot.repl/*default-dependencies*)
+         concat '[[org.clojure/tools.nrepl "0.2.12"]
+                  [cider/cider-nrepl "0.14.0"]
+                  [refactor-nrepl "2.2.0"]])
+  (swap! @(resolve 'boot.repl/*default-middleware*)
+         concat '[cider.nrepl/cider-middleware
+                  refactor-nrepl.middleware/wrap-refactor])
+  identity)
+
 (deftask build
   "Build the project locally as a JAR."
   [d dir PATH #{str} "the set of directories to write to (target)."]
@@ -44,5 +56,9 @@
   [a args ARG [str] "the arguments for the application."]
   (require '[gd-edit.core :as app])
   (apply (resolve 'app/-main) args))
+
+(deftask dev
+  []
+  (comp (cider) (launch-nrepl) (run)))
 
 (require '[adzerk.boot-test :refer [test]])
