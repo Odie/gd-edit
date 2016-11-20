@@ -875,25 +875,6 @@
 (defn name-idx-best-matches
   [name-idx target-name]
 
-      ;; [base-record (->> name-idx
-
-      ;;                    ;; Score and sort the item name index
-      ;;                    ;; First, we rank by the name's overall similiarity
-      ;;                    ;; This should help to filter out items that are not at all similar
-      ;;                    (map (fn [[item-name item-record]]
-      ;;                           [(metrics/jaccard (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
-      ;;                    (sort-by first)
-
-
-      ;;                    ;; Take the top 10 results (most similar) and rank them again using shortest editing distance
-      ;;                    (take 10)
-      ;;                    (map (fn [[score item-name item-record]]
-      ;;                           [(metrics/levenshtein (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
-      ;;                    (sort-by first)
-      ;;                    (first)
-      ;;                    (drop 1)
-      ;;                    )]
-
   (->> name-idx
 
        ;; Score and sort the item name index
@@ -1187,3 +1168,4 @@
 #_(show-handler [nil ["inv/0/items"]])
 #_(set-item-handler  [nil ["inv/0/items/0" "legion warhammer of valor" "64"]])
 #_(write-handler  [nil nil])
+#_(run-query "recordname~gearweapons value~legendary levelreq <= 65")
