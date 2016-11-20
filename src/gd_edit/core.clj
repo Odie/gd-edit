@@ -188,42 +188,5 @@
 #_(initialize)
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc"))
+                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (gd-edit.game-dirs/get-save-dir) "_Hetzer/player.gdc"))))
           nil))
-
-;; Walk each db record
-;; (def r
-;;   (->> @gd-edit.globals/db
-;;        (filter #(.startsWith (:recordname %1) "records/items/gearweapons"))
-;;        (reduce (fn [set db-record]
-
-;;                  (into set (keys db-record)))
-
-;;                #{}
-;;                )
-;;        (filter #(not= :recordname %1))
-;;        (filter #(.startsWith %1 "offensive"))
-;;        (sort)
-;;        ))
-
-;; (def v
-;;   (->> r
-;;        (reduce (fn [set word]
-;;                  (into set (clojure.string/split word #"(?=[A-Z])")))
-;;                #{}
-;;                )
-
-;;        (filter #(> (count %1) 1))
-;;        (map clojure.string/lower-case)
-;;        (into #{})
-;;        (sort)
-;;        ))
-
-;; (def s
-;;   (->> r
-;;        (filter #(-> (clojure.string/lower-case %1)
-;;                     (.contains "leech")
-;;                      )
-;;        )))
-
-;; (nth @gd-edit.globals/db 1)
