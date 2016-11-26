@@ -15,7 +15,7 @@
             [clj-fuzzy.metrics :as metrics])
   (:import  [java.io StringWriter]))
 
-(declare is-item? show-item)
+(declare is-item? show-item set-item-handler)
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -637,7 +637,7 @@
     (not (character-loaded?))
     (character-selection-screen!)
 
-    (not= (count tokens) 2)
+    (< (count tokens) 2)
     (println "Usage: show <path> <new-value>")
 
     :else
@@ -646,8 +646,7 @@
       ;; We're going to use these as keys to navigate into the character sheet
       (let [path-keys (string/split (first tokens) #"/")
             walk-result (walk-structure @globals/character path-keys)
-            {:keys [status]} walk-result
-            ]
+            {:keys [status]} walk-result]
 
         (cond
           (= status :not-found)
@@ -662,11 +661,33 @@
             (let [value (:found-item walk-result)
                   ;; What is the type of the value? We'll have to coerce the supplied new value
                   ;; to the same type first.
-                  newval (coerce-to-type (second tokens) (type value))]
+                  newval (try (coerce-to-type (second tokens) (type value))
+                              (catch Exception e :failed))]
 
-              ;; Set the new value into the character sheet
-              (reset! globals/character
-                      (update-in @globals/character (:actual-path walk-result) (fn [oldval] newval)))
+              (cond
+                ;; Is the targetted value an item?
+                ;; Let the set-item handler deal with it
+                (is-item? value)
+                (set-item-handler [input tokens])
+
+                ;; The user cannot create a collection directly from the commandline.
+                ;; So replacing a collection directly makes no sense and cannot be done.
+                (coll? value)
+                (println "Sorry, can't set the value of" (first tokens))
+
+                ;; If coercion failed, tell the user what type is being expected
+                (= newval :failed)
+                (println "Please provide a value that is of type" (-> (type value)
+                                                                      (str)
+                                                                      (string/split #"\.")
+                                                                      (last)
+                                                                      (string/lower-case)))
+
+                :else
+                ;; Set the new value into the character sheet
+                (reset! globals/character
+                        (update-in @globals/character (:actual-path walk-result) (fn [oldval] newval)))
+                )
               nil
               ))
 
@@ -961,22 +982,52 @@
      :remaining-tokens tokens-cursor
      }))
 
-(defn analyze-item-name
-  [item-name-idx prefix-name-idx suffix-name-idx item-name]
 
-  (let [tokens (clojure.string/split item-name #" ")
+(defn- item-def->item
+  [def]
+
+  {:basename       (or (get-in def [:base :recordname]) "")
+   :prefix-name    (or (get-in def [:prefix :recordname]) "")
+   :suffix-name    (or (get-in def [:suffix :recordname]) "")
+   :modifier-name  ""
+   :transmute-name ""
+   :seed           (rand-int Integer/MAX_VALUE)
+
+   :relic-name     ""
+   :relic-bonus    ""
+   :relic-seed     0
+
+   :augment-name   ""
+   :unknown        0
+   :augment-seed   0
+
+   :var1        0
+   :stack-count 1})
+
+
+(defn analyze-item-name
+  [item-name-idx prefix-name-idx suffix-name-idx target-name]
+
+  (let [tokens (clojure.string/split target-name #" ")
         tokens-cursor tokens
 
-        ;; Check if we can match against the whole item name directly
-        whole-item-match (idx-best-match item-name-idx tokens-cursor)]
+        ;; Try to match against the whole name directly
+        whole-item-match {:base (get-in (idx-best-match item-name-idx tokens-cursor) [3 0])}
 
-    ;; If we can find a whole item name match, return that result
-    (if-not (nil? whole-item-match)
-      {:base (get-in whole-item-match [3 0])}
+        ;; Try to break down the item into multiple part components
+        multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
 
-      ;; Otherwise, try to break the name down into prefix, base, and suffix
-      (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx item-name)
-      )))
+        ;; Of the two results, figure out which one matches the input name more closely
+        ;; Return that item
+        match (->> [whole-item-match multi-part-match]
+                   (sort-by #(u/string-similarity
+                              (string/lower-case target-name)
+                              (string/lower-case (item-name (item-def->item %1) @globals/db)))
+                            >)
+                   (first))
+        ]
+
+    match))
 
 (defn name-idx-highest-level-by-name
   [idx name level-cap]
@@ -1074,25 +1125,7 @@
       nil
 
       ;; Otherwise, create a hashmap that represents the item
-      {:basename       (or (get-in results [:base :recordname]) "")
-       :prefix-name    (or (get-in results [:prefix :recordname]) "")
-       :suffix-name    (or (get-in results [:suffix :recordname]) "")
-       :modifier-name  ""
-       :transmute-name ""
-       :seed           (rand-int Integer/MAX_VALUE)
-
-       :relic-name     ""
-       :relic-bonus    ""
-       :relic-seed     0
-
-       :augment-name   ""
-       :unknown        0
-       :augment-seed   0
-
-       :var1        0
-       :stack-count 1})
-    )
-  )
+      (item-def->item results))))
 
 (defn set-item-handler
   [[input [path target-name level-cap-str]]]
@@ -1155,25 +1188,33 @@
                   "valid operators are: ~ = != < > <= >="
                   " ~ is used for partial string matches"
                   ""
-                  "For example, to find all legendary weapons:"
+                  "Example 1:"
                   " q recordname~weapons"
                   ""
+                  " This this retrieves where 'weapons' is part of the recrodname."
                   " Since weapon db records seem to reside at 'records/items/gearweapons'"
                   " We can try partial matches against any record that have 'weapons'"
                   " in the record name."
                   ""
-                  "To find all weapons of 'legendary' quality:"
+                  "Example 2:"
                   " q recordname~weapons value~legendary"
                   ""
-                  " This adds adds an additional condition that we're looking for records with"
-                  " any key having the value of 'legendary'"
+                  " This find all weapons of 'legendary' quality by adding an additional"
+                  " condition that we're looking for records with any field value that"
+                  " partially matches the word 'legendary'"
                   ""
-                  "To find all legendary weapons below level 50:"
+                  "Example 3:"
                   " q recordname~weapons value~legendary levelreq < 50"
                   ""
                   " The new clause 'levelreq < 50' means that we're looking for records"
                   " with a fieldname that partially matches 'levelreq' and where the value"
                   " of that field is '< 50'"
+                  ""
+                  "Example 4:"
+                  " q recordname~weapons/blunt1h order offensivePhysicalMax"
+                  ""
+                  " Normally, the returned results are ordered by their recordname. However, you"
+                  " can ask the editor to order the results by any field you want."
                   ])]
 
    ["qshow" "Show the next page in the query result"]
@@ -1226,7 +1267,7 @@
                   " If the filter narrows down matches to a single item, the contents of that"
                   " item is displayed. In this case, the editor will show you all the contents"
                   " of items you currently have equipped."
-
+                  ""
                   "Example 4:"
                   " show equipment/0"
                   ""
@@ -1235,10 +1276,41 @@
                   " of the item as well as any related db records."
                   ])]
 
-   ["set"   "Set fields in the save file"]
-   ["set item"  "Create a new item and set it into the indicated slot"]
+   ["set"   "Set fields in the save file"
+    (string/join "\n"
+                 ["Syntax: set <partially matched path to field> <new value>"
+                  ""
+                  "This command is used to alter field values in the loaded character save file."
+                  "Any fields that can be found using the 'show' command can be altered this way."
+                  ""
+                  "Example 1:"
+                  " set character-level 64"
+                  ""
+                  " This sets the character level to 64."
+                  ""
+                  "Example 2:"
+                  " set stash-items/0/stack-count 100"
+                  ""
+                  " Set the first item in your stash to a stack of 100."
+                  ""
+                  "Example 3:"
+                  " set weaponsets/0/items/0 \"legion warhammer of valor\""
+                  ""
+                  " Usually, the set command just puts the specified new value into the field"
+                  " specified by the partial path. So it's possible to change an item's basename,"
+                  " prefix, suffix, or any other field directly."
+                  ""
+                  " However, in the case of dealing with an item, it's actually very painful to"
+                  " query for the record to use as a basename, then repeat for the prefix and the"
+                  " suffix. So in the case where the partial path points at an item, it's possible"
+                  " to just supply the name of the item you want. The editor will try its best to"
+                  " figure the right combination of basename, prefix, and suffix. It also takes"
+                  " into consideration of the character that has currently been loaded."
+                  " "
+                  ])]
+
    ["load"  "Load from a save file"]
-   ["write" "Writes out the character currently being manipulated"]
+   ["write" "Writes out the character that is currently loaded"]
    ])
 
 (defn help-handler
