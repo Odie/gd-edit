@@ -122,10 +122,11 @@
    :inventory-sacks   :ignore
    :use-alt-weaponset :bool
    :equipment         :ignore
-   :alternate1        :bool
-   :alternate1-set    :ignore
-   :alternate2        :bool
-   :alternate2-set    :ignore))
+   :weapon-sets       (s/ordered-map
+                       :unused :bool
+                       :items (s/variable-count EquipmentItem
+                                                :length 2))
+   ))
 
 
 (defn read-block3
@@ -168,10 +169,11 @@
      :inventory-sacks   inventory-sacks
      :use-alt-weaponset use-alt-weaponset
      :equipment         equipment
-     :alternate1        alternate1
-     :alternate1-set    alternate1-set
-     :alternate2        alternate2
-     :alternate2-set    alternate2-set}))
+     :weapon-sets       [{:unused alternate1
+                          :items alternate1-set}
+                         {:unused alternate2
+                          :items alternate2-set}]
+     }))
 
 (defn write-block3
   [^ByteBuffer bb block context]
@@ -192,14 +194,14 @@
   (doseq [item (:equipment block)]
     (s/write-struct EquipmentItem bb item (:primitive-specs @context) context))
 
-  (write-bool! bb (:alternate1 block) context)
-  (assert (=  (count (:alternate1-set block)) 2))
-  (doseq [item (:alternate1-set block)]
+  (write-bool! bb (get-in block [:weapon-sets 0 :unused]) context)
+  (assert (=  (count (get-in block [:weapon-sets 0 :items])) 2))
+  (doseq [item (get-in block [:weapon-sets 0 :items])]
     (s/write-struct EquipmentItem bb item (:primitive-specs @context) context))
 
-  (write-bool! bb (:alternate2 block) context)
-  (assert (= (count (:alternate2-set block)) 2))
-  (doseq [item (:alternate2-set block)]
+  (write-bool! bb (get-in block [:weapon-sets 1 :unused]) context)
+  (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
+  (doseq [item (get-in block [:weapon-sets 1 :items])]
     (s/write-struct EquipmentItem bb item (:primitive-specs @context) context)))
 
 (def Block4
