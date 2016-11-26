@@ -248,7 +248,7 @@
   (s/ordered-map
    :version :int32
 
-   :markers (s/variable-count
+   :shrines (s/variable-count
              (s/variable-count UID)
              :length 6)
    ))
