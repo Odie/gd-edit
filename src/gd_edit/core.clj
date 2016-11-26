@@ -34,18 +34,17 @@
 
 (def command-map
   {
-   ["exit"] (fn [input] (System/exit 0))
-   ["q"] (fn [input] (handlers/query-comand-handler input))
+   ["exit"]  (fn [input] (System/exit 0))
+   ["q"]     (fn [input] (handlers/query-comand-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
-   ["qn"] (fn [input] (handlers/query-show-handler input))
-   ["db"] (fn [input] (handlers/db-show-handler input))
+   ["qn"]    (fn [input] (handlers/query-show-handler input))
+   ["db"]    (fn [input] (handlers/db-show-handler input))
    ["db" "show"] (fn [input] (handlers/db-show-handler input))
-   ["show"] (fn [input] (handlers/show-handler input))
-   ["show" "item"] (fn [input] (handlers/show-item-handler input))
-   ["set"] (fn [input] (handlers/set-handler input))
-   ["set" "item"] (fn [input] (handlers/set-item-handler input))
-   ["load"] (fn [input] (handlers/choose-character-handler input))
+   ["show"]  (fn [input] (handlers/show-handler input))
+   ["set"]   (fn [input] (handlers/set-handler input))
+   ["load"]  (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
+   ["help"] (fn [input] (handlers/help-handler input))
    })
 
 (defn- find-command

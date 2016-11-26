@@ -15,6 +15,8 @@
             [clj-fuzzy.metrics :as metrics])
   (:import  [java.io StringWriter]))
 
+(declare is-item? show-item)
+
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
 
@@ -155,52 +157,52 @@
 (defn db-show-handler
   [[input tokens]]
 
-  (let [path (first tokens)]
-    (if (nil? path)
-      (println "Please provide some path to attempt matching")
+  (let [path (if (nil? (first tokens))
+               "r/"
+               (first tokens))]
 
-      (let [sorted-matches
+    (let [sorted-matches
 
-            ;; Grab a list of items from the db that partially matches the specified path
-            (->> (db-partial-record-path-matches @gd-edit.globals/db path)
+          ;; Grab a list of items from the db that partially matches the specified path
+          (->> (db-partial-record-path-matches @gd-edit.globals/db path)
 
-                 ;; Consolidate the search so we only have n+1 path components
-                 (reduce (fn [accum item]
-                           (conj accum
-                                  (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
-                         #{})
+               ;; Consolidate the search so we only have n+1 path components
+               (reduce (fn [accum item]
+                         (conj accum
+                               (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
+                       #{})
 
-                 ;; Sort the matches
-                 (sort))
+               ;; Sort the matches
+               (sort))
 
-            ;; It's possible for the user to target a single record using "db show".
-            ;; It that happens, we should just display the contents of that record instead of a
-            ;; list of matched paths
-            ;; Try to fetch the full recordname of the match now
-            sole-match-recordname
-            (if (= 1 (count sorted-matches))
-              (first (db-partial-record-path-matches @gd-edit.globals/db path))
-              nil)]
+          ;; It's possible for the user to target a single record using "db show".
+          ;; It that happens, we should just display the contents of that record instead of a
+          ;; list of matched paths
+          ;; Try to fetch the full recordname of the match now
+          sole-match-recordname
+          (if (= 1 (count sorted-matches))
+            (first (db-partial-record-path-matches @gd-edit.globals/db path))
+            nil)]
 
-        ;; If we have a single record match
-        (if sole-match-recordname
+      ;; If we have a single record match
+      (if sole-match-recordname
 
-          ;; Locate the record by name
-          (->> (filter (fn [item]
-                         (= (:recordname item) sole-match-recordname))
-                       @gd-edit.globals/db)
+        ;; Locate the record by name
+        (->> (filter (fn [item]
+                       (= (:recordname item) sole-match-recordname))
+                     @gd-edit.globals/db)
 
-               ;; Print the record
-               (print-result-records))
+             ;; Print the record
+             (print-result-records))
 
 
-          ;; If we have multiple record matches...
-          ;; Just print the names
-          (do
-            (doseq [item sorted-matches]
-              (println item))
-            (println)
-            (println (count sorted-matches) " matches")))))))
+        ;; If we have multiple record matches...
+        ;; Just print the names
+        (do
+          (doseq [item sorted-matches]
+            (println item))
+          (println)
+          (println (count sorted-matches) " matches"))))))
 
 (defn- last-path-component
   [path]
@@ -521,6 +523,9 @@
                            :else
                            (println item))))
 
+      (is-item? obj)
+      (show-item obj)
+
       (associative? obj)
       (print-map obj)
 
@@ -590,7 +595,7 @@
                               (println "No matches found")
 
                               (= status :too-many-matches)
-                              (print-ambiguous-walk-result result)
+                              (into {} (:ambiguous-matches result))
 
                               (= status :found)
                               (:found-item result)
@@ -808,18 +813,26 @@
                ))
       )))
 
+(defn- is-item?
+  "Does the given collection look like something that represents an in-game item?"
+  [coll]
+
+  (and (associative? coll)
+       (contains? coll :basename)))
+
 (defn- show-item
   "Print all related records for an item"
   [item]
 
   (cond
 
-    (or (not (associative? item))
-        (not (contains? item :basename)))
+    (not (is-item? item))
     (println "Sorry, this doesn't look like an item")
 
     (empty? (:basename item))
-    (println "This isn't a valid item (no basename)")
+    (do
+      (println "This isn't a valid item (no basename)")
+      (print-map item))
 
     :else
     (let [related-records (related-db-records item @gd-edit.globals/db)
@@ -831,24 +844,6 @@
       (print-map item :skip-item-count true)
       (newline)
       (print-result-records related-records)
-      )))
-
-(defn show-item-handler
-  [[input tokens]]
-
-  (let [path-keys (string/split (first tokens) #"/")
-        result (walk-structure @gd-edit.globals/character path-keys)
-        {:keys [status found-item]} result]
-
-    (cond
-      (= status :not-found)
-      (println "The path does not specify an item")
-
-      (= status :too-many-matches)
-      (print-ambiguous-walk-result result)
-
-      :else
-      (show-item (:found-item result))
       )))
 
 (defn- affix-record-get-name
@@ -1144,6 +1139,151 @@
             ;; Show the user what was constructed and placed
             (show-item (get-in @globals/character actual-path))))
         ))))
+
+(def command-help-map
+  [["exit"  "Exits the program"]
+   ["q"     "Query the database"
+    (string/join "\n"
+                 ["Query the database using a series of conditions in the form of"
+                  "  <partial fieldname> <operator> <value>"
+                  ""
+                  "<partial fieldname> can also be a special keywords:"
+                  " 'recordname' match against the name/path of the db record"
+                  " 'key' match some key/fieldname in the record"
+                  " 'value' match some value entry in the record"
+                  ""
+                  "valid operators are: ~ = != < > <= >="
+                  " ~ is used for partial string matches"
+                  ""
+                  "For example, to find all legendary weapons:"
+                  " q recordname~weapons"
+                  ""
+                  " Since weapon db records seem to reside at 'records/items/gearweapons'"
+                  " We can try partial matches against any record that have 'weapons'"
+                  " in the record name."
+                  ""
+                  "To find all weapons of 'legendary' quality:"
+                  " q recordname~weapons value~legendary"
+                  ""
+                  " This adds adds an additional condition that we're looking for records with"
+                  " any key having the value of 'legendary'"
+                  ""
+                  "To find all legendary weapons below level 50:"
+                  " q recordname~weapons value~legendary levelreq < 50"
+                  ""
+                  " The new clause 'levelreq < 50' means that we're looking for records"
+                  " with a fieldname that partially matches 'levelreq' and where the value"
+                  " of that field is '< 50'"
+                  ])]
+
+   ["qshow" "Show the next page in the query result"]
+   ["qn"    "Alias for qshow"]
+
+   ["db"    "Explore the database interactively"
+    (string/join "\n"
+                 ["Syntax: db <partially matched path>"
+                  ""
+                  "The query command helps locate exact db records if you know what you're"
+                  "looking for. But if you don't know what's in the db to begin with, it will"
+                  "be difficult to come up with a useful query."
+                  ""
+                  "This command lets you explore the db interactively instead of querying"
+                  "against it."
+                  ""
+                  "Try the following commands:"
+                  " db"
+                  " db record/items"
+                  " db r/item/weapons/melee/d011_blunt2h.dbr"
+                  ""
+                  "If supplied with a path that indicates a 'directory', the results will show you"
+                  "all items residing in that directory. If the supplied path indicates a db record"
+                  "it will show you the contents of that record."
+                  ""
+                  "Lastly, each 'component' in the path can be partially matched, so you don't have"
+                  "to enter the exact path all the time. It works as long as you supply enough of"
+                  "the component to uniquely identify a directory or record."
+                  ])]
+
+   ["show"  "Explore the save file data"
+    (string/join "\n"
+                 ["Syntax: show <partially matched path>"
+                  ""
+                  "This command is used to examine variables in the loaded character save file."
+                  ""
+                  "Example 1:"
+                  " show"
+                  ""
+                  " This shows a top level overview of all fields in the save file."
+                  ""
+                  "Example 2:"
+                  " show level"
+                  ""
+                  " This filters for fields that contains the world 'level'"
+                  ""
+                  "Example 3:"
+                  " show equipment"
+                  ""
+                  " If the filter narrows down matches to a single item, the contents of that"
+                  " item is displayed. In this case, the editor will show you all the contents"
+                  " of items you currently have equipped."
+
+                  "Example 4:"
+                  " show equipment/0"
+                  ""
+                  " The 'equipment' field is a collection of 12 items. This command says to show"
+                  " only the first item. When display an item, the editor will show the full name"
+                  " of the item as well as any related db records."
+                  ])]
+
+   ["set"   "Set fields in the save file"]
+   ["set item"  "Create a new item and set it into the indicated slot"]
+   ["load"  "Load from a save file"]
+   ["write" "Writes out the character currently being manipulated"]
+   ])
+
+(defn help-handler
+  [[input tokens]]
+
+  (cond
+    ;; If there are no other parameters,
+    ;; show the list of commands and a short help text.
+    (= 0 (count tokens))
+    (let [command-names (map #(first %1) command-help-map)
+          max-name-length (reduce (fn [max-length item]
+                                    (if (> (count item) max-length)
+                                      (count item)
+                                      max-length)
+                                    )
+                                  0 command-names)]
+      ;; Print the name of the command followed by the short help text
+      (doseq [help-item command-help-map]
+        (println (format (format "%%-%ds     %%s" max-name-length) (first help-item) (second help-item)))
+        )
+      (newline)
+      (println (string/join "\n"
+                            ["To more detailed help text on a command, run: "
+                             " help <command>"])))
+
+    :else
+    ;; If the user is looking for help text on a specific command,
+    ;; try to find the help text.
+    ;; Display the help text (or lack of one) as appropriate
+    (let [command (string/join " " tokens)
+          help-item (->> command-help-map
+                         (filter #(= command (first %1)))
+                         (first))]
+      (cond
+        (nil? help-item)
+        (println (format "Unknown command '%s'" command))
+
+        (> (count help-item) 2)
+        (println (nth help-item 2))
+
+        :else
+        (println (format "Sorry, '%s' has no detailed help text." command))
+        ))))
+
+#_(help-handler [nil []])
 
 #_(write-handler [nil nil])
 
