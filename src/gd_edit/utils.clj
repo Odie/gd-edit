@@ -1,8 +1,11 @@
 (ns gd-edit.utils
-  (:require [clojure.string :as string]
-            [clojure.set :refer [intersection]])
-  (:import  [java.nio ByteBuffer]
-            [java.nio.channels FileChannel]))
+  (:require [clojure
+             [set :refer [intersection]]
+             [string :as string]]
+            [gd-edit.utils :as u]
+            [jansi-clj.core :refer :all])
+  (:import java.nio.ByteBuffer
+           java.nio.channels.FileChannel))
 
 (defn mmap
   [filepath]
@@ -71,3 +74,7 @@
         match-count (count (intersection a-pairs b-pairs))
         similarity (/ (* 2 match-count) total-count)]
     similarity))
+
+(defn byte-array?
+  [obj]
+  (= byte-array-type (type obj)))

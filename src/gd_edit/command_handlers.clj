@@ -1,19 +1,16 @@
 (ns gd-edit.command-handlers
-  (:require [gd-edit.db-query :as query]
-            [gd-edit.globals :as g]
-            [gd-edit.utils :as u]
-            [gd-edit.game-dirs :as dirs]
-            [gd-edit.arc-reader :as arc-reader]
-            [gd-edit.arz-reader :as arz-reader]
-            [gd-edit.gdc-reader :as gdc]
-            [jansi-clj.core :refer :all]
+  (:require [clojure.java.io :as io]
             [clojure.string :as string]
-            [clojure.java.io :as io]
-            [clojure.pprint :as pp]
-            [gd-edit.globals :as globals]
-            [gd-edit.utils :as utils]
-            [clj-fuzzy.metrics :as metrics])
-  (:import  [java.io StringWriter]))
+            [gd-edit
+             [arc-reader :as arc-reader]
+             [arz-reader :as arz-reader]
+             [db-query :as query]
+             [game-dirs :as dirs]
+             [gdc-reader :as gdc]
+             [globals :as globals]
+             [utils :as u]]
+            [jansi-clj.core :refer :all]
+            ))
 
 (declare is-item? show-item set-item-handler)
 
@@ -52,10 +49,10 @@
 (defn set-new-query-result!
   [query-state-atom new-result query-string]
 
-  (reset! g/query-state (assoc @g/query-state
-                               :query-string query-string
-                               :result new-result
-                               :page 0)))
+  (reset! globals/query-state (assoc @globals/query-state
+                                     :query-string query-string
+                                     :result new-result
+                                     :page 0)))
 
 
 (defn print-result-records
@@ -90,8 +87,8 @@
 (defn query-show-handler
   [[input tokens]]
 
-  (paginate-next! g/query-state)
-  (print-paginated-result @g/query-state))
+  (paginate-next! globals/query-state)
+  (print-paginated-result @globals/query-state))
 
 
 (defn run-query
@@ -103,11 +100,11 @@
     (when (not (nil? predicates))
 
       ;; Run a query against the db using generated predicates
-      (set-new-query-result! g/query-state
-                             (query/query @g/db predicates)
+      (set-new-query-result! globals/query-state
+                             (query/query @globals/db predicates)
                              input)
 
-      (print-paginated-result @g/query-state))))
+      (print-paginated-result @globals/query-state))))
 
 (defn query-comand-handler
   [[input tokens]]
@@ -445,7 +442,10 @@
 
               :else
               (let [[matched-key matched-value] (first matches)]
-                (recur matched-value (rest ks) (conj actual-path matched-key))))))))))
+                (recur matched-value (rest ks) (conj actual-path matched-key)))))
+
+          :else
+          (return-result :cannot-traverse ks actual-path))))))
 
 
 (defn print-details
@@ -482,22 +482,42 @@
                            (throw (Throwable. "Don't know how to print details for a sequence of this type yet!")))
                          )))))
 
-
 (defn print-indent
   [indent-level]
 
   (dotimes [i indent-level]
     (print "    ")))
 
+(defn- is-primitive?
+  [val]
+
+  (or (number? val) (string? val) (u/byte-array? val)))
+
+(defn print-primitive
+  ([obj]
+   (print-primitive obj 0))
+
+  ([obj indent-level]
+   (cond
+     (or (number? obj) (string? obj) )
+     (do
+       (print-indent indent-level)
+       (println (yellow obj)))
+
+     (u/byte-array? obj)
+     (do
+       (print-indent indent-level)
+       (println (format "byte array[%d]" (count obj))
+                (map #(format (yellow "%02X") %1) obj)))
+     )))
+
 (defn print-object
   [obj]
 
   (let [t (type obj)]
     (cond
-      (or (number? obj) (string? obj))
-      (do
-        (print-indent 1)
-        (println (yellow obj)))
+      (is-primitive? obj)
+      (print-primitive obj 1)
 
       (sequential? obj)
       (u/doseq-indexed i [item obj]
@@ -510,8 +530,11 @@
                                i))
                        (let [item-type (type item)]
                          (cond
-                           (= u/byte-array-type item-type)
-                           (println "byte array of size" (count item))
+                           (is-primitive? item)
+                           (print-primitive item)
+
+                           (sequential? item)
+                           (println (format "collection of %d items" (count item)))
 
                            (associative? item)
                            (do
@@ -547,10 +570,31 @@
     (print-indent 1)
     (println ambiguous-item)))
 
-(defn- is-primitive?
-  [val]
+(defn- classname
+  [obj]
 
-  (or (number? val) (string? val)))
+  (cond
+    (u/byte-array? obj)
+    "byte array"
+
+    (integer?)
+    "integer"
+
+    (float?)
+    "float"
+
+    (string?)
+    "string"
+    )
+  )
+
+(defn print-cannot-traverse-walk-result
+  [result]
+
+  (let [actual-path-item (get-in @globals/character (:actual-path result))]
+    (println (format "Cannot traverse into %s at the path \"%s\""
+                     (classname actual-path-item)
+                     (clojure.string/join "/" (:longest-path result))))))
 
 (defn show-handler
   [[input tokens]]
@@ -586,6 +630,9 @@
                             (= status :too-many-matches)
                             (print-ambiguous-walk-result result)
 
+                            (= status :cannot-traverse)
+                            (print-cannot-traverse-walk-result result)
+
                             :else
                             (:found-item result)))
               )]
@@ -603,15 +650,18 @@
                               (= status :too-many-matches)
                               (into {} (:ambiguous-matches result))
 
+                              (= status :cannot-traverse)
+                              (let [result (walk-structure @globals/character path-keys)]
+                                (print-cannot-traverse-walk-result result))
+
                               ;; If we found a result and it looks like a primitive...
                               ;; We want to print the path to that primitive then the value
                               (and (= status :found) (is-primitive? (:found-item result)))
-                              (do
-                                (let [result (walk-structure @globals/character path-keys)]
-                                  (println (->> (:actual-path result)
-                                                (map keyword->str)
-                                                (string/join "/")))
-                                  (:found-item result)))
+                              (let [result (walk-structure @globals/character path-keys)]
+                                (println (->> (:actual-path result)
+                                              (map keyword->str)
+                                              (string/join "/")))
+                                (:found-item result))
 
                               (= status :found)
                               (:found-item result)
@@ -770,11 +820,11 @@
   []
 
   (let [[localization-load-time localization-table]
-        (utils/timed
+        (u/timed
          (arc-reader/load-localization-table (dirs/get-localization-filepath)))
 
         [db-load-time db]
-        (utils/timed
+        (u/timed
          (arz-reader/load-game-db (dirs/get-db-filepath)
                                   localization-table))]
 
@@ -1377,7 +1427,7 @@
 
 #_(choose-character-handler [nil nil])
 #_(show-handler [nil nil])
-#_(show-handler [nil ["stash"]])
+#_(show-handler [nil ["shrines/0"]])
 #_(show-handler [nil ["stash-items"]])
 #_(show-handler [nil ["stash/50"]])
 #_(show-handler [nil ["stash-items/50"]])
