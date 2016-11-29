@@ -496,7 +496,8 @@
     (cond
       (or (number? obj) (string? obj))
       (do
-        (println obj))
+        (print-indent 1)
+        (println (yellow obj)))
 
       (sequential? obj)
       (u/doseq-indexed i [item obj]
@@ -545,6 +546,11 @@
                               (map keyword->str))]
     (print-indent 1)
     (println ambiguous-item)))
+
+(defn- is-primitive?
+  [val]
+
+  (or (number? val) (string? val)))
 
 (defn show-handler
   [[input tokens]]
@@ -596,6 +602,16 @@
 
                               (= status :too-many-matches)
                               (into {} (:ambiguous-matches result))
+
+                              ;; If we found a result and it looks like a primitive...
+                              ;; We want to print the path to that primitive then the value
+                              (and (= status :found) (is-primitive? (:found-item result)))
+                              (do
+                                (let [result (walk-structure @globals/character path-keys)]
+                                  (println (->> (:actual-path result)
+                                                (map keyword->str)
+                                                (string/join "/")))
+                                  (:found-item result)))
 
                               (= status :found)
                               (:found-item result)
