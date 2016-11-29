@@ -862,43 +862,53 @@
 
     related-records))
 
+(defn- is-valid-item?
+  [item]
+
+  (if (or  (nil? (:basename item)) (empty? (:basename item)))
+    false
+    true))
+
 (defn- item-name
   [item db]
 
-  (let [related-records (related-db-records item db)
-        base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
-                        (first))
+  (if-not (is-valid-item? item)
+    nil
 
-        base-name (or (get base-record "itemNameTag") (-> (get base-record "description")
-                                                          (string/replace "^k" "")))
+    (let [related-records (related-db-records item db)
+          base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
+                          (first))
 
-        is-set-item (some #(contains? %1 "itemSetName") related-records)]
+          base-name (or (get base-record "itemNameTag") (-> (get base-record "description")
+                                                            (string/replace "^k" "")))
 
-    ;; If we can't find a base name for the item, this is not a valid item
-    ;; We can't generate a name for an invalid item
-    (if (not (nil? base-name))
+          is-set-item (some #(contains? %1 "itemSetName") related-records)]
 
-      ;; If we've found an item with a unique name, just return the name without any
-      ;; prefix or suffix
-      (if is-set-item
-             base-name
+      ;; If we can't find a base name for the item, this is not a valid item
+      ;; We can't generate a name for an invalid item
+      (if (not (nil? base-name))
 
-             ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
-             ;; of the item
-             (let [prefix-name (-> (filter #(string/includes? (:recordname %1) "/prefix/") related-records)
-                                   (first)
-                                   (get "lootRandomizerName"))
-                   suffix-name (-> (filter #(string/includes? (:recordname %1) "/suffix/") related-records)
-                                   (first)
-                                   (get "lootRandomizerName"))
-                   quality-name (base-record "itemQualityTag")
-                   ]
+        ;; If we've found an item with a unique name, just return the name without any
+        ;; prefix or suffix
+        (if is-set-item
+          base-name
 
-               (->> [prefix-name quality-name base-name suffix-name]
-                    (filter #(not (nil? %1)))
-                    (string/join " "))
-               ))
-      )))
+          ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
+          ;; of the item
+          (let [prefix-name (-> (filter #(string/includes? (:recordname %1) "/prefix/") related-records)
+                                (first)
+                                (get "lootRandomizerName"))
+                suffix-name (-> (filter #(string/includes? (:recordname %1) "/suffix/") related-records)
+                                (first)
+                                (get "lootRandomizerName"))
+                quality-name (base-record "itemQualityTag")
+                ]
+
+            (->> [prefix-name quality-name base-name suffix-name]
+                 (filter #(not (nil? %1)))
+                 (string/join " "))
+            ))
+        ))))
 
 (defn- is-item?
   "Does the given collection look like something that represents an in-game item?"
@@ -1088,7 +1098,7 @@
         match (->> [whole-item-match multi-part-match]
                    (sort-by #(u/string-similarity
                               (string/lower-case target-name)
-                              (string/lower-case (item-name (item-def->item %1) @globals/db)))
+                              (string/lower-case (or (item-name (item-def->item %1) "") @globals/db)))
                             >)
                    (first))
         ]
@@ -1445,5 +1455,7 @@
 #_(show-item r)
 #_(show-handler [nil ["inv/0/items"]])
 #_(set-item-handler  [nil ["inv/0/items/0" "legion warhammer of valor" "64"]])
+#_(set-handler  [nil ["weaponsets/0/items/0" "Infernal Brimstone"]])
+
 #_(write-handler  [nil nil])
 #_(run-query "recordname~gearweapons value~legendary levelreq <= 65")
