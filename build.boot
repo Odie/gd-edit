@@ -1,7 +1,7 @@
 (def project 'gd-edit)
 (def version "0.1.0-SNAPSHOT")
 
-(set-env! :resource-paths #{"src"}
+(set-env! :resource-paths #{"resources" "src"}
           :source-paths   #{"test"}
           :dependencies   '[[org.clojure/clojure "RELEASE"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
@@ -9,9 +9,12 @@
                             [org.fusesource.jansi/jansi "1.14"]
                             [jansi-clj "0.1.0"]
                             [adzerk/boot-jar2bin "1.1.0" :scope "test"]
-                            [adzerk/boot-test "RELEASE" :scope "test"]])
+                            [adzerk/boot-test "RELEASE" :scope "test"]
+                            [mbuczko/boot-build-info "0.1.1" :scope "test"]
+                            [cheshire "5.6.3"]])
 
-(require '[adzerk.boot-jar2bin :refer :all])
+(require '[adzerk.boot-jar2bin :refer :all]
+         '[mbuczko.boot-build-info :refer :all])
 
 (task-options!
  aot {:namespace   #{'gd-edit.core}}
@@ -31,6 +34,7 @@
       :version   "0.1.0"
       :desc      "GrimDawn save game editor"
       :copyright "2016"}
+ build-info {:build {:app-name (str project)}}
  )
 
 (deftask cider "CIDER profile"
@@ -49,7 +53,7 @@
   "Build the project locally as a JAR."
   [d dir PATH #{str} "the set of directories to write to (target)."]
   (let [dir (if (seq dir) dir #{"target"})]
-    (comp (aot) (pom) (uber) (jar) (target :dir dir) (exe :output-dir "target") (bin :output-dir "target"))))
+    (comp (build-info) (aot) (pom) (uber) (jar) (target :dir dir) (exe :output-dir "target") (bin :output-dir "target"))))
 
 (deftask run
   "Run the project."

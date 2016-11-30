@@ -1,19 +1,20 @@
 (ns gd-edit.core
-  (:require [clojure.java.io :as io]
-            [gd-edit.arz-reader :as arz-reader]
-            [gd-edit.arc-reader :as arc-reader]
-            [gd-edit.utils :as utils]
-            [gd-edit.globals :as globals]
-            [gd-edit.command-handlers :as handlers]
-            [gd-edit.jline :as jl]
-            [gd-edit.game-dirs :as dirs]
+  (:gen-class)
+  (:require cheshire.core
+            [clojure.java.io :as io]
             [clojure.string :as string]
+            [gd-edit
+             [arc-reader :as arc-reader]
+             [arz-reader :as arz-reader]
+             [command-handlers :as handlers]
+             [game-dirs :as dirs]
+             [globals :as globals]
+             [jline :as jl]
+             [utils :as utils]]
             [jansi-clj.core :refer :all])
-  (:import  [java.nio ByteBuffer]
-            [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel])
-  (:gen-class))
-
+  (:import java.nio.ByteBuffer
+           java.nio.channels.FileChannel
+           [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
 
 (defn- tokenize-input
   [input]
@@ -175,10 +176,18 @@
   (intern 'gd-edit.globals 'db (future (handlers/load-db)))
   (handlers/character-selection-screen!))
 
+(defn- print-build-info
+  []
+
+  (if-let [info-file (io/resource "build.json")]
+    (let [build-info (cheshire.core/parse-string (slurp info-file))]
+      (println (bold (black (format "%s [build %s]" (build-info "app-name") (build-info "sha"))))))))
 
 (defn -main
   [& args]
 
+  (print-build-info)
+  (println)
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!)
   (initialize)
