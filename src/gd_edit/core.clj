@@ -195,10 +195,12 @@
 (defn -main
   [& args]
 
-  (print-build-info)
-  (println)
+  ;; Enable cross-platform ansi color handling
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!)
+
+  (print-build-info)
+  (println)
   (initialize)
   (repl))
 
