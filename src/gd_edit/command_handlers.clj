@@ -221,13 +221,29 @@
    :choice-map [["r" "reload" (fn [] (load-character-file @globals/last-character-load-path))]
                 ["w" "write" (fn[] (write-character-file @globals/character))]]})
 
+(defn- is-cloud-save?
+  [dir]
+  (if (string/starts-with? dir (dirs/get-steam-cloud-save-dir))
+    true
+    false))
+
+(defn- save-dir-type
+  [dir]
+  (cond
+    (is-cloud-save? dir)
+    "cloud"
+
+    :else
+    "local"))
+
 (defn- character-selection-screen
   []
 
   ;; grab a list save directories where a "player.gdc" file exists
-  (let [save-dirs (->> (dirs/get-save-dir)
-                       (io/file)
-                       (.listFiles)
+  (let [save-dirs (->> (dirs/get-save-dirs)
+                       (map io/file)
+                       (map #(.listFiles %1))
+                       (apply concat)
                        (filter #(.isDirectory %1))
                        (filter #(.exists (io/file %1 "player.gdc"))))]
 
@@ -243,7 +259,9 @@
 
                       (conj accum
                             [(str display-idx)                    ; command string
-                             (last-path-component (.getPath dir)) ; menu display string
+                             (format "%s (%s save)"
+                                     (last-path-component (.getPath dir))
+                                     (save-dir-type dir))         ; menu display string
                              (fn []                               ; function to run when selected
                                (let [savepath (.getPath (io/file dir "player.gdc"))]
                                  (load-character-file savepath)
@@ -762,14 +780,14 @@
         ))))
 
 (defn- get-savepath
-  [character-name]
-  (io/file (dirs/get-save-dir) (format "_%s" character-name) "player.gdc"))
+  [character]
+  (io/file (:meta-character-loaded-from character)))
 
 (defn- get-new-backup-path
-  [character-name]
+  [character]
 
   ;; Grab all sibling files of the character save path
-  (let [sibling-files (-> (get-savepath character-name)
+  (let [sibling-files (-> (get-savepath character)
                           (.getParentFile)
                           (.listFiles))
 
@@ -777,7 +795,7 @@
                           (filter #(.isFile %1))
                           (filter #(not (nil? (re-matches #"player\.gdc\..*$" (.getName %1))))))]
 
-    (format "%s.bak%d" (get-savepath character-name) (inc (count save-backups)))))
+    (format "%s.bak%d" (get-savepath character) (inc (count save-backups)))))
 
 (defn- load-character-file
   [savepath]
@@ -792,13 +810,13 @@
 
   ;; Figure out where we're going to write to
   (let [character-name (:character-name character)
-        savepath (get-savepath character-name)
+        savepath (get-savepath character)
 
         ;; In case the user renamed the character, the save path may not exist at all
         ;; Make sure all parent directories are created
         _ (io/make-parents savepath)
 
-        backup-path (io/file (get-new-backup-path character-name))]
+        backup-path (io/file (get-new-backup-path character))]
 
     ;; Backup the current save file
     (when (.exists savepath)

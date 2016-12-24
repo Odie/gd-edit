@@ -9,20 +9,27 @@
     (u/expand-home "~/Dropbox/Public/GrimDawn")
     "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn"))
 
-(defn get-save-dir
+(defn get-steam-cloud-save-dir
+  []
+  (let [userdata-dir "C:\\Program Files (x86)\\Steam\\userdata\\"
+        user-profile-dir (->> (io/file userdata-dir)
+                              (.listFiles)
+                              (filter #(.isDirectory %1))
+                              (first))]
+    (.getPath (io/file user-profile-dir "219990\\remote\\save\\main"))))
+
+(defn get-local-save-dir
+  []
+
+  (let [user-dir (System/getProperty "user.home")]
+    (.getPath (io/file user-dir "My Documents\\My Games\\Grim Dawn\\save\\main"))))
+
+(defn get-save-dirs
   []
 
   (if (= (System/getProperty "os.name") "Mac OS X")
     (u/expand-home "~/Dropbox/Public/GrimDawn/main")
-    (do
-      (let [userdata-dir "C:\\Program Files (x86)\\Steam\\userdata\\"
-            user-profile-dir (->> (io/file userdata-dir)
-                                  (.listFiles)
-                                  (filter #(.isDirectory %1))
-                                  (first))
-
-            ]
-        (.getPath (io/file user-profile-dir "219990\\remote\\save\\main"))))))
+      [(get-local-save-dir) (get-steam-cloud-save-dir)]))
 
 (defn get-db-filepath
   []
