@@ -277,7 +277,8 @@
 (defn choose-character-handler
   [[input tokens]]
 
-  character-selection-screen!)
+  (swap! globals/character (empty @globals/character))
+  (character-selection-screen!))
 
 (defn- character-loaded?
   []
