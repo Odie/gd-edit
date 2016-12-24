@@ -28,8 +28,8 @@
   []
 
   (if (= (System/getProperty "os.name") "Mac OS X")
-    (u/expand-home "~/Dropbox/Public/GrimDawn/main")
-      [(get-local-save-dir) (get-steam-cloud-save-dir)]))
+    [(u/expand-home "~/Dropbox/Public/GrimDawn/main")]
+    [(get-local-save-dir) (get-steam-cloud-save-dir)]))
 
 (defn get-db-filepath
   []
