@@ -16,11 +16,17 @@
            java.nio.channels.FileChannel
            [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
 
+(defn- strip-quotes
+  "Strip quotes from a string"
+  [value]
+  (clojure.string/replace value #"^\"|\"$" ""))
+
 (defn- tokenize-input
   [input]
 
   [input
-   (into [] (re-seq #"\"[^\"]+\"|\S+" input))])
+   (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
+        (map strip-quotes))])
 
 (defn- repl-read
   []
