@@ -21,15 +21,18 @@
 (defn get-local-save-dir
   []
 
-  (let [user-dir (System/getProperty "user.home")]
-    (.getPath (io/file user-dir "My Documents\\My Games\\Grim Dawn\\save\\main"))))
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    (u/expand-home "~/Dropbox/Public/GrimDawn/main")
+
+    (let [user-dir (System/getProperty "user.home")]
+      (.getPath (io/file user-dir "My Documents\\My Games\\Grim Dawn\\save\\main"))))
 
 (defn get-save-dirs
   []
 
   (if (= (System/getProperty "os.name") "Mac OS X")
-    (u/expand-home "~/Dropbox/Public/GrimDawn/main")
-      [(get-local-save-dir) (get-steam-cloud-save-dir)]))
+    [(get-local-save-dir)]
+    [(get-local-save-dir) (get-steam-cloud-save-dir)]))
 
 (defn get-db-filepath
   []
