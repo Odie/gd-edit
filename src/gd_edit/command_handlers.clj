@@ -1406,6 +1406,9 @@
 
    ["load"  "Load from a save file"]
    ["write" "Writes out the character that is currently loaded"]
+   ["class" "Displays the classes/masteries of the loaded character"]
+   ["class add" "Add a class/mastery by name"]
+   ["class remove" "Remove a class/mastery by name"]
    ])
 
 (defn help-handler
@@ -1449,6 +1452,138 @@
         :else
         (println (format "Sorry, '%s' has no detailed help text." command))
         ))))
+
+(defn- character-classes
+  "Returns a set of db records that represents the classes the player has taken"
+  [character]
+
+  (reduce (fn [result skill]
+            ;; Does this skill represent the player taking a specific class?
+            (if-not (nil? (re-find #"_classtraining_class\d+\.dbr" (:skill-name skill)))
+              ;; If so, add the skill to the result
+              (conj result skill)
+
+              ;; Otherwise, do nothing to the result
+              result))
+          #{}
+
+          (character :skills)))
+
+(defn- db-class-records
+  [db]
+
+  ;; FIXME!!! Reuse db query capability
+  ;; It'll be nice to be able to reuse db query syntax
+  ;; But each call takes about 500ms. =(
+  ;;(query/query-db db "class~skill_mastery")
+
+  (reduce (fn [result record]
+            (if (and (= (record "Class") "Skill_Mastery")
+                     (re-find #"playerclass\d+/_classtraining_class\d+.dbr" (:recordname record)))
+              (conj result record)
+              result))
+          #{}
+          db))
+
+(defn- print-character-classes
+  [character db]
+
+  ;; Find all character "skills" that represents a class mastery
+  (let [player-class-recordnames
+        (->> (character-classes character)
+             (map :skill-name) ;; get all class record names
+             (into #{}))
+
+        ;; Locate all coresponding db records for said class masteries
+        player-class-records
+        (reduce (fn [result record]
+                  (if (contains? player-class-recordnames (:recordname record) )
+                    (conj result record)
+                    result))
+                #{}
+                db)
+
+        ;; Get the display names
+        player-class-names
+        (->> player-class-records
+             (map #(%1 "skillDisplayName")))
+        ]
+
+    ;; Print the display names
+    (println "classes:")
+    (if (empty? player-class-names)
+      (do
+        (print-indent 1)
+        (println (yellow "None")))
+
+      (doseq [name player-class-names]
+        (print-indent 1)
+        (println (yellow name))))))
+
+(defn class-handler
+  "Show the class of the loaded character"
+  [[input tokens]]
+
+  (print-character-classes @globals/character @globals/db))
+
+(defn class-remove-handler
+  "Remove a class to the currently loaded character by partial name"
+  [[input tokens]]
+
+  (if (empty? tokens)
+    (println "Please provide the partial name of the class to remove from the character")
+    ;; Get the db record that represents the class mastery
+    (let [klass (->> (db-class-records @globals/db)
+                     (filter #(u/ci-match (%1 "skillDisplayName") (first tokens)))
+                     (first))]
+
+      (if (empty? klass)
+        (println (format "\"%s\" doesn't match any of the known classes" (first tokens)))
+
+        (do
+          ;; Remove all skills in the character that matches the db record name
+          (swap! globals/character update :skills
+                 (fn [skill-seq] (into (empty skill-seq)
+                                       (remove (fn [skill] (= (:recordname klass) (:skill-name skill))) skill-seq)
+                                       )))
+
+          ;; Inform the user what happened
+          (println "Removing class:" (klass "skillDisplayName"))
+          (print-character-classes @globals/character @globals/db))))))
+
+(defn class-add-handler
+  "Add a class to the currently loaded character by partial name"
+  [[input tokens]]
+
+  (if (empty? tokens)
+    (println "Please provide the partial name of the class to remove from the character")
+    ;; Get the db record that represents the class mastery
+    (let [klass (->> (db-class-records @globals/db)
+                     (filter #(u/ci-match (%1 "skillDisplayName") (first tokens)))
+                     (first))]
+
+      (if (nil? klass)
+        (println (format "\"%s\" doesn't match any of the known classes" (first tokens)))
+
+        (do
+          ;; Remove all skills in the character that matches the db record name
+          (swap! globals/character update :skills
+                 (fn [skill-seq] (conj skill-seq
+                                       {:devotion-level 0
+                                        :devotion-experience 0
+                                        :skill-active false
+                                        :autocast-skill-name ""
+                                        :skill-transition false
+                                        :skill-name (:recordname klass),
+                                        :level (:character-level @globals/character)
+                                        :sublevel 0
+                                        :autocast-controller-name ""
+                                        :enabled true}
+                                       )))
+
+          ;; Inform the user what happened
+          (println "Adding class:" (klass "skillDisplayName"))
+          (print-character-classes @globals/character @globals/db))))))
 
 #_(help-handler [nil []])
 

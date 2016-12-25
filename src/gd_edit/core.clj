@@ -16,11 +16,17 @@
            java.nio.channels.FileChannel
            [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
 
+(defn- strip-quotes
+  "Strip quotes from a string"
+  [value]
+  (clojure.string/replace value #"^\"|\"$" ""))
+
 (defn- tokenize-input
   [input]
 
   [input
-   (into [] (re-seq #"\"[^\"]+\"|\S+" input))])
+   (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
+        (map strip-quotes))])
 
 (defn- repl-read
   []
@@ -45,6 +51,9 @@
    ["set"]   (fn [input] (handlers/set-handler input))
    ["load"]  (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
+   ["class"] (fn [input] (handlers/class-handler input))
+   ["class" "add"] (fn [input] (handlers/class-add-handler input))
+   ["class" "remove"] (fn [input] (handlers/class-remove-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
 
@@ -196,5 +205,5 @@
 #_(initialize)
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (gd-edit.game-dirs/get-save-dir) "_Hetzer/player.gdc"))))
+                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (gd-edit.game-dirs/get-steam-cloud-save-dir) "_Odie/player.gdc"))))
           nil))
