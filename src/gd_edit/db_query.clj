@@ -345,6 +345,16 @@
       (tokens->query-ast)
       (query-ast->query-predicates)))
 
+(defn query-db
+  "Help function to execute a quick query against the db.
+  Although it is possible to manually run a reduce over the db, we have to at least
+  duplicate *some* of the code in this module to make it happen.
+  This module's job is to make querying the db simple, so we might as well use it interally
+  when appropriate."
+  [db query-string]
+
+  (query db (query-string->query-predicates query-string)))
+
 #_(def r (time
           (query gd-edit.core/db
                  (tokens->query-predicate ["recordname" "~" "affix"])
