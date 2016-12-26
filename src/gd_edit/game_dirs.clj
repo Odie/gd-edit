@@ -24,12 +24,16 @@
 
 (defn get-steam-cloud-save-dir
   []
-  (let [userdata-dir (io/file (get-steam-path) "userdata")
-        user-profile-dir (->> (io/file userdata-dir)
-                              (.listFiles)
-                              (filter #(.isDirectory %1))
-                              (first))]
-    (.getPath (io/file user-profile-dir "219990\\remote\\save\\main"))))
+
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    ""
+
+    (let [userdata-dir (io/file (get-steam-path) "userdata")
+          user-profile-dir (->> (io/file userdata-dir)
+                                (.listFiles)
+                                (filter #(.isDirectory %1))
+                                (first))]
+      (.getPath (io/file user-profile-dir "219990\\remote\\save\\main")))))
 
 (defn get-local-save-dir
   []
