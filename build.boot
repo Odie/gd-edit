@@ -11,7 +11,10 @@
                             [adzerk/boot-jar2bin "1.1.0" :scope "test"]
                             [adzerk/boot-test "RELEASE" :scope "test"]
                             [mbuczko/boot-build-info "0.1.1" :scope "test"]
-                            [cheshire "5.6.3"]])
+                            [cheshire "5.6.3"]
+                            [net.java.dev.jna/jna "4.2.2"]
+                            [net.java.dev.jna/jna-platform "4.2.2"]
+                            ])
 
 (require '[adzerk.boot-jar2bin :refer :all]
          '[mbuczko.boot-build-info :refer :all])

@@ -1,22 +1,39 @@
 (ns gd-edit.game-dirs
   (:require [clojure.java.io :as io]
-            [gd-edit.utils :as u]))
+            [gd-edit.utils :as u])
+
+  (:import [com.sun.jna.platform.win32 WinReg Advapi32Util]))
+
+(defn get-steam-path
+  "Get steam installation path"
+  []
+
+  (try
+    (Advapi32Util/registryGetStringValue WinReg/HKEY_CURRENT_USER
+                                         "SOFTWARE\\Valve\\Steam"
+                                         "SteamPath")
+    (catch Exception e nil)))
 
 (defn get-game-dir
+  "Get the game installation path"
   []
 
   (if (= (System/getProperty "os.name") "Mac OS X")
     (u/expand-home "~/Dropbox/Public/GrimDawn")
-    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Grim Dawn"))
+    (str (get-steam-path) "\\steamapps\\common\\Grim Dawn")))
 
 (defn get-steam-cloud-save-dir
   []
-  (let [userdata-dir "C:\\Program Files (x86)\\Steam\\userdata\\"
-        user-profile-dir (->> (io/file userdata-dir)
-                              (.listFiles)
-                              (filter #(.isDirectory %1))
-                              (first))]
-    (.getPath (io/file user-profile-dir "219990\\remote\\save\\main"))))
+
+  (if (= (System/getProperty "os.name") "Mac OS X")
+    ""
+
+    (let [userdata-dir (io/file (get-steam-path) "userdata")
+          user-profile-dir (->> (io/file userdata-dir)
+                                (.listFiles)
+                                (filter #(.isDirectory %1))
+                                (first))]
+      (.getPath (io/file user-profile-dir "219990\\remote\\save\\main")))))
 
 (defn get-local-save-dir
   []
