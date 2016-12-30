@@ -249,7 +249,9 @@
 
     {:display-fn
      (fn []
-       (println "Please choose a character to load:"))
+       (if (empty? save-dirs)
+         (println (red "No save files found"))
+         (println "Please choose a character to load:")))
 
      ;; generate the menu choices
      ;; reduce over save-dirs with each item being [index save-dir-item]

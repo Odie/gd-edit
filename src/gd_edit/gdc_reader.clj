@@ -1082,3 +1082,12 @@
 #_(reset! gd-edit.globals/character nil)
 
 #_(write-character-file @gd-edit.globals/character "/tmp/player.gdc")
+
+
+(defn sep->int
+  [sep]
+  (-> (str sep "\0")
+      (.getBytes)
+      (ByteBuffer/wrap)
+      (.order ByteOrder/LITTLE_ENDIAN)
+      (.getInt)))

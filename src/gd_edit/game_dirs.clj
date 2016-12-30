@@ -64,3 +64,13 @@
   (-> (get-game-dir)
       (io/file "resources" "text_en.arc")
       (.getPath)))
+
+(defn get-all-save-file-dirs
+  []
+
+  (->> (get-save-dirs)
+       (map io/file)
+       (map #(.listFiles %1))
+       (apply concat)
+       (filter #(.isDirectory %1))
+       (filter #(.exists (io/file %1 "player.gdc")))))

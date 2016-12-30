@@ -192,6 +192,66 @@
     (let [build-info (cheshire.core/parse-string (slurp info-file))]
       (println (bold (black (format "%s [build %s]" (build-info "app-name") (build-info "sha"))))))))
 
+(defn- check-save-dir-found?!
+  [verbose]
+
+  (let [save-file-dirs (dirs/get-all-save-file-dirs)]
+    (if (empty? save-file-dirs)
+      (do
+        (println (red "No save files can be located"))
+        (println "The following locations were checked:")
+        (doseq [loc (dirs/get-save-dirs)]
+          (println (str "    " loc)))
+        false ;; return false to indicate that we failed the test
+        )
+
+      (do
+        (when verbose
+          (let [actual-dirs (reduce (fn [result item]
+                                      (conj result (.getParent (io/file item))))
+                                    #{}
+                                    save-file-dirs)]
+            (println "save directories:")
+            ;;(println actual-dirs)
+            (doseq [loc actual-dirs]
+              (println (str "    " loc)))
+          ))
+        true))))
+
+(defn- check-game-dir-found?!
+  [verbose]
+
+  (if (or (not (.exists (io/file (dirs/get-db-filepath))))
+          (not (.exists (io/file (dirs/get-localization-filepath)))))
+    (do
+      (println (red "Game directory cannot be located"))
+      (println "The following locations were checked:")
+      (println (str "    " (dirs/get-game-dir)))
+      (newline)
+      (println "Some editor functions such as db queries and changing items and equipment won't work properly.")
+      false)
+
+    (do
+      (when verbose
+        (let [actual-dirs (reduce (fn [result item]
+                                    (conj result (.getParent (io/file item))))
+                                  #{}
+                                  [(dirs/get-db-filepath)])]
+          (println "game directory:")
+          (doseq [loc actual-dirs]
+            (println (str "    " loc)))
+          ))
+      true)))
+
+(defn- startup-sanity-checks
+  []
+
+  (let [passes-required-checks (check-save-dir-found?! true)]
+    (newline)
+    (check-game-dir-found?! true)
+    (newline)
+    passes-required-checks))
+
 (defn -main
   [& args]
 
@@ -201,8 +261,11 @@
 
   (print-build-info)
   (println)
-  (initialize)
-  (repl))
+  (startup-sanity-checks)
+
+  (do
+    (initialize)
+    (repl)))
 
 #_(initialize)
 #_(time (do
