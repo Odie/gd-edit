@@ -240,12 +240,7 @@
   []
 
   ;; grab a list save directories where a "player.gdc" file exists
-  (let [save-dirs (->> (dirs/get-save-dirs)
-                       (map io/file)
-                       (map #(.listFiles %1))
-                       (apply concat)
-                       (filter #(.isDirectory %1))
-                       (filter #(.exists (io/file %1 "player.gdc"))))]
+  (let [save-dirs (dirs/get-all-save-file-dirs)]
 
     {:display-fn
      (fn []
@@ -865,6 +860,11 @@
 
     db
   ))
+
+(defn load-db-in-background
+  []
+
+  (intern 'gd-edit.globals 'db (future (load-db))))
 
 (defn related-db-records
   [record db]
@@ -1586,6 +1586,54 @@
           ;; Inform the user what happened
           (println "Adding class:" (klass "skillDisplayName"))
           (print-character-classes @globals/character @globals/db))))))
+
+(defn load-settings-file
+  "Load settings file into globals/settings"
+  []
+
+  ;; (println "loading settings file from:" (u/settings-file-path))
+  (reset! globals/settings (u/load-settings)))
+
+(defn setting-gamedir-clear!
+  []
+
+  (swap! globals/settings dissoc :game-dir))
+
+(defn setting-gamedir-set!
+  [game-dir]
+
+  ;; Verify that this looks like a game directory
+  (if-not (dirs/looks-like-game-dir game-dir)
+    ;; If this isn't a valid game directory, print an error msg and exit.
+    (println (format "\"%s\" does not look like a game directory" game-dir))
+
+    (do
+      (println "Ok!")
+
+      ;; If this *is* a valid game directory, set it into a global variable.
+      (swap! globals/settings update :game-dir #(identity %2) game-dir)
+
+      ;; Save the location to a settings file.
+      (u/write-settings @globals/settings)
+
+      ;; Reload game db using the new game directory.
+      (load-db-in-background))))
+
+(defn gamedir-handler
+  [[input tokens]]
+
+  (cond
+    (= 0 (count tokens))
+    (do
+      (println "Currently using this as game dir:")
+      (println "    " (dirs/get-game-dir)))
+
+    :else
+    (let [game-dir (first tokens)]
+
+      (if (empty? game-dir)
+        (setting-gamedir-clear!)
+        (setting-gamedir-set! game-dir)))))
 
 #_(help-handler [nil []])
 

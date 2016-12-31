@@ -11,7 +11,8 @@
              [globals :as globals]
              [jline :as jl]
              [utils :as utils]]
-            [jansi-clj.core :refer :all])
+            [jansi-clj.core :refer :all]
+            [gd-edit.utils :as u])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
@@ -54,6 +55,7 @@
    ["class"] (fn [input] (handlers/class-handler input))
    ["class" "add"] (fn [input] (handlers/class-add-handler input))
    ["class" "remove"] (fn [input] (handlers/class-remove-handler input))
+   ["gamedir"] (fn [input] (handlers/gamedir-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
 
@@ -179,10 +181,21 @@
           (clojure.stacktrace/print-stack-trace e)
           (newline))))))
 
+(declare startup-sanity-checks)
+
 (defn- initialize
   []
 
-  (intern 'gd-edit.globals 'db (future (handlers/load-db)))
+  ;; Try to load the settings file if it exists
+  (handlers/load-settings-file)
+
+  ;; Run sanity checks and print any error messages
+  (startup-sanity-checks)
+
+  ;; Try to load the game db
+  (handlers/load-db-in-background)
+
+  ;; Setup the first screen in the program
   (handlers/character-selection-screen!))
 
 (defn- print-build-info
@@ -200,7 +213,7 @@
       (do
         (println (red "No save files can be located"))
         (println "The following locations were checked:")
-        (doseq [loc (dirs/get-save-dirs)]
+        (doseq [loc (dirs/get-save-dir-search-list)]
           (println (str "    " loc)))
         false ;; return false to indicate that we failed the test
         )
@@ -221,12 +234,12 @@
 (defn- check-game-dir-found?!
   [verbose]
 
-  (if (or (not (.exists (io/file (dirs/get-db-filepath))))
-          (not (.exists (io/file (dirs/get-localization-filepath)))))
+  (if-not (dirs/get-game-dir)
     (do
       (println (red "Game directory cannot be located"))
       (println "The following locations were checked:")
-      (println (str "    " (dirs/get-game-dir)))
+      (doseq [dir (dirs/get-game-dir-search-list)]
+              (println (str "    " dir)))
       (newline)
       (println "Some editor functions such as db queries and changing items and equipment won't work properly.")
       false)
@@ -236,7 +249,8 @@
         (let [actual-dirs (reduce (fn [result item]
                                     (conj result (.getParent (io/file item))))
                                   #{}
-                                  [(dirs/get-db-filepath)])]
+                                  [(-> (dirs/get-db-filepath)
+                                       (.getParent))])]
           (println "game directory:")
           (doseq [loc actual-dirs]
             (println (str "    " loc)))
@@ -261,7 +275,6 @@
 
   (print-build-info)
   (println)
-  (startup-sanity-checks)
 
   (do
     (initialize)

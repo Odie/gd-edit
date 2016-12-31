@@ -4,6 +4,7 @@
 (set-env! :resource-paths #{"resources" "src"}
           :source-paths   #{"test"}
           :dependencies   '[[org.clojure/clojure "RELEASE"]
+                            [org.clojure/tools.namespace "0.2.11" :scope "test"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
                             [org.jline/jline "3.0.1"]
                             [org.fusesource.jansi/jansi "1.14"]

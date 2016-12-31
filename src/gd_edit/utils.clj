@@ -3,9 +3,12 @@
              [set :refer [intersection]]
              [string :as string]]
             [gd-edit.utils :as u]
-            [jansi-clj.core :refer :all])
+            [jansi-clj.core :refer :all]
+            [clojure.java.io :as io]
+            [clojure.edn :as edn])
   (:import java.nio.ByteBuffer
-           java.nio.channels.FileChannel))
+           java.nio.channels.FileChannel
+           java.nio.file.Paths))
 
 (defn mmap
   [filepath]
@@ -78,3 +81,29 @@
 (defn byte-array?
   [obj]
   (= byte-array-type (type obj)))
+
+(defn working-directory
+  []
+  (System/getProperty "user.dir"))
+
+(defn settings-file-path
+  []
+  (.getAbsolutePath (io/file (working-directory) "settings.edn")))
+
+(defn load-settings
+  []
+  (try
+    (edn/read-string (slurp (settings-file-path)))
+    (catch Exception e)))
+
+(defn write-settings
+  [settings]
+  (spit (settings-file-path) (pr-str settings)))
+
+(defn path-exists
+  [path]
+
+  (if (and (not (nil? path))
+           (.exists (io/file path)))
+    true
+    false))

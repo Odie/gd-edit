@@ -12,3 +12,5 @@
 
 (def last-character-load-path (atom ""))
 (def character (atom{}))
+
+(def settings (atom{}))
