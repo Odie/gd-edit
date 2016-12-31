@@ -274,7 +274,7 @@
 (defn choose-character-handler
   [[input tokens]]
 
-  (swap! globals/character (empty @globals/character))
+  (reset! globals/character (empty @globals/character))
   (character-selection-screen!))
 
 (defn- character-loaded?
@@ -1608,8 +1608,6 @@
     (println (format "\"%s\" does not look like a game directory" game-dir))
 
     (do
-      (println "Ok!")
-
       ;; If this *is* a valid game directory, set it into a global variable.
       (swap! globals/settings update :game-dir #(identity %2) game-dir)
 
@@ -1618,6 +1616,13 @@
 
       ;; Reload game db using the new game directory.
       (load-db-in-background))))
+
+(defn gamedir-clear-handler
+  [[input tokens]]
+
+  (setting-gamedir-clear!)
+  (u/write-settings @globals/settings)
+  (println "Ok!"))
 
 (defn gamedir-handler
   [[input tokens]]
@@ -1633,7 +1638,46 @@
 
       (if (empty? game-dir)
         (setting-gamedir-clear!)
-        (setting-gamedir-set! game-dir)))))
+        (setting-gamedir-set! game-dir))
+      (println "Ok!"))))
+
+(defn setting-savedir-clear!
+  []
+
+  (swap! globals/settings dissoc :save-dir)
+  (u/write-settings @globals/settings))
+
+(defn setting-savedir-set!
+  [save-dir]
+
+  (swap! globals/settings update :save-dir #(identity %2) save-dir)
+  (u/write-settings @globals/settings))
+
+
+(defn savedir-clear-handler
+  [[input tokens]]
+
+  (setting-savedir-clear!)
+  (u/write-settings @globals/settings)
+  (println "Ok!"))
+
+(defn savedir-handler
+  [[input tokens]]
+
+  (cond
+    (= 0 (count tokens))
+    (do
+      (println "Currently looking through these directories for save files:")
+      (doseq [loc (dirs/get-save-dir-search-list)]
+        (println (str "    " loc))))
+
+    :else
+    (let [save-dir (first tokens)]
+
+      (if (empty? save-dir)
+        (setting-savedir-clear!)
+        (setting-savedir-set! save-dir))
+      (println "Ok!"))))
 
 #_(help-handler [nil []])
 

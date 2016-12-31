@@ -56,6 +56,9 @@
    ["class" "add"] (fn [input] (handlers/class-add-handler input))
    ["class" "remove"] (fn [input] (handlers/class-remove-handler input))
    ["gamedir"] (fn [input] (handlers/gamedir-handler input))
+   ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
+   ["savedir"] (fn [input] (handlers/savedir-handler input))
+   ["savedir" "clear"] (fn [input] (handlers/savedir-clear-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
 
