@@ -286,5 +286,5 @@
 #_(initialize)
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (gd-edit.game-dirs/get-steam-cloud-save-dir) "_Odie/player.gdc"))))
+                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (first (gd-edit.game-dirs/get-steam-cloud-save-dirs)) "_Odie/player.gdc"))))
           nil))
