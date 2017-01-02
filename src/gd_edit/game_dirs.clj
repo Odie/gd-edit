@@ -63,7 +63,7 @@
     (u/expand-home "~/Dropbox/Public/GrimDawn/main")
 
     (let [user-dir (System/getProperty "user.home")]
-      (.getPath (io/file user-dir "My Documents\\My Games\\Grim Dawn\\save\\main")))))
+      (.getPath (io/file user-dir "Documents\\My Games\\Grim Dawn\\save\\main")))))
 
 (defn get-save-dir-search-list
   "Returns all possible locations where the save dir might be found.
