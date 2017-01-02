@@ -1576,7 +1576,7 @@
                                         :autocast-skill-name ""
                                         :skill-transition false
                                         :skill-name (:recordname klass),
-                                        :level (:character-level @globals/character)
+                                        :level 1
                                         :sublevel 0
                                         :autocast-controller-name ""
                                         :enabled true}
