@@ -41,18 +41,19 @@
   ([settings]
    (clean-list [(get settings :game-dir) (standard-game-dirs)])))
 
-(defn get-steam-cloud-save-dir
+(defn get-steam-cloud-save-dirs
   []
 
   (if (= (System/getProperty "os.name") "Mac OS X")
     ""
 
-    (let [userdata-dir (io/file (get-steam-path) "userdata")
-          user-profile-dir (->> (io/file userdata-dir)
-                                (.listFiles)
-                                (filter #(.isDirectory %1))
-                                (first))]
-      (.getPath (io/file user-profile-dir "219990\\remote\\save\\main")))))
+    (let [userdata-dir (io/file (get-steam-path) "userdata")]
+      (->> (io/file userdata-dir)
+           (.listFiles)
+           (filter #(.isDirectory %1))
+           (map #(io/file % "219990\\remote\\save\\main"))
+           (filter #(.exists %))
+           (map #(.getPath %))))))
 
 (declare get-game-dir)
 
@@ -73,7 +74,7 @@
 
   (if (= (System/getProperty "os.name") "Mac OS X")
     (clean-list [(get @globals/settings :save-dir) (get-local-save-dir)])
-    (clean-list [(get @globals/settings :save-dir) (get-local-save-dir) (get-steam-cloud-save-dir)])))
+    (clean-list (concat [(get @globals/settings :save-dir) (get-local-save-dir)] (get-steam-cloud-save-dirs)))))
 
 (defn get-all-save-file-dirs
   []

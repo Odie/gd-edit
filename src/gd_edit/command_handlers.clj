@@ -223,9 +223,8 @@
 
 (defn- is-cloud-save?
   [dir]
-  (if (string/starts-with? dir (dirs/get-steam-cloud-save-dir))
-    true
-    false))
+  (some #(string/starts-with? dir %)
+        (dirs/get-steam-cloud-save-dirs)))
 
 (defn- save-dir-type
   [dir]
