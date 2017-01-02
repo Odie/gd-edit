@@ -1638,7 +1638,10 @@
     (= 0 (count tokens))
     (do
       (println "Currently using this as game dir:")
-      (println "    " (dirs/get-game-dir)))
+      (println "    " (let [game-dir  (dirs/get-game-dir)]
+                        (if (nil? game-dir)
+                          (red "None")
+                          game-dir))))
 
     :else
     (let [game-dir (first tokens)]
