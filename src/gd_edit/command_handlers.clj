@@ -1118,7 +1118,9 @@
         match (->> [whole-item-match multi-part-match]
                    (sort-by #(u/string-similarity
                               (string/lower-case target-name)
-                              (string/lower-case (or (item-name (item-def->item %1) "") @globals/db)))
+                              (string/lower-case (or
+                                                  (item-name (item-def->item %1) @globals/db)
+                                                  "")))
                             >)
                    (first))
         ]
