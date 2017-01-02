@@ -1412,6 +1412,14 @@
    ["class" "Displays the classes/masteries of the loaded character"]
    ["class add" "Add a class/mastery by name"]
    ["class remove" "Remove a class/mastery by name"]
+   ["savedir" "Sets the save game directory to a path"
+    (string/join "\n"
+                 ["Syntax: savedir <full path to save game directory>"])]
+   ["savedir clear" "Removes the previous set game directory"]
+   ["gamedir" "Sets the game installation directory to a path"
+    (string/join "\n"
+                 ["Syntax: gamedir <full path to save game installation directory>"])]
+   ["gamedir clear" "Removes the previously set game installation directory"]
    ])
 
 (defn help-handler
@@ -1632,7 +1640,10 @@
     (= 0 (count tokens))
     (do
       (println "Currently using this as game dir:")
-      (println "    " (dirs/get-game-dir)))
+      (println "    " (let [game-dir  (dirs/get-game-dir)]
+                        (if (nil? game-dir)
+                          (red "None")
+                          game-dir))))
 
     :else
     (let [game-dir (first tokens)]

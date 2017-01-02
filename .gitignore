@@ -12,3 +12,4 @@ pom.xml.asc
 .hg/
 .#*
 /resources/build.json
+settings.edn
