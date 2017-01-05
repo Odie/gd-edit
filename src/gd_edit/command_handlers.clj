@@ -1464,21 +1464,31 @@
         (println (format "Sorry, '%s' has no detailed help text." command))
         ))))
 
-(defn- character-classes
+
+(defn- character-classes-with-index
   "Returns a set of db records that represents the classes the player has taken"
   [character]
 
-  (reduce (fn [result skill]
+  (reduce (fn [result [idx skill]]
             ;; Does this skill represent the player taking a specific class?
             (if-not (nil? (re-find #"_classtraining_class\d+\.dbr" (:skill-name skill)))
               ;; If so, add the skill to the result
-              (conj result skill)
+              (conj result [idx skill])
 
               ;; Otherwise, do nothing to the result
               result))
           #{}
 
-          (character :skills)))
+          ;; Reduce over the skills collection with the index of the item
+          (map-indexed
+           (fn [idx item] [idx item])
+           (character :skills))))
+
+(defn- character-classes
+  "Returns a set of db records that represents the classes the player has taken"
+  [character]
+
+  (map second (character-classes-with-index character)))
 
 (defn- db-class-records
   [db]
@@ -1500,7 +1510,9 @@
   [character db]
 
   ;; Find all character "skills" that represents a class mastery
-  (let [player-class-recordnames
+  (let [player-classes (character-classes-with-index character)
+
+        player-class-recordnames
         (->> (character-classes character)
              (map :skill-name) ;; get all class record names
              (into #{}))
@@ -1509,27 +1521,30 @@
         player-class-records
         (reduce (fn [result record]
                   (if (contains? player-class-recordnames (:recordname record) )
-                    (conj result record)
+                    (assoc result (:recordname record) record)
                     result))
-                #{}
+                {}
                 db)
 
-        ;; Get the display names
-        player-class-names
-        (->> player-class-records
-             (map #(%1 "skillDisplayName")))
+        player-classes (map (fn [item]
+                              {:idx (first item)
+                               :skill (second item)
+                               :skill-record (player-class-records (:skill-name (second item)))})
+                        player-classes)
         ]
 
     ;; Print the display names
     (println "classes:")
-    (if (empty? player-class-names)
+    (if (empty? player-classes)
       (do
         (print-indent 1)
         (println (yellow "None")))
 
-      (doseq [name player-class-names]
+      (doseq [klass player-classes]
         (print-indent 1)
-        (println (yellow name))))))
+        (println (yellow (get-in klass [:skill-record "skillDisplayName"]))
+                 (format "(skills/%d)" (:idx klass)))
+                 ))))
 
 (defn class-handler
   "Show the class of the loaded character"
