@@ -1,18 +1,13 @@
 (ns gd-edit.jline
-  (:import  [org.jline.reader LineReaderBuilder]
-            [org.jline.terminal TerminalBuilder]))
+  (:import [jline.console ConsoleReader]))
 
 (def use-jline false)
 (def reader nil)
 
 (defn initialize
   []
-  (let [terminal (-> (TerminalBuilder/builder)
-                     (.build))]
 
-    (def reader (-> (LineReaderBuilder/builder)
-                    (.terminal terminal)
-                    (.build)))))
+  (def reader (ConsoleReader.)))
 
 (defn readline
   [prompt]
@@ -28,7 +23,7 @@
       (if (nil? reader)
         (initialize))
 
-      (.readLine reader prompt nil nil nil))))
+      (.readLine reader prompt))))
 
 
 #_(initialize)
