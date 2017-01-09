@@ -286,5 +286,10 @@
 #_(initialize)
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (gd-edit.game-dirs/get-local-save-dir) "_Odie/player.gdc"))))
+                  (gd-edit.gdc-reader/load-character-file
+                   (-> (dirs/get-save-dir-search-list)
+                        (first)
+                        (io/file "_Odie/player.gdc")
+                        (.getPath)
+                        )))
           nil))

@@ -997,6 +997,24 @@
        (sort-by first >)
        ))
 
+(defn compare-match-candidates
+  "Expects 2 items in the form of [score candidate matched-name matched-records]. Return true or false indicating if c1 > c2."
+  [c1 c2]
+
+  (cond
+    ;; If we're compare two items with the same score, prefer the one that matched the longer
+    ;; token. This applies specifically when we found more than one item that perfectly
+    ;; matched the partial name of an item.
+    (= (first c1) (first c2))
+    (> (count (second c1)) (count (second c2)))
+
+    ;; If the scores are clearly different, then just compare the score
+    (> (first c1) (first c2))
+    true
+
+    :else
+    false))
+
 (defn idx-best-match
   "Take the index and an array of 'tokenized' item name, try to find the best match.
   Returns [score candidate matched-name matched-records]]"
@@ -1019,7 +1037,7 @@
                                                                                (name-idx-best-matches idx)
                                                                                (first))]
                                  [score candidate matched-name matched-records])))
-                        (sort-by first >)
+                        (sort compare-match-candidates)
                         (first))]
 
     ;; Does the best match seem "good enough"?
@@ -1734,3 +1752,8 @@
 
 #_(write-handler  [nil nil])
 #_(run-query "recordname~gearweapons value~legendary levelreq <= 65")
+
+#_(set-handler [nil ["equipment/0" "Mantle of the Weeping Eye" 100]])
+
+
+#_(construct-item "Mantle of the Weeping Eye" @globals/db 100)
