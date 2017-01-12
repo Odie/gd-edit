@@ -5,7 +5,8 @@
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
-            [spyscope.core])
+            ;; [spyscope.core]
+            )
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
