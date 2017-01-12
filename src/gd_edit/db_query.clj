@@ -133,7 +133,7 @@
   ;; Strings can only be compared using ~ = !=
   ;; All other ops will return false
   (cond
-    (= op "~")
+    (or (= op "~") (= op "*="))
     (u/ci-match record-val query-val)
 
     (= op "=")
@@ -218,7 +218,7 @@
 (defn valid-op?
   [op]
 
-  (if (contains? #{"~" "=" "!=" ">" "<" ">=" "<="} op)
+  (if (contains? #{"~" "*=" "=" "!=" ">" "<" ">=" "<="} op)
     true
     false))
 
@@ -335,7 +335,7 @@
 
 (defn query-string->tokens
   [input]
-  (into [] (re-seq #"(?:\!\=)|(?:\>\=)|(?:\<\=)|[\(\)\~\<\>\=]|\"[^\"]+\"|[\w\/\.]+" input)))
+  (into [] (re-seq #"(?:\!\=)|(?:\>\=)|(?:\<\=)|(?:\*\=)|[\(\)\~\<\>\=]|\"[^\"]+\"|[\w\/\.]+" input)))
 
 (defn query-string->query-predicates
   [input]
