@@ -4,7 +4,8 @@
             [clojure.string :as string]
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
-            [gd-edit.globals :as globals])
+            [gd-edit.globals :as globals]
+            [spyscope.core])
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
@@ -317,16 +318,14 @@
        :skill-name (read-string! bb context)
        :is-item-skill (read-bool! bb context)
        :item-name (read-string! bb context)
-       :item-equip-location (read-int! bb context)
-       }
+       :item-equip-location (read-int! bb context)}
 
       (= type 4)
       {:type type
        :item-name (read-string! bb context)
        :bitmap-up (read-string! bb context)
        :bitmap-down (read-string! bb context)
-       :default-text (read-string! bb context {:encoding :utf-16-le})
-       }
+       :default-text (read-string! bb context {:encoding :utf-16-le})}
 
       :else
       {:type type}
@@ -608,7 +607,8 @@
   ([^ByteBuffer bb data context]
    (write-string! bb data context {:static-length -1 :encoding :ascii}))
 
-  ([^ByteBuffer bb data context {:keys [static-length encoding]}]
+  ([^ByteBuffer bb data context {:keys [static-length encoding]
+                                 :or {static-length -1 encoding :ascii}}]
 
    (assert (not (nil? data)))
 
@@ -1082,12 +1082,3 @@
 #_(reset! gd-edit.globals/character nil)
 
 #_(write-character-file @gd-edit.globals/character "/tmp/player.gdc")
-
-
-(defn sep->int
-  [sep]
-  (-> (str sep "\0")
-      (.getBytes)
-      (ByteBuffer/wrap)
-      (.order ByteOrder/LITTLE_ENDIAN)
-      (.getInt)))
