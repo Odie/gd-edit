@@ -13,3 +13,5 @@ pom.xml.asc
 .#*
 /resources/build.json
 settings.edn
+/templates
+/records
