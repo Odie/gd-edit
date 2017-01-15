@@ -276,6 +276,7 @@
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!)
 
+  ;; (println (clojure-version))
   (print-build-info)
   (println)
 

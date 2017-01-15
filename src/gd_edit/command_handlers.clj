@@ -10,7 +10,8 @@
              [globals :as globals]
              [utils :as u]]
             [jansi-clj.core :refer :all]
-            ))
+
+            [clojure.string :as str]))
 
 (declare is-item? show-item set-item-handler)
 
@@ -503,10 +504,11 @@
   (dotimes [i indent-level]
     (print "    ")))
 
+
 (defn- is-primitive?
   [val]
 
-  (or (number? val) (string? val) (u/byte-array? val)))
+  (or (number? val) (string? val) (u/byte-array? val) (boolean? val)))
 
 (defn print-primitive
   ([obj]
@@ -514,7 +516,7 @@
 
   ([obj indent-level]
    (cond
-     (or (number? obj) (string? obj) )
+     (or (number? obj) (string? obj) (boolean? obj))
      (do
        (print-indent indent-level)
        (println (yellow obj)))
@@ -692,6 +694,26 @@
               (print-object matched-obj))))))))
 
 
+(defn- parseBoolean
+  [val-str]
+
+  (let [true-aliases ["true" "t" "1"]
+        false-aliases ["false" "f" "0"]]
+    (cond
+      (contains? (into #{} true-aliases) val-str)
+      true
+
+      (contains? (into #{} false-aliases) val-str)
+      false
+
+      :else
+      (throw (Throwable.
+              (str/join "\n"
+                        [(format "Can't interpret \"%s\" as a boolean value" val-str)
+                         "Try any of the following: "
+                         (str "  true  - " (str/join ", " true-aliases))
+                         (str "  false - " (str/join ", " false-aliases))]))))))
+
 (defn coerce-to-type
   "Given an value as a string, return the value after coercing it to the correct type."
   [val-str type]
@@ -706,7 +728,10 @@
     (Float/parseFloat val-str)
 
     (= java.lang.Integer type)
-    (Integer/parseInt val-str)))
+    (Integer/parseInt val-str)
+
+    (= java.lang.Boolean type)
+    (parseBoolean val-str)))
 
 
 (defn set-handler
