@@ -868,15 +868,16 @@
          (arz-reader/load-game-db (dirs/get-db-filepath)
                                   localization-table))
 
-        [templates-load-time templates]
-        (u/timed
-         (arc-reader/load-arc-file (dirs/get-templates-filepath)))
+        ;; [templates-load-time templates]
+        ;; (u/timed
+        ;;  (arc-reader/load-arc-file (dirs/get-templates-filepath)))
 
-        ;; Add the "templates" prefix to all templates recordnames
-        templates (map (fn [item]
-                         (assoc item
-                                :recordname (str "templates/" (:recordname item))))
-                       templates)]
+        ;; ;; Add the "templates" prefix to all templates recordnames
+        ;; templates (map (fn [item]
+        ;;                  (assoc item
+        ;;                         :recordname (str "templates/" (:recordname item))))
+        ;;                templates)
+        ]
 
     ;; (println (count localization-table)
     ;;          "localization strings loaded in"
@@ -892,7 +893,7 @@
     ;; (println "Ready to rock!")
     ;; (println)
 
-    (concat db templates)
+    db
   ))
 
 (defn load-db-in-background
