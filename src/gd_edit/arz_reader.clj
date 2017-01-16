@@ -260,31 +260,36 @@
   [db-records outpath]
 
   ;; For every record in the db-records collection
-  (u/doseq-indexed i [record db-records]
+  ;; We do this in parallel because there is a lot of records to write...
+  (doall
+   (pmap (fn [record]
 
-    ;; If we can retrieve a valid recordname/filename
-    (let [recordname (:recordname record)]
-      (when-not (empty? recordname)
+          ;; If we can retrieve a valid recordname/filename
+          (let [recordname (:recordname record)]
+            (when-not (empty? recordname)
 
-        ;; Grab the file contents...
-        (let [contents (->> record
-                            (filter #(not (keyword? (key %))))
-                            (into {}))
-              record-path (io/file outpath recordname)]
+              ;; Grab the file contents...
+              (let [contents (->> record
+                                  (filter #(not (keyword? (key %))))
+                                  (into {}))
+                    record-path (io/file outpath recordname)]
 
-          ;; Write the contents to disk
-          (.mkdirs (.getParentFile record-path))
-          ;; Print contents directly to file as edn
-          ;; This is very fast, but not pretty-printed
-          ;; (spit record-path (pr-str contents))
+                ;; Write the contents to disk
+                (.mkdirs (.getParentFile record-path))
+                ;; Print contents directly to file as edn
+                ;; This is very fast, but not pretty-printed
+                ;; (spit record-path (pr-str contents))
 
-          ;; Prints the content using the default clojure pretty-printer
-          ;; Too slow to use on this dataset
-          ;; (with-open [writer (clojure.java.io/writer record-path)]
-          ;;   (pp/pprint contents writer))
+                ;; Prints the content using the default clojure pretty-printer
+                ;; Too slow to use on this dataset
+                ;; (with-open [writer (clojure.java.io/writer record-path)]
+                ;;   (pp/pprint contents writer))
 
-          (spit record-path (with-out-str (pp/pprint contents)))
-          )))))
+                (spit record-path (with-out-str (pp/pprint contents)))
+                ))))
+
+        db-records))
+  nil)
 
 
 #_(time  (load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
@@ -295,4 +300,4 @@
 #_(time (def dt (load-db-records-header-table f h st)))
 #_(time (def rt (load-db-records f h st)))
 
-#_(dump-db-records @gd-edit.globals/db (io/file (gd-edit.utils/working-directory) "database"))
+#_(time (dump-db-records @gd-edit.globals/db (io/file (gd-edit.utils/working-directory) "database")))
