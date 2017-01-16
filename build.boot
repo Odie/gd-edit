@@ -16,7 +16,8 @@
                             [net.java.dev.jna/jna "4.2.2"]
                             [net.java.dev.jna/jna-platform "4.2.2"]
                             [spyscope "0.1.5" :scope "test"]
-                            ])
+
+                            [fipp "0.6.8"]])
 
 (require '[adzerk.boot-jar2bin :refer :all]
          '[mbuczko.boot-build-info :refer :all])
