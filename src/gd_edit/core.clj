@@ -1,6 +1,6 @@
 (ns gd-edit.core
   (:gen-class)
-  (:require cheshire.core
+  (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [gd-edit
@@ -204,9 +204,9 @@
 (defn- print-build-info
   []
 
-  (if-let [info-file (io/resource "build.json")]
-    (let [build-info (cheshire.core/parse-string (slurp info-file))]
-      (println (bold (black (format "%s [build %s]" (build-info "app-name") (build-info "sha"))))))))
+  (if-let [info-file (io/resource "build.edn")]
+    (let [build-info (edn/read-string (slurp info-file))]
+      (println (bold (black (format "%s [build %s]" (build-info :app-name) (build-info :sha))))))))
 
 (defn- check-save-dir-found?!
   [verbose]
