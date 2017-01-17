@@ -62,9 +62,9 @@
 (defn- load-record-filename
   [^ByteBuffer bb header record-header]
 
-  (.position bb (+ (:record-table-offset)
-                   (:record-table-size)
-                   (:string-entry-offset)))
+  (.position bb (+ (:record-table-offset header)
+                   (:record-table-size header)
+                   (:string-entry-offset record-header)))
 
   (String. (read-bytes bb (:string-entry-length record-header)) "US-ASCII"))
 
@@ -200,10 +200,61 @@
                  (load-record bb header record-header))))
          (reduce into {}))))
 
+(defn load-arc-file
+  [filepath]
+
+  (let [bb (utils/mmap filepath)
+        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
+        header (load-header bb)
+        record-headers (load-record-headers bb header)]
+
+    (->> record-headers
+         (reduce (fn [accum record-header]
+                   (let [record {:recordname (load-record-filename bb header record-header)
+                                 "contents" (String. (load-record bb header record-header))}]
+                     (if (empty? (:recordname record))
+                       accum
+                       (conj accum record))))
+                 []))))
+
+(defn unpack-arc-file
+  [filepath outpath]
+
+  (let [bb (utils/mmap filepath)
+        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
+        header (load-header bb)
+        record-headers (load-record-headers bb header)]
+
+    ;; For every record in the file
+    (doseq [record-header record-headers]
+
+      ;; If we can retrieve a valid recordname/filename
+      (let [recordname (load-record-filename bb header record-header)]
+        (when-not (empty? recordname)
+
+          ;; Grab the file contents...
+          (let [contents (String. (load-record bb header record-header))
+                record-path (io/file outpath recordname)]
+
+            ;; Write the contents to disk
+            (.mkdirs (.getParentFile record-path))
+            (spit record-path contents)))))))
+
+;; ARC format
+;;
+;; File Header
+;; Record table
+;;  Location = file-header :record-table-offset field
+;;  Total size = file-header :record-table-size
+;; String table
+
 #_(time (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
-#_(def l (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
+#_(def l (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn2/resources/text_en.arc"))
 #_(def f (utils/mmap "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
 #_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
 #_(def h (load-header f))
 #_(time (def dt (load-record-headers f h)))
 #_(time (def r (load-record f h (nth dt 0))))
+
+#_(def l (load-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc"))
+#_(unpack-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc" (io/file (utils/working-directory) "templates"))

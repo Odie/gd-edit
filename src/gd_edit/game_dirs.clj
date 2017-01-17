@@ -90,6 +90,11 @@
 
   (io/file game-dir "database" "database.arz"))
 
+(defn- make-templates-filepath
+  [game-dir]
+
+  (io/file game-dir "database" "templates.arc"))
+
 (defn- make-localization-filepath
   [game-dir]
 
@@ -100,6 +105,12 @@
   []
 
   (make-db-filepath (get-game-dir)))
+
+(defn get-templates-filepath
+  "Checks through all game dirs and retrieves the first templates file"
+  []
+
+  (make-templates-filepath (get-game-dir)))
 
 (defn get-localization-filepath
   "Checks through all game dirs and retrieves the first English localization file"

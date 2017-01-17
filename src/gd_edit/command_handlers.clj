@@ -866,7 +866,18 @@
         [db-load-time db]
         (u/timed
          (arz-reader/load-game-db (dirs/get-db-filepath)
-                                  localization-table))]
+                                  localization-table))
+
+        ;; [templates-load-time templates]
+        ;; (u/timed
+        ;;  (arc-reader/load-arc-file (dirs/get-templates-filepath)))
+
+        ;; ;; Add the "templates" prefix to all templates recordnames
+        ;; templates (map (fn [item]
+        ;;                  (assoc item
+        ;;                         :recordname (str "templates/" (:recordname item))))
+        ;;                templates)
+        ]
 
     ;; (println (count localization-table)
     ;;          "localization strings loaded in"
@@ -1782,3 +1793,5 @@
 
 
 #_(construct-item "Mantle of the Weeping Eye" @globals/db 100)
+
+#_(load-db)
