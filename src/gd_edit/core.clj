@@ -12,9 +12,11 @@
              [jline :as jl]
              [utils :as utils]]
             [jansi-clj.core :refer :all]
-            [gd-edit.utils :as u])
+            [gd-edit.utils :as u]
+            [clojure.core.async :as async :refer [thread]])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
+           java.lang.ProcessBuilder
            [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
 
 (defn- strip-quotes
@@ -269,6 +271,145 @@
     (newline)
     passes-required-checks))
 
+(defn- get-build-info
+  "Get the build info associated with the current build"
+  []
+  (when-let [info-file (io/resource "build.edn")]
+    (edn/read-string (slurp info-file)))
+  {:timestamp (java.util.Date.)})
+
+(defn- is-newer?
+  "Check if build-a is newer than build-b"
+  [build-a build-b]
+
+  (.isAfter (.toInstant (:timestamp build-a))
+            (.toInstant (:timestamp build-b))))
+
+(defn- fetch-latest-build-info
+  "Get the information about the latest available build from network
+  WARNING: This may block for a long time."
+  []
+  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/GrimDawn/editor/latest-build.edn")
+        conn (.openConnection url)]
+
+    ;; Setup reasonable timeouts to contact the server with
+    (doto conn
+      (.setConnectTimeout 2000)
+      ;; (.setReadTimeout 1000)
+      )
+
+    ;; Return the contents of the file to the caller
+    (slurp (.getInputStream conn))))
+
+(defn- has-new-version
+  "Check if the known latest build is newer than the current running build
+
+  WARNING: Long running function
+  We're going over the network to fetch info regarding the latest build.
+  It may take a second or it may never return because network isn't available."
+  []
+
+  (when-let [current-build-info (get-build-info)]
+    (when-let [latest-build-info (fetch-latest-build-info)]
+
+      (is-newer? latest-build-info current-build-info))))
+
+(defn- fetch-latest-build
+  []
+  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/GrimDawn/editor/latest-SNAPSHOT-standalone.exe")
+        conn (.openConnection url)
+        file (java.io.File/createTempFile "gd-edit" ".exe")]
+
+    ;; Setup reasonable timeouts to contact the server with
+    (doto conn
+      (.setConnectTimeout 2000)
+      ;; (.setReadTimeout 1000)
+      )
+
+    ;; Try to copy the file contents to a temp location
+    (println "Downloading to " file)
+    (io/copy (.getInputStream conn) file)
+
+    ;; Return the temp location to caller
+    file))
+
+(defn- fetch-latest-version
+  "Attempts to fetch the latest version of the program.
+  Returns either:
+    :up-to-date - if already running the latest version
+    tempfile - if can be
+
+  Can throw exception. We're performing various networking tasks. Any number of conditions may arise.
+  It's not clear what exactly might be thrown here.
+  It's up to the caller to handle network error conditions."
+  []
+
+  (when-let [latest-build-info (fetch-latest-build-info)]
+    (let [current-build-info (get-build-info)]
+
+      ;; Is the latest build newer than the one we're running?
+      (if-not true;(is-newer? latest-build-info (get-build-info))
+
+        ;; If not, then say we don't need to do anything
+        :up-to-date
+
+        ;; Otherwise, try to fetch the latest version
+        (fetch-latest-build)))))
+
+(defn- restart-self
+  [new-exe]
+
+  (println "Restarting...")
+  (let [running-exe-path (io/file (System/getProperty "java.class.path"))
+        backup-path (io/file (str running-exe-path ".bak"))
+        restart-script-path (io/file (utils/working-directory) "restart.bat")]
+
+    ;; Rename the running exe
+    (when (.exists backup-path)
+      (io/delete-file backup-path))
+    (.renameTo running-exe-path backup-path)
+
+    ;; Move the exe to be replaced into the original location
+    (println "Moving " new-exe " to " running-exe-path)
+    (.renameTo (io/file new-exe) running-exe-path)
+    (.setExecutable running-exe-path true)
+
+    ;; Write out the restart script
+    (println "Trying to write to: " restart-script-path)
+    (spit restart-script-path
+     (format
+      "
+        echo Restarting...
+        timeout /t 1 /nobreak
+
+        %s
+      "
+      ;; "
+      ;;   echo Restarting...
+      ;;   sleep
+
+      ;;   %s
+      ;; "
+      running-exe-path))
+    (.setExecutable restart-script-path true)
+
+    ;; Start the restart script
+    (-> (ProcessBuilder. [(str restart-script-path)])
+        (.start))
+
+    (System/exit 0)))
+
+(defn- try-self-update
+  []
+  (let [fetch-result (fetch-latest-version)]
+    (cond
+      (instance? java.io.File fetch-result)
+      (restart-self fetch-result)
+
+      :else
+      fetch-result)))
+
+
 (defn -main
   [& args]
 
@@ -279,6 +420,8 @@
   ;; (println (clojure-version))
   (print-build-info)
   (println)
+
+  (try-self-update)
 
   (do
     (initialize)

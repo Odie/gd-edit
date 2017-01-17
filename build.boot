@@ -14,7 +14,8 @@
                             [net.java.dev.jna/jna "4.2.2"]
                             [net.java.dev.jna/jna-platform "4.2.2"]
                             [spyscope "0.1.5" :scope "test"]
-                            [fipp "0.6.8"]])
+                            [fipp "0.6.8"]
+                            [org.clojure/core.async "0.2.395"]])
 
 
 
