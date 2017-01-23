@@ -13,7 +13,8 @@
              [utils :as utils]]
             [jansi-clj.core :refer :all]
             [gd-edit.utils :as u]
-            [clojure.core.async :as async :refer [thread]])
+            [clojure.core.async :as async :refer [thread]]
+            [progress.file :as progress])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.lang.ProcessBuilder
@@ -294,7 +295,7 @@
 
     ;; Setup reasonable timeouts to contact the server with
     (doto conn
-      (.setConnectTimeout 2000)
+      (.setConnectTimeout 10000)
       ;; (.setReadTimeout 1000)
       )
 
@@ -315,20 +316,22 @@
       (is-newer? latest-build-info current-build-info))))
 
 (defn- fetch-latest-build
-  []
+  [build-info]
   (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/GrimDawn/editor/latest-SNAPSHOT-standalone.exe")
         conn (.openConnection url)
         file (java.io.File/createTempFile "gd-edit" ".exe")]
 
     ;; Setup reasonable timeouts to contact the server with
     (doto conn
-      (.setConnectTimeout 2000)
+      (.setConnectTimeout 10000)
       ;; (.setReadTimeout 1000)
       )
 
     ;; Try to copy the file contents to a temp location
-    (println "Downloading to " file)
-    (io/copy (.getInputStream conn) file)
+    (println "Downloading new version")
+
+    (progress/with-file-progress file :filesize (:filesize build-info)
+      (io/copy (.getInputStream conn) file))
 
     ;; Return the temp location to caller
     file))
@@ -354,7 +357,7 @@
         :up-to-date
 
         ;; Otherwise, try to fetch the latest version
-        (fetch-latest-build)))))
+        (fetch-latest-build latest-build-info)))))
 
 (defmacro fmt [^String string]
   (let [-re #"#\{(.*?)\}"
@@ -372,7 +375,6 @@
         restart-script-path (io/file (utils/working-directory) "restart.bat")]
 
     ;; Write out the restart script
-    (println "Writing restart script: " restart-script-path)
     (spit restart-script-path
      (fmt
       "
