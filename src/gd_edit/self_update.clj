@@ -100,13 +100,17 @@
       ;; Or say that everything is up to date
       :up-to-date)))
 
+(defn- get-restart-script-file
+  []
+  (io/file (utils/working-directory) "restart.bat"))
+
 (defn- restart-self
   [new-exe]
 
   (println "Restarting...")
   (let [running-exe-path (io/file (System/getProperty "java.class.path"))
         backup-path (io/file (str running-exe-path ".bak"))
-        restart-script-path (io/file (utils/working-directory) "restart.bat")]
+        restart-script-path (get-restart-script-file)]
 
     ;; Write out the restart script
     (spit restart-script-path
@@ -155,6 +159,12 @@
         (.start))
 
     (System/exit 0)))
+
+(defn cleanup-restart-script
+  []
+  (let [resart-script-file (get-restart-script-file)]
+    (when (.exists resart-script-file)
+      (io/delete-file (get-restart-script-file)))))
 
 (defn try-self-update
   "Attempts to update the running executable to the latest version.

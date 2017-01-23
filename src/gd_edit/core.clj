@@ -215,7 +215,11 @@
   (handlers/load-db-in-background)
 
   ;; Setup the first screen in the program
-  (handlers/character-selection-screen!))
+  (handlers/character-selection-screen!)
+
+  ;; Remove any left over restart scripts from last time we ran "update"
+  (su/cleanup-restart-script)
+  )
 
 (defn- print-build-info
   []
