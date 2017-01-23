@@ -10,7 +10,8 @@
              [globals :as globals]
              [utils :as u]]
             [jansi-clj.core :refer :all]
-            ))
+
+            [clojure.string :as str]))
 
 (declare is-item? show-item set-item-handler)
 
@@ -503,10 +504,11 @@
   (dotimes [i indent-level]
     (print "    ")))
 
+
 (defn- is-primitive?
   [val]
 
-  (or (number? val) (string? val) (u/byte-array? val)))
+  (or (number? val) (string? val) (u/byte-array? val) (boolean? val)))
 
 (defn print-primitive
   ([obj]
@@ -514,7 +516,7 @@
 
   ([obj indent-level]
    (cond
-     (or (number? obj) (string? obj) )
+     (or (number? obj) (string? obj) (boolean? obj))
      (do
        (print-indent indent-level)
        (println (yellow obj)))
@@ -692,6 +694,26 @@
               (print-object matched-obj))))))))
 
 
+(defn- parseBoolean
+  [val-str]
+
+  (let [true-aliases ["true" "t" "1"]
+        false-aliases ["false" "f" "0"]]
+    (cond
+      (contains? (into #{} true-aliases) val-str)
+      true
+
+      (contains? (into #{} false-aliases) val-str)
+      false
+
+      :else
+      (throw (Throwable.
+              (str/join "\n"
+                        [(format "Can't interpret \"%s\" as a boolean value" val-str)
+                         "Try any of the following: "
+                         (str "  true  - " (str/join ", " true-aliases))
+                         (str "  false - " (str/join ", " false-aliases))]))))))
+
 (defn coerce-to-type
   "Given an value as a string, return the value after coercing it to the correct type."
   [val-str type]
@@ -706,7 +728,10 @@
     (Float/parseFloat val-str)
 
     (= java.lang.Integer type)
-    (Integer/parseInt val-str)))
+    (Integer/parseInt val-str)
+
+    (= java.lang.Boolean type)
+    (parseBoolean val-str)))
 
 
 (defn set-handler
@@ -997,6 +1022,24 @@
        (sort-by first >)
        ))
 
+(defn compare-match-candidates
+  "Expects 2 items in the form of [score candidate matched-name matched-records]. Return true or false indicating if c1 > c2."
+  [c1 c2]
+
+  (cond
+    ;; If we're compare two items with the same score, prefer the one that matched the longer
+    ;; token. This applies specifically when we found more than one item that perfectly
+    ;; matched the partial name of an item.
+    (= (first c1) (first c2))
+    (> (count (second c1)) (count (second c2)))
+
+    ;; If the scores are clearly different, then just compare the score
+    (> (first c1) (first c2))
+    true
+
+    :else
+    false))
+
 (defn idx-best-match
   "Take the index and an array of 'tokenized' item name, try to find the best match.
   Returns [score candidate matched-name matched-records]]"
@@ -1019,7 +1062,7 @@
                                                                                (name-idx-best-matches idx)
                                                                                (first))]
                                  [score candidate matched-name matched-records])))
-                        (sort-by first >)
+                        (sort compare-match-candidates)
                         (first))]
 
     ;; Does the best match seem "good enough"?
@@ -1278,28 +1321,28 @@
                  ["Query the database using a series of conditions in the form of"
                   "  <partial fieldname> <operator> <value>"
                   ""
-                  "<partial fieldname> can also be a special keywords:"
-                  " 'recordname' match against the name/path of the db record"
-                  " 'key' match some key/fieldname in the record"
-                  " 'value' match some value entry in the record"
+                  "<partial fieldname> can also be one of the following special keywords:"
+                  " 'recordname' matches against the name/path of the db record"
+                  " 'key' matches some key/fieldname in the record"
+                  " 'value' matches some value entry in the record"
                   ""
-                  "valid operators are: ~ = != < > <= >="
-                  " ~ is used for partial string matches"
+                  "valid operators are: ~ *= = != < > <= >="
+                  " ~ and *= are used for partial string matches"
                   ""
                   "Example 1:"
                   " q recordname~weapons"
                   ""
-                  " This this retrieves where 'weapons' is part of the recrodname."
-                  " Since weapon db records seem to reside at 'records/items/gearweapons'"
-                  " We can try partial matches against any record that have 'weapons'"
-                  " in the record name."
+                  " This says to return a list of records that has the word 'weapons' as part of"
+                  " the recordname. Since weapon records seem to mostly live under"
+                  " 'records/items/gearweapons', this will effectively return all weapons in the"
+                  " game."
                   ""
                   "Example 2:"
                   " q recordname~weapons value~legendary"
                   ""
-                  " This find all weapons of 'legendary' quality by adding an additional"
-                  " condition that we're looking for records with any field value that"
-                  " partially matches the word 'legendary'"
+                  " In addition to matching against all weapons, as we saw in example 1, the added"
+                  " 'value~legendary' condition will narrow the list down to only records where"
+                  " some field contains the string 'legendary'."
                   ""
                   "Example 3:"
                   " q recordname~weapons value~legendary levelreq < 50"
@@ -1312,7 +1355,7 @@
                   " q recordname~weapons/blunt1h order offensivePhysicalMax"
                   ""
                   " Normally, the returned results are ordered by their recordname. However, you"
-                  " can ask the editor to order the results by any field you want."
+                  " can ask the editor to order the results by any field you'd like ."
                   ])]
 
    ["qshow" "Show the next page in the query result"]
@@ -1464,21 +1507,31 @@
         (println (format "Sorry, '%s' has no detailed help text." command))
         ))))
 
-(defn- character-classes
+
+(defn- character-classes-with-index
   "Returns a set of db records that represents the classes the player has taken"
   [character]
 
-  (reduce (fn [result skill]
+  (reduce (fn [result [idx skill]]
             ;; Does this skill represent the player taking a specific class?
             (if-not (nil? (re-find #"_classtraining_class\d+\.dbr" (:skill-name skill)))
               ;; If so, add the skill to the result
-              (conj result skill)
+              (conj result [idx skill])
 
               ;; Otherwise, do nothing to the result
               result))
           #{}
 
-          (character :skills)))
+          ;; Reduce over the skills collection with the index of the item
+          (map-indexed
+           (fn [idx item] [idx item])
+           (character :skills))))
+
+(defn- character-classes
+  "Returns a set of db records that represents the classes the player has taken"
+  [character]
+
+  (map second (character-classes-with-index character)))
 
 (defn- db-class-records
   [db]
@@ -1500,7 +1553,9 @@
   [character db]
 
   ;; Find all character "skills" that represents a class mastery
-  (let [player-class-recordnames
+  (let [player-classes (character-classes-with-index character)
+
+        player-class-recordnames
         (->> (character-classes character)
              (map :skill-name) ;; get all class record names
              (into #{}))
@@ -1509,27 +1564,30 @@
         player-class-records
         (reduce (fn [result record]
                   (if (contains? player-class-recordnames (:recordname record) )
-                    (conj result record)
+                    (assoc result (:recordname record) record)
                     result))
-                #{}
+                {}
                 db)
 
-        ;; Get the display names
-        player-class-names
-        (->> player-class-records
-             (map #(%1 "skillDisplayName")))
+        player-classes (map (fn [item]
+                              {:idx (first item)
+                               :skill (second item)
+                               :skill-record (player-class-records (:skill-name (second item)))})
+                        player-classes)
         ]
 
     ;; Print the display names
     (println "classes:")
-    (if (empty? player-class-names)
+    (if (empty? player-classes)
       (do
         (print-indent 1)
         (println (yellow "None")))
 
-      (doseq [name player-class-names]
+      (doseq [klass player-classes]
         (print-indent 1)
-        (println (yellow name))))))
+        (println (yellow (get-in klass [:skill-record "skillDisplayName"]))
+                 (format "(skills/%d)" (:idx klass)))
+                 ))))
 
 (defn class-handler
   "Show the class of the loaded character"
@@ -1719,3 +1777,8 @@
 
 #_(write-handler  [nil nil])
 #_(run-query "recordname~gearweapons value~legendary levelreq <= 65")
+
+#_(set-handler [nil ["equipment/0" "Mantle of the Weeping Eye" 100]])
+
+
+#_(construct-item "Mantle of the Weeping Eye" @globals/db 100)

@@ -6,7 +6,7 @@
           :dependencies   '[[org.clojure/clojure "RELEASE"]
                             [org.clojure/tools.namespace "0.2.11" :scope "test"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
-                            [org.jline/jline "3.0.1"]
+                            [jline/jline "2.14.2"]
                             [org.fusesource.jansi/jansi "1.14"]
                             [jansi-clj "0.1.0"]
                             [adzerk/boot-jar2bin "1.1.0" :scope "test"]
@@ -15,6 +15,7 @@
                             [cheshire "5.6.3"]
                             [net.java.dev.jna/jna "4.2.2"]
                             [net.java.dev.jna/jna-platform "4.2.2"]
+                            [spyscope "0.1.5" :scope "test"]
                             ])
 
 (require '[adzerk.boot-jar2bin :refer :all]

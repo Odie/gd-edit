@@ -276,6 +276,7 @@
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!)
 
+  ;; (println (clojure-version))
   (print-build-info)
   (println)
 
@@ -286,5 +287,10 @@
 #_(initialize)
 #_(time (do
           (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file (.getPath (io/file (first (gd-edit.game-dirs/get-steam-cloud-save-dirs)) "_Odie/player.gdc"))))
+                  (gd-edit.gdc-reader/load-character-file
+                   (-> (dirs/get-save-dir-search-list)
+                        (first)
+                        (io/file "_Odie/player.gdc")
+                        (.getPath)
+                        )))
           nil))
