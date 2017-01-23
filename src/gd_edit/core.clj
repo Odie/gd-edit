@@ -356,6 +356,13 @@
         ;; Otherwise, try to fetch the latest version
         (fetch-latest-build)))))
 
+(defmacro fmt [^String string]
+  (let [-re #"#\{(.*?)\}"
+        fstr (clojure.string/replace string -re "%s")
+        fargs (map #(read-string (second %)) (re-seq -re string))]
+    `(format ~fstr ~@fargs)
+    ))
+
 (defn- restart-self
   [new-exe]
 
@@ -364,37 +371,51 @@
         backup-path (io/file (str running-exe-path ".bak"))
         restart-script-path (io/file (utils/working-directory) "restart.bat")]
 
-    ;; Rename the running exe
-    (when (.exists backup-path)
-      (io/delete-file backup-path))
-    (.renameTo running-exe-path backup-path)
-
-    ;; Move the exe to be replaced into the original location
-    (println "Moving " new-exe " to " running-exe-path)
-    (.renameTo (io/file new-exe) running-exe-path)
-    (.setExecutable running-exe-path true)
-
     ;; Write out the restart script
-    (println "Trying to write to: " restart-script-path)
+    (println "Writing restart script: " restart-script-path)
     (spit restart-script-path
-     (format
+     (fmt
       "
-        echo Restarting...
-        timeout /t 1 /nobreak
+        @echo off
+        echo Preparing to restart gd-edit...
 
-        %s
+        REM remove old backup file
+        del /F #{backup-path}
+        if %%ERRORLEVEL%% neq 0 goto backup_error
+
+        REM rename the original exe as a backup
+        move #{running-exe-path} #{backup-path}
+        if %%ERRORLEVEL%% neq 0 goto backup_error
+
+        REM move the new exe to where the original exe was
+        move #{(str new-exe)} #{running-exe-path}
+        if %%ERRORLEVEL%% neq 0 goto replace_error
+
+        REM finally, start the new version
+        echo Restarting gd-edit...
+        start #{running-exe-path}
+        exit 0
+
+        backup_error:
+        echo Could not create backup file. Aborting self update.
+        pause
+        exit 1
+
+        replace_error:
+        echo Could not move new version to correct location.
+        echo Attempting to restore backup.
+        echo If this doesn't work, please manually rename
+        echo #{backup-path} => #{running-exe-path}
+        move #{backup-path} #{running-exe-path}
+        start #{running-exe-path}
+        pause
+        exit 1
       "
-      ;; "
-      ;;   echo Restarting...
-      ;;   sleep
-
-      ;;   %s
-      ;; "
-      running-exe-path))
+      ))
     (.setExecutable restart-script-path true)
 
     ;; Start the restart script
-    (-> (ProcessBuilder. [(str restart-script-path)])
+    (-> (ProcessBuilder. ["cmd.exe" "/C" "start" (str restart-script-path)])
         (.start))
 
     (System/exit 0)))
