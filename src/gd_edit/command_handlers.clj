@@ -8,7 +8,8 @@
              [game-dirs :as dirs]
              [gdc-reader :as gdc]
              [globals :as globals]
-             [utils :as u]]
+             [utils :as u]
+             [self-update :as su]]
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]))
@@ -1759,6 +1760,13 @@
         (setting-savedir-clear!)
         (setting-savedir-set! save-dir))
       (println "Ok!"))))
+
+(defn update-handler
+  [[input tokens]]
+
+  (let [result (su/try-self-update)]
+    (when (= result :up-to-date)
+      (println "Already running latest version"))))
 
 #_(help-handler [nil []])
 

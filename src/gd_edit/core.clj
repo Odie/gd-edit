@@ -64,6 +64,7 @@
    ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
    ["savedir"] (fn [input] (handlers/savedir-handler input))
    ["savedir" "clear"] (fn [input] (handlers/savedir-clear-handler input))
+   ["update"] (fn [input] (handlers/update-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
 

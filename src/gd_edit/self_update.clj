@@ -18,7 +18,9 @@
   [build-a build-b]
 
   (.isAfter (.toInstant (:timestamp build-a))
-            (.toInstant (:timestamp build-b))))
+            (.toInstant (:timestamp build-b)))
+  true
+  )
 
 (defn fetch-latest-build-info
   "Get the information about the latest available build from network
@@ -154,7 +156,11 @@
 
     (System/exit 0)))
 
-(defn- try-self-update
+(defn try-self-update
+  "Attempts to update the running executable to the latest version.
+  Returns:
+  :up-to-date if the running exe is the latest version
+  attempts to download and restart the program otherwise"
   []
   (let [fetch-result (fetch-latest-version)]
     (cond
