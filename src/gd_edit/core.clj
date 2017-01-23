@@ -13,8 +13,9 @@
              [utils :as utils]]
             [jansi-clj.core :refer :all]
             [gd-edit.utils :as u]
-            [clojure.core.async :as async :refer [thread]]
-            [progress.file :as progress])
+            [clojure.core.async :as async :refer [thread >!!]]
+            [progress.file :as progress]
+            [clojure.string :as str])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.lang.ProcessBuilder
@@ -167,11 +168,21 @@
       :else
       (println "Don't know how to handle this command"))))
 
+(defn- repl-print-notification
+  [chan]
+
+  ;; Try to pull a message out of the notification channel
+  (when-let [msg (async/poll! chan)]
+
+    ;; If a message can be retrieved, display it now.
+    (println msg)))
+
 (defn- repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"
   []
 
   (repl-print-menu @globals/menu)
+  (repl-print-notification globals/notification-chan)
   (repl-eval (repl-read) command-map)
   (println))
 
@@ -300,20 +311,7 @@
       )
 
     ;; Return the contents of the file to the caller
-    (slurp (.getInputStream conn))))
-
-(defn- has-new-version
-  "Check if the known latest build is newer than the current running build
-
-  WARNING: Long running function
-  We're going over the network to fetch info regarding the latest build.
-  It may take a second or it may never return because network isn't available."
-  []
-
-  (when-let [current-build-info (get-build-info)]
-    (when-let [latest-build-info (fetch-latest-build-info)]
-
-      (is-newer? latest-build-info current-build-info))))
+    (edn/read-string (slurp (.getInputStream conn)))))
 
 (defn- fetch-latest-build
   [build-info]
@@ -336,6 +334,27 @@
     ;; Return the temp location to caller
     file))
 
+(defn- fetch-has-new-version?
+  "Attempts to fetch the latest version of the program.
+  Returns either:
+    :up-to-date - if already running the latest version
+    :new-version-available - if a later version is available online
+
+  Can throw exception. We're performing various networking tasks. Any number of conditions may arise.
+  It's not clear what exactly might be thrown here.
+  It's up to the caller to handle network error conditions."
+  []
+
+  (when-let [latest-build-info (fetch-latest-build-info)]
+    (when-let [current-build-info (get-build-info)]
+      (println "latest: " latest-build-info)
+      (println "current: " current-build-info)
+
+      ;; Is the latest build newer than the one we're running?
+      (if-not (is-newer? latest-build-info current-build-info)
+        [:up-to-date]
+        [:new-version-available latest-build-info]))))
+
 (defn- fetch-latest-version
   "Attempts to fetch the latest version of the program.
   Returns either:
@@ -347,17 +366,14 @@
   It's up to the caller to handle network error conditions."
   []
 
-  (when-let [latest-build-info (fetch-latest-build-info)]
-    (let [current-build-info (get-build-info)]
+  (let [[new-ver-status latest-build-info](fetch-has-new-version?)]
+    (if (=  new-ver-status :new-version-available)
 
-      ;; Is the latest build newer than the one we're running?
-      (if-not true;(is-newer? latest-build-info (get-build-info))
+      ;; Try to fetch the latest version
+      (fetch-latest-build latest-build-info)
 
-        ;; If not, then say we don't need to do anything
-        :up-to-date
-
-        ;; Otherwise, try to fetch the latest version
-        (fetch-latest-build latest-build-info)))))
+      ;; Or say that everything is up to date
+      :up-to-date)))
 
 (defmacro fmt [^String string]
   (let [-re #"#\{(.*?)\}"
@@ -444,10 +460,18 @@
   (print-build-info)
   (println)
 
-  (try-self-update)
 
   (do
     (initialize)
+
+    ;; Kick off a background thread to check if an update is available
+    (thread (if (fetch-has-new-version?)
+              (>!! globals/notification-chan
+                   (green
+                    (str/join "\n"
+                              ["New version available!"
+                               "Run the \"update\" command to get it!"])))))
+
     (repl)))
 
 #_(initialize)
