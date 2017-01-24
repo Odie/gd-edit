@@ -69,8 +69,8 @@
 
   (when-let [latest-build-info (fetch-latest-build-info)]
     (when-let [current-build-info (get-build-info)]
-      (println "latest: " latest-build-info)
-      (println "current: " current-build-info)
+      ;; (println "latest: " latest-build-info)
+      ;; (println "current: " current-build-info)
 
       ;; Is the latest build newer than the one we're running?
       (if-not (is-newer? latest-build-info current-build-info)
