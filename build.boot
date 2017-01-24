@@ -16,16 +16,28 @@
                             [spyscope "0.1.5" :scope "test"]
                             [fipp "0.6.8"]
                             [org.clojure/core.async "0.2.395"]
-                            [progress "1.0.2"]])
+                            [progress "1.0.2"]
+                            [com.dropbox.core/dropbox-core-sdk "2.1.2" :scope "test"]
+
+                            [org.clojure/data.json "0.2.6" :scope "test"]
+                            [digest "1.4.5" :scope "test"]])
 
 
 
 (require '[adzerk.boot-jar2bin :refer :all]
+         '[clojure.java.io :as io]
          '[clojure.java.shell]
          '[clojure.string :as str]
-         ;; '[clj-time.format :as tf]
-         ;; '[clj-time.core :as t]
+         '[clojure.data.json]
+         '[clojure.edn :as edn]
+         '[boot.core :as c]
+         '[boot.util :as u]
+         '[digest]
          )
+
+(import com.dropbox.core.DbxRequestConfig
+        com.dropbox.core.v2.DbxClientV2
+        com.dropbox.core.v2.files.WriteMode)
 
 (task-options!
  aot {:namespace   #{'gd-edit.core}}
@@ -62,7 +74,10 @@
 
   ([kv]
    (merge
-    {:sha (str/trim ((shell "git rev-parse --short HEAD") :out))
+    {:app-name project
+     :version version
+
+     :sha (str/trim ((shell "git rev-parse --short HEAD") :out))
      :tag (str/trim ((shell "git describe --abbrev=0 --tags HEAD") :out))
      :branch (str/trim ((shell "git rev-parse --abbrev-ref HEAD") :out))
      :timestamp (new java.util.Date)} kv)))
@@ -74,7 +89,7 @@
 (deftask build-info []
   (with-pre-wrap fs
     (let [t (tmp-dir!)]
-      (spit (clojure.java.io/file t "build.edn") (make-build-info {:app-name project}))
+      (spit (clojure.java.io/file t "build.edn") (make-build-info))
       (-> fs (add-resource t) commit!))))
 
 (deftask cider "CIDER profile"
@@ -106,3 +121,91 @@
   (comp (cider) (launch-nrepl) (run)))
 
 (require '[adzerk.boot-test :refer [test]])
+
+(defn- await-exe-build
+  [exe-file jar-file]
+
+  ;; Wait until the exe exists
+  (while (not (.exists exe-file))
+    (println "Exe doesn't seem to exist yet")
+    (Thread/sleep 100))
+
+  ;; Wait until the exe to be built
+  (loop [last-length 0]
+    (let [cur-length (.length exe-file)]
+
+      ;; The exe file is at least as large as the jar file
+      ;; and that the file has stopped growing
+      (if (and (> (.length exe-file) (.length jar-file))
+               (= cur-length last-length))
+
+        ;; Then we are done
+        :done
+
+        ;; Otherwise, we need to wait for the exe to finish building
+        (do
+          ;; Sleep for a bit and try again...
+          (println "Waiting for exe to finish building...")
+          (Thread/sleep 100)
+          (recur cur-length)))))
+
+  (assert (> (.length exe-file) (.length jar-file))))
+
+(defn- make-dropbox-client
+  []
+  (let [config (DbxRequestConfig. "GDUploader/0.1" "en_US")
+        dropbox-setting-file (edn/read-string (slurp (io/file ".publish.edn")))]
+    (DbxClientV2. config (:token dropbox-setting-file))))
+
+(deftask publish-exe
+  "Publish the built windows exe to dropbox"
+  []
+
+  (let [tmp (c/tmp-dir!)]
+
+    (with-post-wrap fileset
+      (println "publish post!")
+
+      ;; jar2bin doesn't play well with the boot pipeline...
+      ;; Executing via the shell causes a separate process to be launched, which
+      ;; boot isn't able to wait for.
+      ;;
+      ;; We're going to have to do something silly to figure out when the
+      ;; exe generation is done
+      (let [current-dir (System/getProperty "user.dir")
+            output-dir (io/file current-dir "target")
+
+            output-jar-file (io/file output-dir
+                                     (str/join "-"
+                                               [project version "standalone.jar"]))
+            output-file (io/file output-dir
+                                 (str/join "-"
+                                           [project version "standalone.exe"]))]
+
+        (await-exe-build output-file output-jar-file)
+
+        (let [client (make-dropbox-client)]
+          ;; Write the gd-editor.edn file to describe the latest version
+          (-> client
+              (.files)
+              (.uploadBuilder "/Public/GrimDawn/editor/gd-editor.edn")
+              (.withMode WriteMode/OVERWRITE)
+              (.uploadAndFinish (-> (make-build-info {:filesize (.length output-file)
+                                                      :file-sha1 (digest/sha1 output-file)})
+                                    (pr-str)
+                                    (.getBytes)
+                                    (io/input-stream))))
+
+          ;; Write the gd-editor.exe file
+          (with-open [exe-stream (io/input-stream output-file)]
+            (-> client
+                (.files)
+                (.uploadBuilder "/Public/GrimDawn/editor/gd-editor.exe")
+                (.withMode WriteMode/OVERWRITE)
+                (.uploadAndFinish exe-stream)))
+          ))
+    fileset)))
+
+(deftask publish
+  []
+  (comp (build) (publish-exe)))
