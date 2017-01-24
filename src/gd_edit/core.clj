@@ -289,6 +289,19 @@
     (newline)
     passes-required-checks))
 
+(defn- check-latest-version-in-background
+  "Kick off a background thread to check if an update is available"
+  []
+
+  ;; Kick off a background thread to check if an update is available
+  (thread (let [[status build-info] (su/fetch-has-new-version?)]
+            (if (= status :new-version-available)
+              (>!! globals/notification-chan
+                   (green
+                    (str/join "\n"
+                              ["New version available!"
+                               "Run the \"update\" command to get it!"])))))))
+
 (defn -main
   [& args]
 
@@ -304,13 +317,7 @@
   (do
     (initialize)
 
-    ;; Kick off a background thread to check if an update is available
-    (thread (if (su/fetch-has-new-version?)
-              (>!! globals/notification-chan
-                   (green
-                    (str/join "\n"
-                              ["New version available!"
-                               "Run the \"update\" command to get it!"])))))
+    (check-latest-version-in-background)
 
     (repl)))
 
