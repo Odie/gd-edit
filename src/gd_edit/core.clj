@@ -226,7 +226,7 @@
 
   (if-let [info-file (io/resource "build.edn")]
     (let [build-info (edn/read-string (slurp info-file))]
-      (println (bold (black (format "%s [build %s]" (build-info :app-name) (build-info :sha))))))))
+      (println (bold (black (format "%s %s [build %s]" (build-info :app-name) (build-info :version)(build-info :sha))))))))
 
 (defn- check-save-dir-found?!
   [verbose]
