@@ -26,7 +26,7 @@
   "Get the information about the latest available build from network
   WARNING: This may block for a long time."
   []
-  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/GrimDawn/editor/latest-build.edn")
+  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.edn")
         conn (.openConnection url)]
 
     ;; Setup reasonable timeouts to contact the server with
@@ -40,7 +40,7 @@
 
 (defn fetch-latest-build
   [build-info]
-  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/GrimDawn/editor/latest-SNAPSHOT-standalone.exe")
+  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.exe")
         conn (.openConnection url)
         file (java.io.File/createTempFile "gd-edit" ".exe")]
 

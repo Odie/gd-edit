@@ -185,24 +185,26 @@
         (await-exe-build output-file output-jar-file)
 
         (let [client (make-dropbox-client)]
+          ;; Write the gd-editor.exe file
+          (println "Uploading new build...")
+          (with-open [exe-stream (io/input-stream output-file)]
+            (-> client
+                (.files)
+                (.uploadBuilder "/Public/GrimDawn/editor/gd-edit.exe")
+                (.withMode WriteMode/OVERWRITE)
+                (.uploadAndFinish exe-stream)))
+
           ;; Write the gd-editor.edn file to describe the latest version
+          (println "Uploading new build edn file...")
           (-> client
               (.files)
-              (.uploadBuilder "/Public/GrimDawn/editor/gd-editor.edn")
+              (.uploadBuilder "/Public/GrimDawn/editor/gd-edit.edn")
               (.withMode WriteMode/OVERWRITE)
               (.uploadAndFinish (-> (make-build-info {:filesize (.length output-file)
                                                       :file-sha1 (digest/sha1 output-file)})
                                     (pr-str)
                                     (.getBytes)
                                     (io/input-stream))))
-
-          ;; Write the gd-editor.exe file
-          (with-open [exe-stream (io/input-stream output-file)]
-            (-> client
-                (.files)
-                (.uploadBuilder "/Public/GrimDawn/editor/gd-editor.exe")
-                (.withMode WriteMode/OVERWRITE)
-                (.uploadAndFinish exe-stream)))
           ))
     fileset)))
 
