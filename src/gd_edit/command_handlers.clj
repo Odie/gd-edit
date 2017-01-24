@@ -1737,12 +1737,27 @@
   (u/write-settings @globals/settings))
 
 
+(defn- maybe-return-to-character-selection-screen
+  []
+
+  ;; If no character has been loaded yet, reload the screen...
+  (if (empty? @globals/character)
+    (choose-character-handler nil)
+
+    (do
+      (println (str/join "\n"
+                         ["Savedir changed."
+                          "You can use the \"load\" command to return to the character selection screen."
+                          "Any unsaved changes for the current character will be lost."
+                          ])))))
+
 (defn savedir-clear-handler
   [[input tokens]]
 
   (setting-savedir-clear!)
   (u/write-settings @globals/settings)
-  (println "Ok!"))
+  (println "Ok!")
+  (maybe-return-to-character-selection-screen))
 
 (defn savedir-handler
   [[input tokens]]
@@ -1760,7 +1775,8 @@
       (if (empty? save-dir)
         (setting-savedir-clear!)
         (setting-savedir-set! save-dir))
-      (println "Ok!"))))
+      (println "Ok!")
+      (maybe-return-to-character-selection-screen))))
 
 (defn update-handler
   [[input tokens]]
