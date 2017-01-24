@@ -10,17 +10,14 @@
   "Get the build info associated with the current build"
   []
   (when-let [info-file (io/resource "build.edn")]
-    (edn/read-string (slurp info-file)))
-  {:timestamp (java.util.Date.)})
+    (edn/read-string (slurp info-file))))
 
 (defn is-newer?
   "Check if build-a is newer than build-b"
   [build-a build-b]
 
   (.isAfter (.toInstant (:timestamp build-a))
-            (.toInstant (:timestamp build-b)))
-  true
-  )
+            (.toInstant (:timestamp build-b))))
 
 (defn fetch-latest-build-info
   "Get the information about the latest available build from network
