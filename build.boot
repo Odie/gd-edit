@@ -157,14 +157,26 @@
         dropbox-setting-file (edn/read-string (slurp (io/file ".publish.edn")))]
     (DbxClientV2. config (:token dropbox-setting-file))))
 
+(defn- git-has-uncommitted-changes
+  []
+
+  (if (= (:exit (shell "git diff-index --quiet HEAD --")) 1)
+    true
+    false))
+
 (deftask publish-exe
   "Publish the built windows exe to dropbox"
   []
 
+  (when (git-has-uncommitted-changes)
+    (println "Please don't publish using uncommitted changes.\nThis makes the build info useless for determining what the user is running.")
+    (throw (Throwable. "Should not publish uncommitted changes")))
+
   (let [tmp (c/tmp-dir!)]
 
+
     (with-post-wrap fileset
-      (println "publish post!")
+      (println "Publishing exe to dropbox...")
 
       ;; jar2bin doesn't play well with the boot pipeline...
       ;; Executing via the shell causes a separate process to be launched, which
@@ -195,7 +207,7 @@
                 (.uploadAndFinish exe-stream)))
 
           ;; Write the gd-editor.edn file to describe the latest version
-          (println "Uploading new build edn file...")
+          (println "Uploading new build's edn file...")
           (-> client
               (.files)
               (.uploadBuilder "/Public/GrimDawn/editor/gd-edit.edn")
@@ -206,7 +218,7 @@
                                     (.getBytes)
                                     (io/input-stream))))
           ))
-    fileset)))
+      fileset)))
 
 (deftask publish
   []
