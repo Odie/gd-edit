@@ -80,7 +80,8 @@
      :sha (str/trim ((shell "git rev-parse --short HEAD") :out))
      :tag (str/trim ((shell "git describe --abbrev=0 --tags HEAD") :out))
      :branch (str/trim ((shell "git rev-parse --abbrev-ref HEAD") :out))
-     :timestamp (new java.util.Date)} kv)))
+     :timestamp (clojure.instant/read-instant-timestamp ((shell "git log -1 --pretty=format:%cd --date=iso-strict") :out))}
+    kv)))
 
 ;;------------------------------------------------------------------------------
 ;;
