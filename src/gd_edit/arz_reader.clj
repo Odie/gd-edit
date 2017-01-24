@@ -4,7 +4,8 @@
             [clojure.string :as string]
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
-            [fipp.clojure :as pp])
+            ;; [fipp.clojure :as pp]
+            [clojure.pprint :as pp])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
