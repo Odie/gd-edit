@@ -1,7 +1,10 @@
 (ns gd-edit.arz-reader
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as utils]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [clojure.java.io :as io]
+            [gd-edit.utils :as u]
+            [fipp.clojure :as pp])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
@@ -253,6 +256,41 @@
     ;; Read in all the file records
     (load-db-records bb header string-table localization-table)))
 
+(defn dump-db-records
+  [db-records outpath]
+
+  ;; For every record in the db-records collection
+  ;; We do this in parallel because there is a lot of records to write...
+  (doall
+   (pmap (fn [record]
+
+          ;; If we can retrieve a valid recordname/filename
+          (let [recordname (:recordname record)]
+            (when-not (empty? recordname)
+
+              ;; Grab the file contents...
+              (let [contents (->> record
+                                  (filter #(not (keyword? (key %))))
+                                  (into {}))
+                    record-path (io/file outpath recordname)]
+
+                ;; Write the contents to disk
+                (.mkdirs (.getParentFile record-path))
+                ;; Print contents directly to file as edn
+                ;; This is very fast, but not pretty-printed
+                ;; (spit record-path (pr-str contents))
+
+                ;; Prints the content using the default clojure pretty-printer
+                ;; Too slow to use on this dataset
+                ;; (with-open [writer (clojure.java.io/writer record-path)]
+                ;;   (pp/pprint contents writer))
+
+                (spit record-path (with-out-str (pp/pprint contents)))
+                ))))
+
+        db-records))
+  nil)
+
 
 #_(time  (load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
 #_(def f (mmap "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
@@ -261,3 +299,5 @@
 #_(time (def st (load-db-string-table f h)))
 #_(time (def dt (load-db-records-header-table f h st)))
 #_(time (def rt (load-db-records f h st)))
+
+#_(time (dump-db-records @gd-edit.globals/db (io/file (gd-edit.utils/working-directory) "database")))

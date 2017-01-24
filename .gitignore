@@ -11,5 +11,8 @@ pom.xml.asc
 .hgignore
 .hg/
 .#*
-/resources/build.json
+/resources/build.edn
 settings.edn
+/templates
+/records
+.publish.edn

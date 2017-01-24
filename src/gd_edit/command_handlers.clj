@@ -8,7 +8,8 @@
              [game-dirs :as dirs]
              [gdc-reader :as gdc]
              [globals :as globals]
-             [utils :as u]]
+             [utils :as u]
+             [self-update :as su]]
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]))
@@ -866,7 +867,18 @@
         [db-load-time db]
         (u/timed
          (arz-reader/load-game-db (dirs/get-db-filepath)
-                                  localization-table))]
+                                  localization-table))
+
+        ;; [templates-load-time templates]
+        ;; (u/timed
+        ;;  (arc-reader/load-arc-file (dirs/get-templates-filepath)))
+
+        ;; ;; Add the "templates" prefix to all templates recordnames
+        ;; templates (map (fn [item]
+        ;;                  (assoc item
+        ;;                         :recordname (str "templates/" (:recordname item))))
+        ;;                templates)
+        ]
 
     ;; (println (count localization-table)
     ;;          "localization strings loaded in"
@@ -1463,6 +1475,7 @@
     (string/join "\n"
                  ["Syntax: gamedir <full path to save game installation directory>"])]
    ["gamedir clear" "Removes the previously set game installation directory"]
+   ["update" "Update to the latest version of gd-edit"]
    ])
 
 (defn help-handler
@@ -1749,6 +1762,13 @@
         (setting-savedir-set! save-dir))
       (println "Ok!"))))
 
+(defn update-handler
+  [[input tokens]]
+
+  (let [result (su/try-self-update)]
+    (when (= result :up-to-date)
+      (println "Already running latest version"))))
+
 #_(help-handler [nil []])
 
 #_(write-handler [nil nil])
@@ -1782,3 +1802,5 @@
 
 
 #_(construct-item "Mantle of the Weeping Eye" @globals/db 100)
+
+#_(load-db)

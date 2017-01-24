@@ -1,6 +1,6 @@
 (ns gd-edit.core
   (:gen-class)
-  (:require cheshire.core
+  (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as string]
             [gd-edit
@@ -10,11 +10,16 @@
              [game-dirs :as dirs]
              [globals :as globals]
              [jline :as jl]
-             [utils :as utils]]
+             [utils :as utils]
+             [self-update :as su]]
             [jansi-clj.core :refer :all]
-            [gd-edit.utils :as u])
+            [gd-edit.utils :as u]
+            [clojure.core.async :as async :refer [thread >!!]]
+            [progress.file :as progress]
+            [clojure.string :as str])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
+           java.lang.ProcessBuilder
            [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
 
 (defn- strip-quotes
@@ -59,6 +64,7 @@
    ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
    ["savedir"] (fn [input] (handlers/savedir-handler input))
    ["savedir" "clear"] (fn [input] (handlers/savedir-clear-handler input))
+   ["update"] (fn [input] (handlers/update-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
 
@@ -164,11 +170,21 @@
       :else
       (println "Don't know how to handle this command"))))
 
+(defn- repl-print-notification
+  [chan]
+
+  ;; Try to pull a message out of the notification channel
+  (when-let [msg (async/poll! chan)]
+
+    ;; If a message can be retrieved, display it now.
+    (println msg)))
+
 (defn- repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"
   []
 
   (repl-print-menu @globals/menu)
+  (repl-print-notification globals/notification-chan)
   (repl-eval (repl-read) command-map)
   (println))
 
@@ -199,14 +215,18 @@
   (handlers/load-db-in-background)
 
   ;; Setup the first screen in the program
-  (handlers/character-selection-screen!))
+  (handlers/character-selection-screen!)
+
+  ;; Remove any left over restart scripts from last time we ran "update"
+  (su/cleanup-restart-script)
+  )
 
 (defn- print-build-info
   []
 
-  (if-let [info-file (io/resource "build.json")]
-    (let [build-info (cheshire.core/parse-string (slurp info-file))]
-      (println (bold (black (format "%s [build %s]" (build-info "app-name") (build-info "sha"))))))))
+  (if-let [info-file (io/resource "build.edn")]
+    (let [build-info (edn/read-string (slurp info-file))]
+      (println (bold (black (format "%s %s [build %s]" (build-info :app-name) (build-info :version)(build-info :sha))))))))
 
 (defn- check-save-dir-found?!
   [verbose]
@@ -269,6 +289,19 @@
     (newline)
     passes-required-checks))
 
+(defn- check-latest-version-in-background
+  "Kick off a background thread to check if an update is available"
+  []
+
+  ;; Kick off a background thread to check if an update is available
+  (thread (let [[status build-info] (su/fetch-has-new-version?)]
+            (if (= status :new-version-available)
+              (>!! globals/notification-chan
+                   (green
+                    (str/join "\n"
+                              ["New version available!"
+                               "Run the \"update\" command to get it!"])))))))
+
 (defn -main
   [& args]
 
@@ -280,8 +313,12 @@
   (print-build-info)
   (println)
 
+
   (do
     (initialize)
+
+    (check-latest-version-in-background)
+
     (repl)))
 
 #_(initialize)

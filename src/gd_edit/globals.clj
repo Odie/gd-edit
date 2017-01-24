@@ -1,7 +1,11 @@
-(ns gd-edit.globals)
+(ns gd-edit.globals
+  (:require [clojure.core.async :as async]))
 
 (def menu (atom {:display-fn nil
                  :choice-map nil}))
+
+;; Notification channel for the repl
+(def notification-chan (async/chan))
 
 (def db (atom {}))
 (def query-state
