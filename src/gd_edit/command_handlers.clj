@@ -1475,6 +1475,7 @@
     (string/join "\n"
                  ["Syntax: gamedir <full path to save game installation directory>"])]
    ["gamedir clear" "Removes the previously set game installation directory"]
+   ["update" "Update to the latest version of gd-edit"]
    ])
 
 (defn help-handler
