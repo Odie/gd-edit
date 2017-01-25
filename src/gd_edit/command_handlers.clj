@@ -1671,8 +1671,7 @@
   "Load settings file into globals/settings"
   []
 
-  ;; (println "loading settings file from:" (u/settings-file-path))
-  (reset! globals/settings (u/load-settings)))
+  (reset! globals/settings (or (u/load-settings) {})))
 
 (defn setting-gamedir-clear!
   []

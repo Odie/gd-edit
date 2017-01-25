@@ -20,7 +20,9 @@
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.lang.ProcessBuilder
-           [java.nio.file Files FileSystems Path Paths StandardOpenOption]))
+           [java.nio.file Files FileSystems Path Paths StandardOpenOption]
+           [java.time Instant ZonedDateTime ZoneId]
+           java.util.Date))
 
 (defn- strip-quotes
   "Strip quotes from a string"
@@ -289,18 +291,50 @@
     (newline)
     passes-required-checks))
 
-(defn- check-latest-version-in-background
-  "Kick off a background thread to check if an update is available"
+(defn- should-check-for-update?
+  [last-check-time]
+
+  (let [;; When did we check for a verion the last time?
+        last-check-time (if (nil? last-check-time)
+                          (Instant/EPOCH)
+                          (.toInstant last-check-time))
+
+        ;; When is the next check due?
+        next-check-time (-> (ZonedDateTime/ofInstant last-check-time (ZoneId/systemDefault))
+                            (.plusDays 1)
+                            (.toInstant))]
+
+    ;; If we've gone past the next check time...
+    (if (.isAfter (Instant/now) next-check-time)
+
+      ;; Say we should check for an update...
+      true
+      false)))
+
+(defn- notify-repl-if-latest-version-available
+  "Check if the latest version is available.
+  If so, send a notification to the repl.
+  If not, do nothing."
   []
 
-  ;; Kick off a background thread to check if an update is available
-  (thread (let [[status build-info] (su/fetch-has-new-version?)]
-            (if (= status :new-version-available)
-              (>!! globals/notification-chan
-                   (green
-                    (str/join "\n"
-                              ["New version available!"
-                               "Run the \"update\" command to get it!"])))))))
+  ;; We want to throttle update checks to some sane interval
+  ;; Check if we should actually check for an update
+  (when (should-check-for-update? (:last-version-check @globals/settings))
+
+    ;; Check if there is a new version available
+    (let [[status build-info] (su/fetch-has-new-version?)]
+
+      ;; Update the last check time in the settings file
+      (swap! globals/settings assoc :last-version-check (Date.))
+      (u/write-settings @globals/settings)
+
+      ;; Notify the user there is a new version
+      (if (= status :new-version-available)
+        (>!! globals/notification-chan
+             (green
+              (str/join "\n"
+                        ["New version available!"
+                         "Run the \"update\" command to get it!"])))))))
 
 (defn -main
   [& args]
@@ -317,7 +351,7 @@
   (do
     (initialize)
 
-    (check-latest-version-in-background)
+    (thread (notify-repl-if-latest-version-available))
 
     (repl)))
 
