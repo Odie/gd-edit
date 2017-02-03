@@ -735,6 +735,44 @@
     (parseBoolean val-str)))
 
 
+(defn- find-item-component-by-name
+  [db component-name]
+
+  (->> db
+       (filter (fn [record]
+                 (and
+                  (u/case-insensitive-match (:recordname record) "items/materia")
+                  (u/case-insensitive-match (record "description") component-name))))
+       (first)))
+
+;; FIXME Should use a recordname -> record index instead of a linear search
+(defn- find-record-by-name
+  [db recordname]
+
+  (->> db
+       (filter (fn [record]
+                 (= (:recordname record) recordname)))
+       (first)))
+
+(defn- set-item--relic-name
+  [db update-path newval]
+
+  ;; An item can have a relic/component attached
+  ;; To make the program a bit more friendly to use, the user can set the relic-name to a
+  ;; the name of a record, or just the English display name of a relic/component.
+  (let [component-record (find-item-component-by-name db newval)]
+        (cond
+
+          ;; Does the component name look like a display name of a component?
+          component-record
+          (reset! globals/character
+                  (update-in @globals/character update-path (fn [oldval] (:recordname component-record))))
+
+
+          ;; Otherwise, we just set
+          :else
+          (swap! globals/character update-in update-path (fn [oldval] newval)))))
+
 (defn set-handler
   [[input tokens]]
 
@@ -776,6 +814,12 @@
                 ;; Let the set-item handler deal with it
                 (is-item? value)
                 (set-item-handler [input tokens])
+
+                (and
+                 (is-item? (get-in @globals/character (butlast (:actual-path walk-result))))
+                 (= :relic-name (last (:actual-path walk-result))))
+                (set-item--relic-name @globals/db (:actual-path walk-result) newval)
+
 
                 ;; The user cannot create a collection directly from the commandline.
                 ;; So replacing a collection directly makes no sense and cannot be done.
