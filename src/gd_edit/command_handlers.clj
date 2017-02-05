@@ -726,7 +726,13 @@
     (= java.lang.Float type)
     (Float/parseFloat val-str)
 
+    (= java.lang.Double type)
+    (Double/parseDouble val-str)
+
     (= java.lang.Integer type)
+    (Integer/parseInt val-str)
+
+    (= java.lang.Long type)
     (Integer/parseInt val-str)
 
     (= java.lang.Boolean type)
@@ -743,8 +749,14 @@
     (= java.lang.Float type)
     (float val-int)
 
+    (= java.lang.Double type)
+    (double val-int)
+
     (= java.lang.Integer type)
     (Integer. val-int)
+
+    (= java.lang.Long type)
+    (Long. val-int)
 
     (= java.lang.Boolean type)
     (if (= val-int 0)
