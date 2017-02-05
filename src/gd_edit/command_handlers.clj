@@ -14,7 +14,7 @@
 
             [clojure.string :as str]))
 
-(declare is-item? show-item set-item-handler)
+(declare is-item? show-item set-item-handler find-record-by-name)
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -158,50 +158,47 @@
 
   (let [path (if (nil? (first tokens))
                "r/"
-               (first tokens))]
+               (first tokens))
 
-    (let [sorted-matches
+        path-components (string/split path #"/")
 
-          ;; Grab a list of items from the db that partially matches the specified path
-          (->> (db-partial-record-path-matches @gd-edit.globals/db path)
+        ;; Grab a list of items from the db that partially matches the specified path
+        matches (->> path
+                     (db-partial-record-path-matches @gd-edit.globals/db)
 
-               ;; Consolidate the search so we only have n+1 path components
-               (reduce (fn [accum item]
-                         (conj accum
-                               (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
-                       #{})
+                     ;; Filter out all results that have too few path components
+                     (filter (fn [item]
+                               (>= (count (string/split item #"/")) (count path-components))
+                               )))
 
-               ;; Sort the matches
-               (sort))
+        sorted-matches
+        (->> matches
 
-          ;; It's possible for the user to target a single record using "db show".
-          ;; It that happens, we should just display the contents of that record instead of a
-          ;; list of matched paths
-          ;; Try to fetch the full recordname of the match now
-          sole-match-recordname
-          (if (= 1 (count sorted-matches))
-            (first (db-partial-record-path-matches @gd-edit.globals/db path))
-            nil)]
+             ;; Consolidate the search so we only have n+1 path components
+             (reduce (fn [accum item]
+                       (conj accum
+                             (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
+                     #{})
 
-      ;; If we have a single record match
-      (if sole-match-recordname
+             ;; Sort the matches
+             (sort))]
 
-        ;; Locate the record by name
-        (->> (filter (fn [item]
-                       (= (:recordname item) sole-match-recordname))
-                     @gd-edit.globals/db)
-
-             ;; Print the record
-             (print-result-records))
+    ;; It's possible for the user to target a single record using "db show".
+    ;; It that happens, we should just display the contents of that record instead of a
+    ;; list of matched paths
+    ;; Try to fetch the full recordname of the match now
+    (if (= 1 (count sorted-matches))
+      (print-result-records
+       [(find-record-by-name @gd-edit.globals/db (first sorted-matches))])
 
 
-        ;; If we have multiple record matches...
-        ;; Just print the names
-        (do
-          (doseq [item sorted-matches]
-            (println item))
-          (println)
-          (println (count sorted-matches) " matches"))))))
+      ;; If we have multiple record matches...
+      ;; Just print the names
+      (do
+        (doseq [item sorted-matches]
+          (println item))
+        (println)
+        (println (count sorted-matches) " matches")))))
 
 (defn- last-path-component
   [path]
@@ -715,7 +712,8 @@
                          (str "  true  - " (str/join ", " true-aliases))
                          (str "  false - " (str/join ", " false-aliases))]))))))
 
-(defn coerce-to-type
+
+(defn coerce-str-to-type
   "Given an value as a string, return the value after coercing it to the correct type."
   [val-str type]
 
@@ -734,6 +732,88 @@
     (= java.lang.Boolean type)
     (parseBoolean val-str)))
 
+
+(defn coerce-int-to-type
+  [val-int type]
+
+  (cond
+    (= java.lang.String type)
+    (.toString val-int)
+
+    (= java.lang.Float type)
+    (float val-int)
+
+    (= java.lang.Integer type)
+    (Integer. val-int)
+
+    (= java.lang.Boolean type)
+    (if (= val-int 0)
+      false
+      true)))
+
+(defn coerce-to-type
+  [val type]
+  (cond
+    (string? val)
+    (coerce-str-to-type val type)
+
+    (int? val)
+    (coerce-int-to-type val type)
+
+    :else
+    (throw (Throwable. "Don't know how to coerce this kind of value"))))
+
+(defn- find-item-component-by-name
+  [db component-name]
+
+  (->> db
+       (filter (fn [record]
+                 (and
+                  (u/case-insensitive-match (:recordname record) "items/materia")
+                  (u/case-insensitive-match (record "description") component-name))))
+       (first)))
+
+;; FIXME Should use a recordname -> record index instead of a linear search
+(defn- find-record-by-name
+  [db recordname]
+
+  (->> db
+       (filter (fn [record]
+                 (= (:recordname record) recordname)))
+       (first)))
+
+(defn- set-item--relic-name
+  [db update-path newval]
+
+  ;; An item can have a relic/component attached
+  ;; To make the program a bit more friendly to use, the user can set the relic-name to a
+  ;; the name of a record, or just the English display name of a relic/component.
+  (let [component-record (find-item-component-by-name db newval)]
+        (cond
+
+          ;; Does the component name look like a display name of a component?
+          component-record
+          (reset! globals/character
+                  (update-in @globals/character update-path (fn [oldval] (:recordname component-record))))
+
+
+          ;; Otherwise, we just set
+          :else
+          (swap! globals/character update-in update-path (fn [oldval] newval)))))
+
+(defn set-character-field
+  [character path newval]
+
+  (let [;; What's the current value at that location?
+        value (get-in character path)
+
+        ;; What is the type of the value? We'll have to coerce the supplied new value
+        ;; to the same type first.
+        newval (try (coerce-to-type newval (type value))
+                    (catch Exception e :failed))]
+
+    ;; Set the new value into the character sheet
+    (update-in character path (fn [oldval] newval))))
 
 (defn set-handler
   [[input tokens]]
@@ -776,6 +856,23 @@
                 ;; Let the set-item handler deal with it
                 (is-item? value)
                 (set-item-handler [input tokens])
+
+                (and
+                 (is-item? (get-in @globals/character (butlast (:actual-path walk-result))))
+                 (= :relic-name (last (:actual-path walk-result))))
+                (do
+                  (set-item--relic-name @globals/db (:actual-path walk-result) newval)
+                  (swap! globals/character
+                         set-character-field
+                         ;; Set the item's relic-completion-level field...
+                         (conj (->> (:actual-path walk-result)
+                                    (butlast)
+                                    (into []))
+                               :relic-completion-level)
+
+                         ;; to 4
+                         4))
+
 
                 ;; The user cannot create a collection directly from the commandline.
                 ;; So replacing a collection directly makes no sense and cannot be done.
@@ -1194,23 +1291,22 @@
          (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
          (first))))
 
+(defn- record-has-display-name?
+  [record]
+
+  (or (get record "itemNameTag") (get record "description")))
 
 (defn build-item-name-idx
   [db]
   (let [
         item-records (filter (fn [record]
-                               (some #(string/starts-with? (:recordname record) %1)
-                                     #{"records/items/gearaccessories/"
-                                       "records/items/gearfeet/"
-                                       "records/items/gearhands/"
-                                       "records/items/gearhead/"
-                                       "records/items/gearlegs/"
-                                       "records/items/gearrelic/"
-                                       "records/items/gearshoulders/"
-                                       "records/items/geartorso/"
-                                       "records/items/gearweapons/"
-                                       "records/items/materia/"
-                                       "records/items/faction/"}))
+                               (and
+                                (some #(string/starts-with? (:recordname record) %1)
+                                      #{"records/items/"})
+                                (not (string/starts-with? (:recordname record) "records/items/lootaffixes"))
+                                (record-has-display-name? record)
+                               ))
+
                              db)
 
         item-name-idx (group-by #(item-base-record-get-name %1) item-records)]

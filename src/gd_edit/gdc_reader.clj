@@ -85,8 +85,8 @@
    :unknown        :int32
    :augment-seed   :int32
 
-   :var1           :int32
-   :stack-count    :int32))
+   :relic-completion-level :int32
+   :stack-count            :int32))
 
 (def InventoryItem
   (into Item

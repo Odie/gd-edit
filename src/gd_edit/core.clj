@@ -166,7 +166,9 @@
       ;; They shouldn't be passed to the command handlers
       (not (nil? command-handler))
       (let [param-tokens (drop (count command) tokens)
-            command-input-string (string/join " " param-tokens)]
+            command-input-string (string/trim (subs input (->> command
+                                                               (string/join " ")
+                                                               (count))))]
         (command-handler [command-input-string param-tokens]))
 
       :else
