@@ -14,7 +14,7 @@
 
             [clojure.string :as str]))
 
-(declare is-item? show-item set-item-handler)
+(declare is-item? show-item set-item-handler find-record-by-name)
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -158,50 +158,47 @@
 
   (let [path (if (nil? (first tokens))
                "r/"
-               (first tokens))]
+               (first tokens))
 
-    (let [sorted-matches
+        path-components (string/split path #"/")
 
-          ;; Grab a list of items from the db that partially matches the specified path
-          (->> (db-partial-record-path-matches @gd-edit.globals/db path)
+        ;; Grab a list of items from the db that partially matches the specified path
+        matches (->> path
+                     (db-partial-record-path-matches @gd-edit.globals/db)
 
-               ;; Consolidate the search so we only have n+1 path components
-               (reduce (fn [accum item]
-                         (conj accum
-                               (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
-                       #{})
+                     ;; Filter out all results that have too few path components
+                     (filter (fn [item]
+                               (>= (count (string/split item #"/")) (count path-components))
+                               )))
 
-               ;; Sort the matches
-               (sort))
+        sorted-matches
+        (->> matches
 
-          ;; It's possible for the user to target a single record using "db show".
-          ;; It that happens, we should just display the contents of that record instead of a
-          ;; list of matched paths
-          ;; Try to fetch the full recordname of the match now
-          sole-match-recordname
-          (if (= 1 (count sorted-matches))
-            (first (db-partial-record-path-matches @gd-edit.globals/db path))
-            nil)]
+             ;; Consolidate the search so we only have n+1 path components
+             (reduce (fn [accum item]
+                       (conj accum
+                             (string-first-n-path-components (inc (count (clojure.string/split path #"/"))) item)))
+                     #{})
 
-      ;; If we have a single record match
-      (if sole-match-recordname
+             ;; Sort the matches
+             (sort))]
 
-        ;; Locate the record by name
-        (->> (filter (fn [item]
-                       (= (:recordname item) sole-match-recordname))
-                     @gd-edit.globals/db)
-
-             ;; Print the record
-             (print-result-records))
+    ;; It's possible for the user to target a single record using "db show".
+    ;; It that happens, we should just display the contents of that record instead of a
+    ;; list of matched paths
+    ;; Try to fetch the full recordname of the match now
+    (if (= 1 (count sorted-matches))
+      (print-result-records
+       [(find-record-by-name @gd-edit.globals/db (first sorted-matches))])
 
 
-        ;; If we have multiple record matches...
-        ;; Just print the names
-        (do
-          (doseq [item sorted-matches]
-            (println item))
-          (println)
-          (println (count sorted-matches) " matches"))))))
+      ;; If we have multiple record matches...
+      ;; Just print the names
+      (do
+        (doseq [item sorted-matches]
+          (println item))
+        (println)
+        (println (count sorted-matches) " matches")))))
 
 (defn- last-path-component
   [path]
@@ -1294,23 +1291,22 @@
          (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
          (first))))
 
+(defn- record-has-display-name?
+  [record]
+
+  (or (get record "itemNameTag") (get record "description")))
 
 (defn build-item-name-idx
   [db]
   (let [
         item-records (filter (fn [record]
-                               (some #(string/starts-with? (:recordname record) %1)
-                                     #{"records/items/gearaccessories/"
-                                       "records/items/gearfeet/"
-                                       "records/items/gearhands/"
-                                       "records/items/gearhead/"
-                                       "records/items/gearlegs/"
-                                       "records/items/gearrelic/"
-                                       "records/items/gearshoulders/"
-                                       "records/items/geartorso/"
-                                       "records/items/gearweapons/"
-                                       "records/items/materia/"
-                                       "records/items/faction/"}))
+                               (and
+                                (some #(string/starts-with? (:recordname record) %1)
+                                      #{"records/items/"})
+                                (not (string/starts-with? (:recordname record) "records/items/lootaffixes"))
+                                (record-has-display-name? record)
+                               ))
+
                              db)
 
         item-name-idx (group-by #(item-base-record-get-name %1) item-records)]
