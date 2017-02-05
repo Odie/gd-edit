@@ -12,7 +12,8 @@
              [self-update :as su]]
             [jansi-clj.core :refer :all]
 
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [gd-edit.utils :as utils]))
 
 (declare is-item? show-item set-item-handler find-record-by-name)
 
@@ -1289,7 +1290,7 @@
                    (first))
         ]
 
-    match))
+     match))
 
 (defn name-idx-highest-level-by-name
   [idx name level-cap]
@@ -1308,10 +1309,29 @@
 
   (or (get record "itemNameTag") (get record "description")))
 
+(defn swap-first-two
+  [vec]
+
+  (->> (apply conj [] (second vec) (first vec) (drop 2 vec))))
+
+(defn prefer-material-over-blueprint
+  [coll]
+
+  (if (and (> (count coll) 1)
+
+           ;; Do the items have the exact same name?
+           (= (item-base-record-get-name (first coll)) (item-base-record-get-name (second coll)))
+
+           ;; Is the preferred one a blueprint?
+           (utils/ci-match (:recordname (first coll)) "/items/crafting/blueprints/")
+           (utils/ci-match (:recordname (second coll)) "/items/crafting/materials/"))
+    (swap-first-two coll)
+    coll))
+
+
 (defn build-item-name-idx
   [db]
-  (let [
-        item-records (filter (fn [record]
+  (let [item-records (filter (fn [record]
                                (and
                                 (some #(string/starts-with? (:recordname record) %1)
                                       #{"records/items/"})
@@ -1321,7 +1341,10 @@
 
                              db)
 
-        item-name-idx (group-by #(item-base-record-get-name %1) item-records)]
+        item-name-idx (->> (group-by #(item-base-record-get-name %1) item-records)
+                           (map (fn [[k v]] [k (prefer-material-over-blueprint v)]))
+                           (into {})
+                           )]
     item-name-idx
     ))
 
