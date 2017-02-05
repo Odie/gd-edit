@@ -715,7 +715,8 @@
                          (str "  true  - " (str/join ", " true-aliases))
                          (str "  false - " (str/join ", " false-aliases))]))))))
 
-(defn coerce-to-type
+
+(defn coerce-str-to-type
   "Given an value as a string, return the value after coercing it to the correct type."
   [val-str type]
 
@@ -734,6 +735,36 @@
     (= java.lang.Boolean type)
     (parseBoolean val-str)))
 
+
+(defn coerce-int-to-type
+  [val-int type]
+
+  (cond
+    (= java.lang.String type)
+    (.toString val-int)
+
+    (= java.lang.Float type)
+    (float val-int)
+
+    (= java.lang.Integer type)
+    (Integer. val-int)
+
+    (= java.lang.Boolean type)
+    (if (= val-int 0)
+      false
+      true)))
+
+(defn coerce-to-type
+  [val type]
+  (cond
+    (string? val)
+    (coerce-str-to-type val type)
+
+    (int? val)
+    (coerce-int-to-type val type)
+
+    :else
+    (throw (Throwable. "Don't know how to coerce this kind of value"))))
 
 (defn- find-item-component-by-name
   [db component-name]
@@ -772,6 +803,20 @@
           ;; Otherwise, we just set
           :else
           (swap! globals/character update-in update-path (fn [oldval] newval)))))
+
+(defn set-character-field
+  [character path newval]
+
+  (let [;; What's the current value at that location?
+        value (get-in character path)
+
+        ;; What is the type of the value? We'll have to coerce the supplied new value
+        ;; to the same type first.
+        newval (try (coerce-to-type newval (type value))
+                    (catch Exception e :failed))]
+
+    ;; Set the new value into the character sheet
+    (update-in character path (fn [oldval] newval))))
 
 (defn set-handler
   [[input tokens]]
@@ -818,7 +863,18 @@
                 (and
                  (is-item? (get-in @globals/character (butlast (:actual-path walk-result))))
                  (= :relic-name (last (:actual-path walk-result))))
-                (set-item--relic-name @globals/db (:actual-path walk-result) newval)
+                (do
+                  (set-item--relic-name @globals/db (:actual-path walk-result) newval)
+                  (swap! globals/character
+                         set-character-field
+                         ;; Set the item's relic-completion-level field...
+                         (conj (->> (:actual-path walk-result)
+                                    (butlast)
+                                    (into []))
+                               :relic-completion-level)
+
+                         ;; to 4
+                         4))
 
 
                 ;; The user cannot create a collection directly from the commandline.
