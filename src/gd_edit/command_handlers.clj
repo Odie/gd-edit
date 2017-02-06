@@ -819,6 +819,15 @@
     ;; Set the new value into the character sheet
     (update-in character path (fn [oldval] newval))))
 
+(defn path-sibling
+  "Given a path as a vector, return a path to the 'sibling'."
+  [path sibling-field]
+
+  (conj (->> path
+             (butlast)
+             (into []))
+        sibling-field))
+
 (defn set-handler
   [[input tokens]]
 
@@ -869,10 +878,8 @@
                   (swap! globals/character
                          set-character-field
                          ;; Set the item's relic-completion-level field...
-                         (conj (->> (:actual-path walk-result)
-                                    (butlast)
-                                    (into []))
-                               :relic-completion-level)
+                         (path-sibling (:actual-path walk-result)
+                                       :relic-completion-level)
 
                          ;; to 4
                          4))
@@ -1352,6 +1359,19 @@
     item-name-idx
     ))
 
+(defn item-is-materia?
+  [item]
+
+  (and (string/starts-with? (:basename item) "records/items/materia/")
+       (= ((record-by-name (:basename item)) "Class") "ItemRelic")))
+
+(defn item-materia-fill-completion-level
+  [item]
+
+  (if (item-is-materia? item)
+    (assoc item :relic-completion-level 4)
+    item))
+
 (defn construct-item
   [target-name db level-cap]
 
@@ -1413,7 +1433,8 @@
       nil
 
       ;; Otherwise, create a hashmap that represents the item
-      (item-def->item results))))
+      (->> (item-def->item results)
+           (item-materia-fill-completion-level)))))
 
 (defn set-item-handler
   [[input [path target-name level-cap-str]]]
