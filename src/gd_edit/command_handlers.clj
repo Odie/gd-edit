@@ -15,7 +15,7 @@
             [clojure.string :as str]
             [gd-edit.utils :as utils]))
 
-(declare is-item? show-item set-item-handler find-record-by-name)
+(declare is-item? show-item set-item-handler record-by-name)
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -190,7 +190,7 @@
     ;; Try to fetch the full recordname of the match now
     (if (= 1 (count sorted-matches))
       (print-result-records
-       [(find-record-by-name @gd-edit.globals/db (first sorted-matches))])
+       [(record-by-name (first sorted-matches))])
 
 
       ;; If we have multiple record matches...
@@ -786,15 +786,6 @@
                   (u/case-insensitive-match (record "description") component-name))))
        (first)))
 
-;; FIXME Should use a recordname -> record index instead of a linear search
-(defn- find-record-by-name
-  [db recordname]
-
-  (->> db
-       (filter (fn [record]
-                 (= (:recordname record) recordname)))
-       (first)))
-
 (defn- set-item--relic-name
   [db update-path newval]
 
@@ -1007,10 +998,23 @@
     db
   ))
 
+(defn build-db-index
+  [db]
+
+  (->> db
+       (map (fn [record] [(:recordname record) record]))
+       (into {})))
+
 (defn load-db-in-background
   []
 
-  (intern 'gd-edit.globals 'db (future (load-db))))
+  (intern 'gd-edit.globals 'db (future (load-db)))
+  (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
+
+(defn record-by-name
+  [recordname]
+
+  (@globals/db-index recordname))
 
 (defn related-db-records
   [record db]

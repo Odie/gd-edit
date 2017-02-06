@@ -8,6 +8,8 @@
 (def notification-chan (async/chan))
 
 (def db (atom {}))
+(def db-index (atom {}))
+
 (def query-state
   (atom {:query-string nil
          :result nil
