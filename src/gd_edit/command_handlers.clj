@@ -2072,6 +2072,10 @@
 
   (swap! globals/settings dissoc :moddir)
   (u/write-settings @globals/settings)
+
+  ;; Reload the database
+  (load-db-in-background)
+
   (println "Ok!"))
 
 #_(help-handler [nil []])
