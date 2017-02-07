@@ -45,6 +45,12 @@
   [time]
   (/ (float time) 1000000000))
 
+(defn case-insensitive=
+  "Check if str2 can be found in str1"
+  [str1 str2]
+
+  (= (string/lower-case (str str1)) (string/lower-case (str str2))))
+
 (defn case-insensitive-match
   "Check if str2 can be found in str1"
   [str1 str2]
@@ -57,6 +63,11 @@
   (if (.startsWith s "~")
     (clojure.string/replace-first s "~" (System/getProperty "user.home"))
     s))
+
+(defn last-path-component
+  [path]
+
+  (last (clojure.string/split path #"[/\\]")))
 
 (defmacro doseq-indexed [index-sym [item-sym coll] & body]
   `(doseq [[~item-sym ~index-sym]
