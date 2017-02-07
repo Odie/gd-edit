@@ -15,6 +15,45 @@
             [clojure.string :as str]
             [gd-edit.utils :as utils]))
 
+(declare load-db-in-background)
+
+;;--------------------------------------------------------------------
+;; Stack functions
+;;
+;; Simple functions that makes dealing with stack less verbose
+(defn stack-push!
+  [stack-atom item]
+
+  (when-not (nil? item)
+    (swap! stack-atom conj item)))
+
+(defn stack-pop!
+  "Pop an item off of the stack"
+  [stack-atom]
+
+  (when-not (empty? @stack-atom)
+    (let [item (peek @stack-atom)]
+      (swap! stack-atom pop)
+      item)))
+
+(defn pop-safe
+  [coll]
+  (if-not (empty? coll)
+    (pop coll)
+    coll))
+
+(defn stack-replace-last!
+  [stack-atom item]
+
+  (when-not (nil? item)
+    (swap! stack-atom (fn [stack]
+                        (-> stack
+                            (pop-safe)
+                            (conj item))))))
+
+
+;;--------------------------------------------------------------------
+;; Query and pagination functions
 (declare is-item? show-item set-item-handler record-by-name)
 
 (defn paginate-next
@@ -201,11 +240,6 @@
         (println)
         (println (count sorted-matches) " matches")))))
 
-(defn- last-path-component
-  [path]
-
-  (last (clojure.string/split path #"[/\\]")))
-
 (declare load-character-file
          write-character-file
          character-selection-screen!
@@ -223,17 +257,31 @@
 
 (defn- is-cloud-save?
   [dir]
-  (some #(string/starts-with? dir %)
-        (dirs/get-steam-cloud-save-dirs)))
+  (not (nil? (some #(string/starts-with? dir %)
+                   (map #(.getParent (io/file %)) (dirs/get-steam-cloud-save-dirs))))))
+
+(defn- is-mod-save?
+  [dir]
+
+  (let [path-components (string/split (str dir) #"[/\\]")
+        length (count path-components)]
+    (if (and (u/case-insensitive= (path-components (- length 3)) "save")
+             (u/case-insensitive= (path-components (- length 2)) "user"))
+      true
+      false)))
 
 (defn- save-dir-type
   [dir]
-  (cond
-    (is-cloud-save? dir)
-    "cloud"
 
-    :else
-    "local"))
+  (let [cloud? (is-cloud-save? dir)
+        custom? (is-mod-save? dir)
+        builder (StringBuilder.)]
+    (if cloud?
+      (.append builder "cloud")
+      (.append builder "local"))
+    (when custom?
+      (.append builder " custom"))
+    (.toString builder)))
 
 (defn- character-selection-screen
   []
@@ -256,7 +304,7 @@
                       (conj accum
                             [(str display-idx)                    ; command string
                              (format "%s (%s save)"
-                                     (last-path-component (.getPath dir))
+                                     (u/last-path-component (.getPath dir))
                                      (save-dir-type dir))         ; menu display string
                              (fn []                               ; function to run when selected
                                (let [savepath (.getPath (io/file dir "player.gdc"))]
@@ -267,8 +315,40 @@
                   (map-indexed vector save-dirs))
      }))
 
-(defn character-selection-screen! [] (reset! gd-edit.globals/menu (character-selection-screen)))
-(defn character-manipulation-screen! [] (reset! gd-edit.globals/menu (character-manipulation-screen)))
+(defn- mod-selection-screen
+  []
+
+  (let [gamedir (dirs/get-game-dir)
+        moddir (io/file gamedir "mods")
+        mods (.listFiles moddir)]
+
+    (if (or (not (.exists moddir))
+            (empty? mods))
+      (println "No mods installed")
+
+      {:display-fn nil
+       :choice-map (reduce
+                    (fn [accum [idx moddir]]
+                      (let [display-idx (inc idx)]
+                        (conj accum
+                              [(str display-idx)
+                               (str (u/last-path-component (str moddir)))
+                               (fn []
+                                 ;; Update the global state and save the settings file
+                                 (swap! globals/settings assoc :moddir (str moddir))
+                                 (u/write-settings @globals/settings)
+
+                                 ;; Reload the database
+                                 (load-db-in-background)
+
+                                 (stack-pop! globals/menu-stack)
+                                 )])))
+                    []
+                    (map-indexed vector mods))})))
+
+
+(defn character-selection-screen! [] (stack-replace-last! gd-edit.globals/menu-stack (character-selection-screen)))
+(defn character-manipulation-screen! [] (stack-replace-last! gd-edit.globals/menu-stack (character-manipulation-screen)))
 
 (defn choose-character-handler
   [[input tokens]]
@@ -968,40 +1048,36 @@
 (defn load-db
   []
 
-  (let [[localization-load-time localization-table]
+  (let [mod-dir (:moddir @globals/settings)
+
+        ;; Try to load the localization table for the selected mod if available
+        mod-localization-table (if (and mod-dir (.exists (dirs/make-localization-filepath mod-dir)))
+                                 (arc-reader/load-localization-table (dirs/make-localization-filepath mod-dir))
+                                 nil)
+
+        ;; Load the game's original localization table
+        [localization-load-time localization-table]
         (u/timed
          (arc-reader/load-localization-table (dirs/get-localization-filepath)))
 
+        ;; Combine the mod and game localization table
+        combined-localization-table (merge localization-table mod-localization-table)
+
+
+        ;; Try to load the db of the select mod if available
+        mod-db (if (and mod-dir (.exists (dirs/make-mod-db-filepath mod-dir)))
+                 (arz-reader/load-game-db (dirs/make-mod-db-filepath mod-dir) combined-localization-table)
+                 nil)
+
+        ;; Load the game's original database
         [db-load-time db]
         (u/timed
          (arz-reader/load-game-db (dirs/get-db-filepath)
-                                  localization-table))
+                                  combined-localization-table))
 
-        ;; [templates-load-time templates]
-        ;; (u/timed
-        ;;  (arc-reader/load-arc-file (dirs/get-templates-filepath)))
-
-        ;; ;; Add the "templates" prefix to all templates recordnames
-        ;; templates (map (fn [item]
-        ;;                  (assoc item
-        ;;                         :recordname (str "templates/" (:recordname item))))
-        ;;                templates)
-        ]
-
-    ;; (println (count localization-table)
-    ;;          "localization strings loaded in"
-    ;;          (format "%.3f" (utils/nanotime->secs localization-load-time))
-    ;;          "seconds")
-
-    ;; (println (count db)
-    ;;          "records loaded in"
-    ;;          (format "%.3f" (utils/nanotime->secs db-load-time))
-    ;;          "seconds")
-
-    ;; (println)
-    ;; (println "Ready to rock!")
-    ;; (println)
-
+        ;; Merge the mod and game database
+        db (->> (merge (build-db-index db) (build-db-index mod-db))
+                (vals))]
     db
   ))
 
@@ -1678,23 +1754,14 @@
 
 
 (defn- character-classes-with-index
-  "Returns a set of db records that represents the classes the player has taken"
+    "Returns a set of db records that represents the classes the player has taken"
   [character]
 
-  (reduce (fn [result [idx skill]]
-            ;; Does this skill represent the player taking a specific class?
-            (if-not (nil? (re-find #"_classtraining_class\d+\.dbr" (:skill-name skill)))
-              ;; If so, add the skill to the result
-              (conj result [idx skill])
-
-              ;; Otherwise, do nothing to the result
-              result))
-          #{}
-
-          ;; Reduce over the skills collection with the index of the item
-          (map-indexed
-           (fn [idx item] [idx item])
-           (character :skills))))
+  (->> (map-indexed vector (character :skills))
+       (filter (fn [[idx skill]] (= "Skill_Mastery" (-> (:skill-name skill)
+                                                        (record-by-name)
+                                                        (get "Class")
+                                                         ))))))
 
 (defn- character-classes
   "Returns a set of db records that represents the classes the player has taken"
@@ -1702,67 +1769,103 @@
 
   (map second (character-classes-with-index character)))
 
+(defn- db-class-ui-records
+  []
+
+  (->> (record-by-name "records/ui/skills/skills_mastertable.dbr")
+       ;; Grab all the fields named "skillCtrlPaneXXX"
+       (filter (fn [[k v]] (string/starts-with? (str k) "skillCtrlPane")))
+
+       ;; sort by the number behind the "skillCtrlPane" string
+       (sort-by (fn [[k v]]
+                  (Integer/parseInt (subs k (count "skillCtrlPane")))))
+
+       ;; Follow the link to the classtable
+       (map (fn [[k v]] (record-by-name v)))
+       (filter #(not (empty? %)))))
+
+(defn- db-class-ui-record->class-name
+  [class-ui-record]
+  (clean-display-string (class-ui-record "skillTabTitle")))
+
+(defn- db-class-ui-record->class-record
+  [class-ui-record]
+
+  (-> (class-ui-record "tabSkillButtons")
+      (first)
+
+      ;; Look up the records and grab the "skillName" field
+      ;; This shoud give us the _classtraining db records
+      (record-by-name)
+      (get "skillName")
+      (record-by-name)))
+
 (defn- db-class-records
-  [db]
+  []
 
-  ;; FIXME!!! Reuse db query capability
-  ;; It'll be nice to be able to reuse db query syntax
-  ;; But each call takes about 500ms. =(
-  ;;(query/query-db db "class~skill_mastery")
+  (->> (db-class-ui-records)
+       (map db-class-ui-record->class-record)))
 
-  (reduce (fn [result record]
-            (if (and (= (record "Class") "Skill_Mastery")
-                     (re-find #"playerclass\d+/_classtraining_class\d+.dbr" (:recordname record)))
-              (conj result record)
-              result))
-          #{}
-          db))
+
+(defn- db-class-record-by-class-name
+  [classname]
+
+  (-> (db-class-ui-records)
+      (filter #())))
+
+(defn- clean-display-string
+  "Remove any strange formatting symbols from a display string"
+  [s]
+
+  (string/replace s #"\^." ""))
 
 (defn- print-character-classes
   [character db]
 
   ;; Find all character "skills" that represents a class mastery
-  (let [player-classes (character-classes-with-index character)
 
-        player-class-recordnames
-        (->> (character-classes character)
-             (map :skill-name) ;; get all class record names
-             (into #{}))
+  (let [;; Generate a mapping from class record recordname => class name
+        class-display-name-map (->> (db-class-ui-records)
+                                    (map (fn [ui-record]
+                                           [(:recordname (db-class-ui-record->class-record ui-record))
+                                            (db-class-ui-record->class-name ui-record)]))
+                                    (into {}))
 
-        ;; Locate all coresponding db records for said class masteries
-        player-class-records
-        (reduce (fn [result record]
-                  (if (contains? player-class-recordnames (:recordname record) )
-                    (assoc result (:recordname record) record)
-                    result))
-                {}
-                db)
-
-        player-classes (map (fn [item]
-                              {:idx (first item)
-                               :skill (second item)
-                               :skill-record (player-class-records (:skill-name (second item)))})
-                        player-classes)
-        ]
+        classes (->> (character-classes-with-index character)
+                     (map (fn [[idx record]]
+                            {:idx idx
+                             :skill record
+                             :skill-display-name (class-display-name-map (:skill-name record))
+                             })))]
 
     ;; Print the display names
     (println "classes:")
-    (if (empty? player-classes)
+    (if (empty? classes)
       (do
         (print-indent 1)
         (println (yellow "None")))
 
-      (doseq [klass player-classes]
+      (doseq [klass classes]
         (print-indent 1)
-        (println (yellow (get-in klass [:skill-record "skillDisplayName"]))
+        (println (yellow (:skill-display-name klass)))
                  (format "(skills/%d)" (:idx klass)))
-                 ))))
+                 )))
 
 (defn class-handler
   "Show the class of the loaded character"
   [[input tokens]]
 
   (print-character-classes @globals/character @globals/db))
+
+(defn class-list-handler
+  "Show the class of the loaded character"
+  [[input tokens]]
+
+  (println "Known classes:")
+  (doseq [classname (->> (db-class-ui-records)
+                         (map db-class-ui-record->class-name))]
+    (print-indent 1)
+    (println classname)))
 
 (defn class-remove-handler
   "Remove a class to the currently loaded character by partial name"
@@ -1771,22 +1874,32 @@
   (if (empty? tokens)
     (println "Please provide the partial name of the class to remove from the character")
     ;; Get the db record that represents the class mastery
-    (let [klass (->> (db-class-records @globals/db)
-                     (filter #(u/ci-match (%1 "skillDisplayName") (first tokens)))
-                     (first))]
+    (let [class-to-remove (first tokens)
 
-      (if (empty? klass)
-        (println (format "\"%s\" doesn't match any of the known classes" (first tokens)))
 
-        (do
+          matched-class (->> (db-class-ui-records)
+                             (map db-class-ui-record->class-name)
+                             (filter #(u/ci-match % class-to-remove))
+                             (first))]
+
+      (if (empty? matched-class)
+        (println (format "\"%s\" doesn't match any of the known classes" class-to-remove))
+
+        (let [class-display-name-map (->> (db-class-ui-records)
+                                          (map (fn [ui-record]
+                                                 [(db-class-ui-record->class-name ui-record)
+                                                  (:recordname (db-class-ui-record->class-record ui-record))]))
+                                          (into {}))
+
+              skill-name-to-remove (class-display-name-map matched-class)]
+
           ;; Remove all skills in the character that matches the db record name
           (swap! globals/character update :skills
                  (fn [skill-seq] (into (empty skill-seq)
-                                       (remove (fn [skill] (= (:recordname klass) (:skill-name skill))) skill-seq)
-                                       )))
+                                       (remove (fn [skill] (= skill-name-to-remove (:skill-name skill))) skill-seq))))
 
           ;; Inform the user what happened
-          (println "Removing class:" (klass "skillDisplayName"))
+          (println "Removing class:" matched-class)
           (print-character-classes @globals/character @globals/db))))))
 
 (defn class-add-handler
@@ -1796,7 +1909,7 @@
   (if (empty? tokens)
     (println "Please provide the partial name of the class to remove from the character")
     ;; Get the db record that represents the class mastery
-    (let [klass (->> (db-class-records @globals/db)
+    (let [klass (->> (db-class-records)
                      (filter #(u/ci-match (%1 "skillDisplayName") (first tokens)))
                      (first))]
 
@@ -1939,6 +2052,27 @@
   (let [result (su/try-self-update)]
     (when (= result :up-to-date)
       (println "Already running latest version"))))
+
+(defn mod-handler
+  [[input tokens]]
+
+  (println "currently selected mod:")
+  (print-indent 1)
+  (if (:moddir @globals/settings)
+    (println (u/last-path-component (:moddir @globals/settings)))
+    (println "none")))
+
+(defn mod-pick-handler
+  [[input tokens]]
+
+  (stack-push! globals/menu-stack (mod-selection-screen)))
+
+(defn mod-clear-handler
+  [[input tokens]]
+
+  (swap! globals/settings dissoc :moddir)
+  (u/write-settings @globals/settings)
+  (println "Ok!"))
 
 #_(help-handler [nil []])
 

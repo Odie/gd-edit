@@ -1,8 +1,7 @@
 (ns gd-edit.globals
   (:require [clojure.core.async :as async]))
 
-(def menu (atom {:display-fn nil
-                 :choice-map nil}))
+(def menu-stack (atom []))
 
 ;; Notification channel for the repl
 (def notification-chan (async/chan))

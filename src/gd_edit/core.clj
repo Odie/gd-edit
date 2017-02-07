@@ -60,12 +60,16 @@
    ["load"]  (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
    ["class"] (fn [input] (handlers/class-handler input))
+   ["class" "list"] (fn [input] (handlers/class-list-handler input))
    ["class" "add"] (fn [input] (handlers/class-add-handler input))
    ["class" "remove"] (fn [input] (handlers/class-remove-handler input))
    ["gamedir"] (fn [input] (handlers/gamedir-handler input))
    ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
    ["savedir"] (fn [input] (handlers/savedir-handler input))
    ["savedir" "clear"] (fn [input] (handlers/savedir-clear-handler input))
+   ["mod"] (fn [input] (handlers/mod-handler input))
+   ["mod" "pick"] (fn [input] (handlers/mod-pick-handler input))
+   ["mod" "clear"] (fn [input] (handlers/mod-clear-handler input))
    ["update"] (fn [input] (handlers/update-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
@@ -145,7 +149,7 @@
   ;; This means we can put command handlers like "q" and "q show"
   ;; directly in the command map and figure out which one should be
   ;; called
-  (let [menu-cmd (find-menu-command (first tokens) @globals/menu)
+  (let [menu-cmd (find-menu-command (first tokens) (last @globals/menu-stack))
         menu-handler (if-not (nil? menu-cmd)
                        (nth menu-cmd 2)
                        nil)
@@ -187,7 +191,7 @@
   "Runs one repl iteration. Useful when the program is run from the repl"
   []
 
-  (repl-print-menu @globals/menu)
+  (repl-print-menu (last @globals/menu-stack))
   (repl-print-notification globals/notification-chan)
   (repl-eval (repl-read) command-map)
   (println))
@@ -362,7 +366,7 @@
           (reset! gd-edit.globals/character
                   (gd-edit.gdc-reader/load-character-file
                    (-> (dirs/get-save-dir-search-list)
-                        (first)
+                        (second)
                         (io/file "_Odie/player.gdc")
                         (.getPath)
                         )))

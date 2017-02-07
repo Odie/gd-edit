@@ -76,9 +76,17 @@
     (clean-list [(get @globals/settings :save-dir) (get-local-save-dir)])
     (clean-list (concat [(get @globals/settings :save-dir) (get-local-save-dir)] (get-steam-cloud-save-dirs)))))
 
+(defn save-dir->mod-save-dir
+  [save-dir]
+  (-> (io/file save-dir)
+      (.getParentFile)
+      (io/file "user")
+      (.getAbsolutePath)))
+
 (defn get-all-save-file-dirs
   []
-  (->> (get-save-dir-search-list)
+  (->> (map save-dir->mod-save-dir (get-save-dir-search-list))
+       (concat (get-save-dir-search-list))
        (map io/file)
        (map #(.listFiles %1))
        (apply concat)
@@ -95,10 +103,15 @@
 
   (io/file game-dir "database" "templates.arc"))
 
-(defn- make-localization-filepath
+(defn make-localization-filepath
   [game-dir]
 
   (io/file game-dir "resources" "text_en.arc"))
+
+(defn make-mod-db-filepath
+  [mod-dir]
+  (let [mod-name (u/last-path-component mod-dir)]
+    (io/file mod-dir "database" (str mod-name ".arz"))))
 
 (defn get-db-filepath
   "Checks through all game dirs and retrieves the first db file"
