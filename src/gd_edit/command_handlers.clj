@@ -15,7 +15,7 @@
             [clojure.string :as str]
             [gd-edit.utils :as utils]))
 
-(declare load-db-in-background)
+(declare load-db-in-background build-db-index clean-display-string)
 
 ;;--------------------------------------------------------------------
 ;; Stack functions
@@ -1697,6 +1697,7 @@
    ["load"  "Load from a save file"]
    ["write" "Writes out the character that is currently loaded"]
    ["class" "Displays the classes/masteries of the loaded character"]
+   ["class list" "Display classes/masteries known ot the editor"]
    ["class add" "Add a class/mastery by name"]
    ["class remove" "Remove a class/mastery by name"]
    ["savedir" "Sets the save game directory to a path"
@@ -1707,6 +1708,9 @@
     (string/join "\n"
                  ["Syntax: gamedir <full path to save game installation directory>"])]
    ["gamedir clear" "Removes the previously set game installation directory"]
+   ["mod" "Displays the mod currently selected"]
+   ["mod pick" "Picks an installed mod to activate"]
+   ["mod clear" "Unselect the currently selected mod"]
    ["update" "Update to the latest version of gd-edit"]
    ])
 
