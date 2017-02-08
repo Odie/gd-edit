@@ -70,6 +70,7 @@
    ["mod"] (fn [input] (handlers/mod-handler input))
    ["mod" "pick"] (fn [input] (handlers/mod-pick-handler input))
    ["mod" "clear"] (fn [input] (handlers/mod-clear-handler input))
+   ["level"] (fn [input] (handlers/level-handler input))
    ["update"] (fn [input] (handlers/update-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
