@@ -9,7 +9,8 @@
              [gdc-reader :as gdc]
              [globals :as globals]
              [utils :as u]
-             [self-update :as su]]
+             [self-update :as su]
+             [equation-eval :as eq]]
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]
@@ -1711,6 +1712,7 @@
    ["mod" "Displays the mod currently selected"]
    ["mod pick" "Picks an installed mod to activate"]
    ["mod clear" "Unselect the currently selected mod"]
+   ["level" "Set the level of the loaded character to a new value"]
    ["update" "Update to the latest version of gd-edit"]
    ])
 
@@ -2081,6 +2083,96 @@
   (load-db-in-background)
 
   (println "Ok!"))
+
+
+(defn attribute-points-total-at-level
+  "Return the total number of skill points a character should have at the give level."
+  [level]
+  {:pre [(>= level 1)]}
+
+  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+        level (dec level)]
+
+    (* level (data-record "characterModifierPoints"))))
+
+(defn skill-points-total-at-level
+  "Return the total number of skill points a character should have at the give level."
+  [level]
+  {:pre [(>= level 1)]}
+
+  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+        level (dec level)]
+
+    (apply + (take level (data-record "skillModifierPoints")))))
+
+(defn xp-total-at-level
+  "Returns the number of exp points a character should have at the given level."
+  [level]
+  {:pre [(>= level 1)]}
+
+  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+        ;; level (dec level)
+        ]
+
+    (if (= level 1)
+      0
+      (int (eq/evaluate (data-record "experienceLevelEquation") {"playerLevel" (dec level)})))))
+
+
+(defn fields-for--modify-character-level
+  [character new-level]
+
+  {:character-level new-level
+   :level-in-bio new-level
+   :max-level new-level
+   :experience (xp-total-at-level new-level)
+   :skill-points
+   (let [points-to-award
+         (- (skill-points-total-at-level new-level)
+            (skill-points-total-at-level (character :character-level)))]
+
+     (max 0 (+ (:skill-points character) points-to-award)))
+   :modifier-points
+   (let [points-to-award
+         (- (attribute-points-total-at-level new-level)
+            (attribute-points-total-at-level (character :character-level)))]
+     (max 0 (+ (:modifier-points character) points-to-award)))})
+
+(defn modify-character-level
+  [character new-level]
+
+  (merge character (fields-for--modify-character-level character new-level)))
+
+(defn level-handler
+  [[input tokens]]
+
+  (cond
+    (empty? tokens)
+    (println
+     "usage: level <new-level>")
+
+    :else
+    (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+          level (coerce-str-to-type (first tokens) java.lang.Integer)
+          level-limit (data-record "maxPlayerLevel")
+          ]
+      (cond
+        (< level 1)
+        (println "Please enter a level value that is 1 or greater")
+
+        (> level level-limit)
+        (println "Sorry, max allowed level is" level-limit)
+
+        :else
+        (do
+          (println "Changing level to" level)
+          (newline)
+
+          (println "Updating the following fields:")
+          (print-map (fields-for--modify-character-level @globals/character level))
+
+          (swap! globals/character modify-character-level level))))))
+
 
 #_(help-handler [nil []])
 
