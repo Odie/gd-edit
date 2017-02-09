@@ -2215,14 +2215,12 @@
              (skill-points-total-at-level (character :character-level)))]
 
       (max 0 (+ (:skill-points character) points-to-award)))
-    :modifier-points
+    :attribute-points
     (let [points-to-award
           (- (attribute-points-total-at-level new-level)
              (attribute-points-total-at-level (character :character-level)))]
-      (max 0 (+ (:modifier-points character) points-to-award)))}
-   character
-   )
-  )
+      (max 0 (+ (:attribute-points character) points-to-award)))}
+   character))
 
 (defn modify-character-level
   [character new-level]
@@ -2300,7 +2298,7 @@
              :cunning base-attr-points
              :spirit base-attr-points
 
-             :modifier-points
+             :attribute-points
              (let [points-to-award
                    (+
                     (/ (- (:physique character) base-attr-points)
@@ -2309,7 +2307,7 @@
                        (data-record "dexterityIncrement"))
                     (/ (- (:spirit character) base-attr-points)
                        (data-record "intelligenceIncrement")))]
-               (-> (+ (:modifier-points character) points-to-award)
+               (-> (+ (:attribute-points character) points-to-award)
                    (max 0)))}
             character))))
 
@@ -2355,7 +2353,7 @@
 (defn respec-handler
   [[input tokens]]
 
-  (let [mode (or (string/lower-case (first tokens)) "all")
+  (let [mode (string/lower-case (or (first tokens) "all"))
         valid-modes #{"all" "attributes" "devotions" "skills"}]
 
     ;; Sanity check on the respec mode
@@ -2384,7 +2382,9 @@
 
               (= mode "devotions")
               (respec-character-devotions @globals/character)
-              )
+
+              :else
+              (throw (Throwable. (str "Unknown respec mode: " mode))))
 
             differences (clojure.data/diff @globals/character modified-character)]
 

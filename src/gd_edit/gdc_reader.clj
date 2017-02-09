@@ -56,7 +56,7 @@
    :version                :int32
    :level-in-bio           :int32
    :experience             :int32
-   :modifier-points        :int32
+   :attribute-points       :int32
    :skill-points           :int32
    :devotion-points        :int32
    :total-devotion-points-unlocked :int32
