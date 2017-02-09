@@ -2355,35 +2355,45 @@
 (defn respec-handler
   [[input tokens]]
 
-  (let [mode (or (first tokens) "all")
+  (let [mode (or (string/lower-case (first tokens)) "all")
+        valid-modes #{"all" "attributes" "devotions" "skills"}]
 
-        modified-character
-        (cond
-          (= mode "all")
-          (do
-            (->> @globals/character
-                 (respec-character-devotions)
-                 (respec-character-skills)
-                 (respec-character-attributes)))
+    ;; Sanity check on the respec mode
+    (if-not (contains? valid-modes mode)
+      (do
+        (println "Please choose from one of the valid respec types:")
+        (doseq [r-type (sort valid-modes)]
+          (print-indent 1)
+          (println r-type)))
 
-          (= mode "attributes")
-          (respec-character-attributes @globals/character)
+      ;; Try to modify the character according to the chosen mocd
+      (let [modified-character
+            (cond
+              (= mode "all")
+              (do
+                (->> @globals/character
+                     (respec-character-devotions)
+                     (respec-character-skills)
+                     (respec-character-attributes)))
 
-          (= mode "skills")
-          (respec-character-skills @globals/character)
+              (= mode "attributes")
+              (respec-character-attributes @globals/character)
 
-          (= mode "devotions")
-          (respec-character-devotions @globals/character)
-          )
+              (= mode "skills")
+              (respec-character-skills @globals/character)
 
-        differences (clojure.data/diff @globals/character modified-character)]
+              (= mode "devotions")
+              (respec-character-devotions @globals/character)
+              )
 
-    ;; Print how we're going to update the character
-    (println "Updating the following fields:")
-    (print-map-difference differences)
+            differences (clojure.data/diff @globals/character modified-character)]
 
-    ;; Actually update the character
-    (swap! globals/character (fn [oldval] modified-character))))
+        ;; Print how we're going to update the character
+        (println "Updating the following fields:")
+        (print-map-difference differences)
+
+        ;; Actually update the character
+        (swap! globals/character (fn [oldval] modified-character))))))
 
 #_(help-handler [nil []])
 
