@@ -1,6 +1,7 @@
 (ns gd-edit.command-handlers
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
+            [clojure.data]
             [gd-edit
              [arc-reader :as arc-reader]
              [arz-reader :as arz-reader]
@@ -440,7 +441,7 @@
          ;; Print the value
          (cond
            (coll? value)
-           (format "collection of %d items changed" (->> value
+           (format "collection with %d items changed" (->> value
                                                          (filter some?)
                                                          (count)))
 
