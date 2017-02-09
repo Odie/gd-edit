@@ -820,42 +820,70 @@
     (= java.lang.Boolean type)
     (parseBoolean val-str)))
 
-
 (defn coerce-int-to-type
-  [val-int type]
+  [val-int to-type]
 
   (cond
-    (= java.lang.String type)
+    (= java.lang.String to-type)
     (.toString val-int)
 
-    (= java.lang.Float type)
+    (= java.lang.Float to-type)
     (float val-int)
 
-    (= java.lang.Double type)
+    (= java.lang.Double to-type)
     (double val-int)
 
-    (= java.lang.Integer type)
+    (= java.lang.Integer to-type)
     (Integer. val-int)
 
-    (= java.lang.Long type)
+    (= java.lang.Long to-type)
     (Long. val-int)
 
-    (= java.lang.Boolean type)
+    (= java.lang.Boolean to-type)
     (if (= val-int 0)
       false
       true)))
 
-(defn coerce-to-type
-  [val type]
-  (cond
-    (string? val)
-    (coerce-str-to-type val type)
+(defn coerce-number-to-type
+  [val-number to-type]
 
-    (int? val)
-    (coerce-int-to-type val type)
+  (cond
+    (= java.lang.String to-type)
+    (.toString val-number)
+
+    (= java.lang.Float to-type)
+    (float val-number)
+
+    (= java.lang.Double to-type)
+    (double val-number)
+
+    (= java.lang.Integer to-type)
+    (int val-number)
+
+    (= java.lang.Long to-type)
+    (long val-number)
 
     :else
-    (throw (Throwable. "Don't know how to coerce this kind of value"))))
+    (throw (Throwable. (format "Don't know how to coerce %s => %s"
+                               (str (type val))
+                               (str to-type))))))
+
+(defn coerce-to-type
+  [val to-type]
+  (cond
+    (string? val)
+    (coerce-str-to-type val to-type)
+
+    (int? val)
+    (coerce-int-to-type val to-type)
+
+    (number? val)
+    (coerce-number-to-type val to-type)
+
+    :else
+    (throw (Throwable. (format "Don't know how to coerce %s => %s"
+                               (str (type val))
+                               (str to-type))))))
 
 (defn- find-item-component-by-name
   [db component-name]
@@ -1713,6 +1741,16 @@
    ["mod pick" "Picks an installed mod to activate"]
    ["mod clear" "Unselect the currently selected mod"]
    ["level" "Set the level of the loaded character to a new value"]
+   ["respec" "Respecs the loaded character"
+    (string/join "\n"
+                 ["Syntax: respec <respec-type>"
+                  ""
+                  "Valid respec types:"
+                  " attributes - refund all attribute points spent"
+                  " skills - remove all masteries & skills and refund skill points spent"
+                  " devotions - remove all devotions and refund devotion points spent"
+                  " all - combination of all of the above"
+                  ])]
    ["update" "Update to the latest version of gd-edit"]
    ])
 
@@ -2173,6 +2211,171 @@
 
           (swap! globals/character modify-character-level level))))))
 
+;;------------------------------------------------------------------------------
+;; Skills manipulation functions
+;;
+
+(defn skill-is-devotion?
+  [skill]
+
+  (string/starts-with? (:skill-name skill) "records/skills/devotion"))
+
+(defn skills-vec->skills-by-category
+  [skills-list]
+
+  {:default (take 5 skills-list)
+   :skills (->> (drop 5 skills-list)
+                (filter #(not (skill-is-devotion? %))))
+
+   :devotions (->> (drop 5 skills-list)
+                   (filter skill-is-devotion? ))})
+
+(defn skills-by-category->skills-vec
+  [skills-by-category]
+
+  (->> (concat (:default skills-by-category)
+               (:skills skills-by-category)
+               (:devotions skills-by-category))
+       (into [])))
+
+(defn coerce-map-numbers-using-reference
+  "Coerce all map values that are numbers to the same type as the field in the reference map."
+  [m reference]
+
+  (->> m
+       (map (fn [[k v]]
+              (if (number? v)
+                [k (coerce-to-type v (type (reference k)))]
+                [k v])))
+       (into (empty m))))
+
+(defn respec-character-attributes
+  [character]
+
+  (let [base-attr-points 50
+        data-record (record-by-name "records/creatures/pc/playerlevels.dbr")]
+
+    (merge character
+           (coerce-map-numbers-using-reference
+            {:physique base-attr-points
+             :cunning base-attr-points
+             :spirit base-attr-points
+
+             :modifier-points
+             (let [points-to-award
+                   (+
+                    (/ (- (:physique character) base-attr-points)
+                       (data-record "strengthIncrement"))
+                    (/ (- (:cunning character) base-attr-points)
+                       (data-record "dexterityIncrement"))
+                    (/ (- (:spirit character) base-attr-points)
+                       (data-record "intelligenceIncrement")))]
+               (-> (+ (:modifier-points character) points-to-award)
+                   (max 0)))}
+            character))))
+
+
+(defn respec-character-skills
+  [character]
+
+  (let [skills-by-category (skills-vec->skills-by-category (:skills character))
+        skills (:skills skills-by-category)
+
+        ;; Compute how many skill points were used
+        points-to-award (reduce #(+ % (:level %2))
+                                0
+                                skills)]
+
+    (merge character
+           (coerce-map-numbers-using-reference
+            {;; Refund the points used back to the character
+             :skill-points (+ (:skill-points character) points-to-award)
+
+             ;; Remove all skills from the skills vector
+             :skills (skills-by-category->skills-vec
+                      (dissoc skills-by-category :skills))}
+            character))))
+
+(defn respec-character-devotions
+  [character]
+
+  ;; Grab a list of devtions taken
+  (let [skills-by-category (skills-vec->skills-by-category (:skills character))
+        devotions (:devotions skills-by-category)]
+
+    (merge character
+           (coerce-map-numbers-using-reference
+            {;; Refund 1 devotion point per devotions taken
+             :devotion-points (+ (:devotion-points character) (count devotions))
+
+             ;; Remove all devotions from the skills vector
+             :skills (skills-by-category->skills-vec
+                      (dissoc skills-by-category :devotions))}
+            character))))
+
+(defn print-map-difference
+  [[only-in-a only-in-b _]]
+
+  (if (empty? only-in-a)
+    (println "Nothing has been changed")
+
+    (let [max-key-length (->> (keys only-in-a)
+                              (map (comp count keyword->str))
+                              (apply max))]
+
+      (doseq [[key value] (sort only-in-a)]
+        (println
+
+         ;; Print the key name
+         (format (format "%%%ds :" (+ max-key-length 2))
+                 (keyword->str key))
+
+         ;; Print the value
+         (cond
+           (coll? value)
+           (format "collection of %d items changed" (->> value
+                                                         (filter some?)
+                                                         (count)))
+
+           :else
+           (do
+             ;; (println (format "%s => %s" (yellow (type value)) (yellow (type (only-in-b key)))))
+             (format "%s => %s" (yellow value) (yellow (only-in-b key)))))))
+
+      (newline)
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count only-in-a)) "fields changed"))))
+
+(defn respec-handler
+  [[input tokens]]
+
+  (let [mode (or (first tokens) "all")
+
+        modified-character
+        (cond
+          (= mode "all")
+          (do
+            (->> @globals/character
+                 (respec-character-devotions)
+                 (respec-character-skills)
+                 (respec-character-attributes)))
+
+          (= mode "attributes")
+          (respec-character-attributes @globals/character)
+
+          (= mode "skills")
+          (respec-character-skills @globals/character)
+
+          (= mode "devotions")
+          (respec-character-devotions @globals/character)
+          )
+
+        differences (clojure.data/diff @globals/character modified-character)]
+
+    ;; Print how we're going to update the character
+    (print-map-difference differences)
+
+    ;; Actually update the character
+    (swap! globals/character (fn [oldval] modified-character))))
 
 #_(help-handler [nil []])
 
@@ -2209,3 +2412,6 @@
 #_(construct-item "Mantle of the Weeping Eye" @globals/db 100)
 
 #_(load-db)
+
+#_(skills-vec->skills-by-category (:skills @globals/character))
+#_(respec-handler [nil ["all"]])
