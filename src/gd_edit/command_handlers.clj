@@ -420,6 +420,38 @@
       (newline)
       (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
+(defn print-map-difference
+  [[only-in-a only-in-b _]]
+
+  (if (empty? only-in-a)
+    (println "Nothing has been changed")
+
+    (let [max-key-length (->> (keys only-in-a)
+                              (map (comp count keyword->str))
+                              (apply max))]
+
+      (doseq [[key value] (sort only-in-a)]
+        (println
+
+         ;; Print the key name
+         (format (format "%%%ds :" (+ max-key-length 2))
+                 (keyword->str key))
+
+         ;; Print the value
+         (cond
+           (coll? value)
+           (format "collection of %d items changed" (->> value
+                                                         (filter some?)
+                                                         (count)))
+
+           :else
+           (do
+             ;; (println (format "%s => %s" (yellow (type value)) (yellow (type (only-in-b key)))))
+             (format "%s => %s" (yellow value) (yellow (only-in-b key)))))))
+
+      (newline)
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count only-in-a)) "fields changed"))))
+
 (defn str-without-dash
   [str]
   (string/replace str "-" ""))
@@ -884,6 +916,17 @@
     (throw (Throwable. (format "Don't know how to coerce %s => %s"
                                (str (type val))
                                (str to-type))))))
+
+(defn coerce-map-numbers-using-reference
+  "Coerce all map values that are numbers to the same type as the field in the reference map."
+  [m reference]
+
+  (->> m
+       (map (fn [[k v]]
+              (if (number? v)
+                [k (coerce-to-type v (type (reference k)))]
+                [k v])))
+       (into (empty m))))
 
 (defn- find-item-component-by-name
   [db component-name]
@@ -2160,21 +2203,25 @@
 (defn fields-for--modify-character-level
   [character new-level]
 
-  {:character-level new-level
-   :level-in-bio new-level
-   :max-level new-level
-   :experience (xp-total-at-level new-level)
-   :skill-points
-   (let [points-to-award
-         (- (skill-points-total-at-level new-level)
-            (skill-points-total-at-level (character :character-level)))]
+  (coerce-map-numbers-using-reference
+   {:character-level new-level
+    :level-in-bio new-level
+    :max-level new-level
+    :experience (xp-total-at-level new-level)
+    :skill-points
+    (let [points-to-award
+          (- (skill-points-total-at-level new-level)
+             (skill-points-total-at-level (character :character-level)))]
 
-     (max 0 (+ (:skill-points character) points-to-award)))
-   :modifier-points
-   (let [points-to-award
-         (- (attribute-points-total-at-level new-level)
-            (attribute-points-total-at-level (character :character-level)))]
-     (max 0 (+ (:modifier-points character) points-to-award)))})
+      (max 0 (+ (:skill-points character) points-to-award)))
+    :modifier-points
+    (let [points-to-award
+          (- (attribute-points-total-at-level new-level)
+             (attribute-points-total-at-level (character :character-level)))]
+      (max 0 (+ (:modifier-points character) points-to-award)))}
+   character
+   )
+  )
 
 (defn modify-character-level
   [character new-level]
@@ -2202,14 +2249,16 @@
         (println "Sorry, max allowed level is" level-limit)
 
         :else
-        (do
+        (let [modified-character (merge @globals/character
+                                        (fields-for--modify-character-level @globals/character level))]
           (println "Changing level to" level)
           (newline)
 
           (println "Updating the following fields:")
-          (print-map (fields-for--modify-character-level @globals/character level))
+          (print-map-difference (clojure.data/diff @globals/character modified-character))
 
-          (swap! globals/character modify-character-level level))))))
+          (swap! globals/character modify-character-level level)))
+      )))
 
 ;;------------------------------------------------------------------------------
 ;; Skills manipulation functions
@@ -2237,17 +2286,6 @@
                (:skills skills-by-category)
                (:devotions skills-by-category))
        (into [])))
-
-(defn coerce-map-numbers-using-reference
-  "Coerce all map values that are numbers to the same type as the field in the reference map."
-  [m reference]
-
-  (->> m
-       (map (fn [[k v]]
-              (if (number? v)
-                [k (coerce-to-type v (type (reference k)))]
-                [k v])))
-       (into (empty m))))
 
 (defn respec-character-attributes
   [character]
@@ -2313,38 +2351,6 @@
                       (dissoc skills-by-category :devotions))}
             character))))
 
-(defn print-map-difference
-  [[only-in-a only-in-b _]]
-
-  (if (empty? only-in-a)
-    (println "Nothing has been changed")
-
-    (let [max-key-length (->> (keys only-in-a)
-                              (map (comp count keyword->str))
-                              (apply max))]
-
-      (doseq [[key value] (sort only-in-a)]
-        (println
-
-         ;; Print the key name
-         (format (format "%%%ds :" (+ max-key-length 2))
-                 (keyword->str key))
-
-         ;; Print the value
-         (cond
-           (coll? value)
-           (format "collection of %d items changed" (->> value
-                                                         (filter some?)
-                                                         (count)))
-
-           :else
-           (do
-             ;; (println (format "%s => %s" (yellow (type value)) (yellow (type (only-in-b key)))))
-             (format "%s => %s" (yellow value) (yellow (only-in-b key)))))))
-
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count only-in-a)) "fields changed"))))
-
 (defn respec-handler
   [[input tokens]]
 
@@ -2372,6 +2378,7 @@
         differences (clojure.data/diff @globals/character modified-character)]
 
     ;; Print how we're going to update the character
+    (println "Updating the following fields:")
     (print-map-difference differences)
 
     ;; Actually update the character
