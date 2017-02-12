@@ -8,7 +8,8 @@
             [clojure.edn :as edn])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
-           java.nio.file.Paths))
+           java.nio.file.Paths
+           java.io.File))
 
 (defn mmap
   [filepath]
@@ -63,6 +64,16 @@
   (if (.startsWith s "~")
     (clojure.string/replace-first s "~" (System/getProperty "user.home"))
     s))
+
+(defn filepath->components
+  [path]
+
+  (clojure.string/split path #"[/\\]"))
+
+(defn components->filepath
+  [components]
+
+  (clojure.string/join File/separator components))
 
 (defn last-path-component
   [path]

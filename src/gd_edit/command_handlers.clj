@@ -244,6 +244,7 @@
 
 (declare load-character-file
          write-character-file
+         write-loaded-character-file!
          character-selection-screen!
          character-manipulation-screen!)
 
@@ -254,8 +255,8 @@
    (fn []
      (println "Character: " (:character-name @globals/character)))
 
-   :choice-map [["r" "reload" (fn [] (load-character-file @globals/last-character-load-path))]
-                ["w" "write" (fn[] (write-character-file @globals/character))]]})
+   :choice-map [["r" "reload" (fn [] (load-character-file (@globals/character :meta-character-loaded-from)))]
+                ["w" "write" (fn[] (write-loaded-character-file!))]]})
 
 (defn- is-cloud-save?
   [dir]
@@ -285,6 +286,8 @@
       (.append builder " custom"))
     (.toString builder)))
 
+(declare print-indent)
+
 (defn- character-selection-screen
   []
 
@@ -310,6 +313,9 @@
                                      (save-dir-type dir))         ; menu display string
                              (fn []                               ; function to run when selected
                                (let [savepath (.getPath (io/file dir "player.gdc"))]
+                                 (println "Loading from:")
+                                 (print-indent 1)
+                                 (println (yellow savepath))
                                  (load-character-file savepath)
                                  (character-manipulation-screen!))
                                )])))
@@ -1063,51 +1069,134 @@
           (throw (Throwable. "Unhandled case")))
         ))))
 
+(defn- get-loadpath
+  [character]
+  (:meta-character-loaded-from character))
+
 (defn- get-savepath
   [character]
-  (io/file (:meta-character-loaded-from character)))
+
+  (let [loadpath (get-loadpath character)
+        loadpath-components (u/filepath->components (str loadpath))]
+
+    (u/components->filepath
+     (assoc loadpath-components
+            (- (count loadpath-components) 2)
+            (str "_" (:character-name character))))))
 
 (defn- get-new-backup-path
-  [character]
+  [filepath]
 
-  ;; Grab all sibling files of the character save path
-  (let [sibling-files (-> (get-savepath character)
+  ;; Grab all sibling files of the given file
+  (let [sibling-files (-> (io/file filepath)
                           (.getParentFile)
                           (.listFiles))
 
+        ;; What's the filename?
+        filename (u/last-path-component filepath)
+
+        ;; Filter for all items that starts with the filename followed by .bakXXX
         save-backups (->> sibling-files
                           (filter #(.isFile %1))
-                          (filter #(not (nil? (re-matches #"player\.gdc\..*$" (.getName %1))))))]
+                          (filter #(string/starts-with? (.getName %1) filename))
+                          (filter #(re-matches #"\.bak.*$" (subs (.getName %) (count filename)))))]
 
-    (format "%s.bak%d" (get-savepath character) (inc (count save-backups)))))
+    (format "%s.bak%d" filepath (inc (count save-backups)))))
+
+(defn- backup-file
+  "Renames the given file to a .bakXXX file if it exists."
+  [filepath]
+
+  (let [f (io/file filepath)
+        backup-path (get-new-backup-path filepath)]
+
+    (if (.exists f)
+      [(.renameTo f (io/file backup-path)) backup-path]
+      [:nothing-to-backup backup-path])))
 
 (defn- load-character-file
   [savepath]
 
   (reset! globals/character
           (gdc/load-character-file savepath))
-  (reset! globals/last-character-load-path
-          savepath))
+  (reset! globals/last-loaded-character @globals/character))
+
+(defn- write-character-file-after-backup
+  [character]
+
+  (let [savepath (get-savepath character)
+
+        ;; save the file
+        [backup-status backup-path] (backup-file savepath)]
+    (cond
+      (= backup-status true)
+      (do
+        (println "Save file backed up to:")
+        (print-indent 1)
+        (println (yellow backup-path)))
+
+      (= backup-status false)
+      (do
+        (println "Cannot backup file up to:")
+        (print-indent 1)
+        (println (yellow backup-path))))
+
+    (println "Saving file:" )
+    (print-indent 1)
+    (println (yellow savepath))
+
+    (gd-edit.gdc-reader/write-character-file character (.getCanonicalPath (io/file savepath)))))
+
+(defn- rename-save-dir-if-required
+  [character]
+
+  (let [loadpath (get-loadpath character)
+        savepath (get-savepath character)]
+
+    (if (= loadpath savepath)
+      :rename-not-needed
+
+      (if (.renameTo (-> (io/file loadpath)
+                             (.getParentFile))
+                         (-> (io/file savepath)
+                             (.getParentFile)))
+        :rename-success
+        :rename-failed))))
 
 (defn- write-character-file
   [character]
 
-  ;; Figure out where we're going to write to
   (let [character-name (:character-name character)
-        savepath (get-savepath character)
 
-        ;; In case the user renamed the character, the save path may not exist at all
-        ;; Make sure all parent directories are created
-        _ (io/make-parents savepath)
+        ;; If the save directory should be renamed (because character name changed),
+        ;; do so now...
+        rn-status (rename-save-dir-if-required character)]
 
-        backup-path (io/file (get-new-backup-path character))]
+    ;; Print out any rename status
+    (cond
+      (= rn-status :rename-success)
+      (println "Renamed save directory to match character name: " character-name)
 
-    ;; Backup the current save file
-    (when (.exists savepath)
-      (.renameTo savepath backup-path))
+      (= rn-status :rename-failed)
+      (println "Unable to rename save directory to match character name: " character-name))
 
-    ;; Write the new character file
-    (gd-edit.gdc-reader/write-character-file character (.getCanonicalPath savepath))))
+    ;; If rename failed (rename required, but could not be done...)
+    ;; Don't write the file and just return the character as is
+    (if (= rn-status :rename-failed)
+      character
+
+      ;; Otherwise, actually write out the character file
+      ;; Update the last loaded location in case it changed
+      (do
+        (write-character-file-after-backup character)
+        (assoc character :meta-character-loaded-from (get-savepath character))))))
+
+(defn write-loaded-character-file!
+  []
+
+  ;; Although we're writing out the file...
+  ;; Some meta-data on the character may change due to character & savedir rename handling
+  (reset! globals/character (write-character-file @globals/character)))
 
 (defn write-handler
   [[input tokens]]
@@ -1115,7 +1204,7 @@
   (if (not (character-loaded?))
     (println "Don't have a character loaded yet!")
 
-    (write-character-file @globals/character)))
+    (write-loaded-character-file!)))
 
 
 (defn load-db
@@ -2419,7 +2508,7 @@
 #_(show-item r)
 #_(show-handler [nil ["inv/0/items"]])
 #_(set-item-handler  [nil ["inv/0/items/0" "legion warhammer of valor" "64"]])
-#_(set-handler  [nil ["weaponsets/0/items/0" "Infernal Brimstone"]])
+#_(set-handler  [nil ["character-name" "Odie2"]])
 
 #_(write-handler  [nil nil])
 #_(run-query "recordname~gearweapons value~legendary levelreq <= 65")
@@ -2433,3 +2522,6 @@
 
 #_(skills-vec->skills-by-category (:skills @globals/character))
 #_(respec-handler [nil ["all"]])
+
+#_(set-handler  [nil ["character-name" "Odie2"]])
+#_(write-handler  [nil nil])
