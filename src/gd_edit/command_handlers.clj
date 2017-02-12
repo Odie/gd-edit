@@ -1178,7 +1178,19 @@
       (println "Renamed save directory to match character name: " character-name)
 
       (= rn-status :rename-failed)
-      (println "Unable to rename save directory to match character name: " character-name))
+      (do
+        ;; Did the rename fail because there because the target directory already exists?
+        ;; If so, inform the user...
+        (if (.exists (.getParentFile (io/file (get-savepath character))))
+          (do
+            (println "Unable to rename save directory because it conflicts with an existing directory: ")
+            (print-indent 1)
+            (println (yellow (.getCanonicalPath (.getParentFile (io/file (get-savepath character))))))
+            (newline)
+            (println "Please rename your character before trying again."))
+
+          ;; If we don't know why the renamed failed, just print a generic message.
+          (println "Unable to rename save directory to match character name: " character-name))))
 
     ;; If rename failed (rename required, but could not be done...)
     ;; Don't write the file and just return the character as is
