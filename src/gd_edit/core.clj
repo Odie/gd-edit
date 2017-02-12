@@ -365,11 +365,10 @@
 
 #_(initialize)
 #_(time (do
-          (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file
-                   (-> (dirs/get-save-dir-search-list)
-                        (second)
-                        (io/file "_Odie/player.gdc")
-                        (.getPath)
-                        )))
+          (gd-edit.command-handlers/load-character-file
+           (-> (dirs/get-save-dir-search-list)
+               (second)
+               (io/file "_Odie/player.gdc")
+               (.getPath)
+               ))
           nil))
