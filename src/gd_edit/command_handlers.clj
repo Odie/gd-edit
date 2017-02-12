@@ -2320,7 +2320,10 @@
     (let [points-to-award
           (- (attribute-points-total-at-level new-level)
              (attribute-points-total-at-level (character :character-level)))]
-      (max 0 (+ (:attribute-points character) points-to-award)))}
+      (max 0 (+ (:attribute-points character) points-to-award)))
+
+    :masteries-allowed (max 2 (:masteries-allowed character))}
+
    character))
 
 (defn modify-character-level
