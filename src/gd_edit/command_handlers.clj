@@ -15,7 +15,8 @@
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]
-            [gd-edit.utils :as utils]))
+            [gd-edit.utils :as utils]
+            [me.raynes.fs :as fs]))
 
 (declare load-db-in-background build-db-index clean-display-string)
 
@@ -1210,14 +1211,53 @@
   ;; Some meta-data on the character may change due to character & savedir rename handling
   (reset! globals/character (write-character-file @globals/character)))
 
+(defn write-separate-copy
+  [character new-name]
+
+  (let [from-char-dir-file (-> (get-savepath character)
+                               (io/file)
+                               (.getParentFile))
+
+        modified-character (assoc character :character-name new-name)
+        to-char-dir-file (-> (get-savepath modified-character)
+                             (io/file)
+                             (.getParentFile))]
+
+    (if (.exists to-char-dir-file)
+      [:new-path-already-exists (str to-char-dir-file)]
+
+      (do
+        ;; Recursively copy the original character directory
+        (fs/copy-dir from-char-dir-file to-char-dir-file)
+
+        ;; Write out the character to the new location also
+        (write-character-file modified-character)
+        [:done (str to-char-dir-file)]))))
+
 (defn write-handler
   [[input tokens]]
 
   (if (not (character-loaded?))
     (println "Don't have a character loaded yet!")
 
-    (write-loaded-character-file!)))
+    ;; If the user invoked the command without any parameters...
+    (if (nil? (first tokens))
 
+      ;; Write out the currently loaded character
+      (write-loaded-character-file!)
+
+      ;; Otherwise, try to write out a new copy of the character
+      (let [[status savepath] (write-separate-copy @globals/character (first tokens))]
+        (cond
+          (= status :new-path-already-exists)
+          (do
+            (println (red "Cannot copy character because the directory already exists:"))
+            (print-indent 1)
+            (println savepath))
+
+          :else
+          (println (green "Ok!"))
+          )))))
 
 (defn load-db
   []
@@ -1869,7 +1909,15 @@
                   ])]
 
    ["load"  "Load from a save file"]
-   ["write" "Writes out the character that is currently loaded"]
+   ["write" "Writes out the character that is currently loaded"
+    (string/join "\n"
+                 ["Syntax: write"
+                  ""
+                  "Writes out the currently loaded character."
+                  ""
+                  "Syntax: write <new-character-name>"
+                  ""
+                  "Makes a copy of the currently loaded character."])]
    ["class" "Displays the classes/masteries of the loaded character"]
    ["class list" "Display classes/masteries known ot the editor"]
    ["class add" "Add a class/mastery by name"]
@@ -2540,3 +2588,12 @@
 
 #_(set-handler  [nil ["character-name" "Odie2"]])
 #_(write-handler  [nil nil])
+
+#_(time (do
+          (gd-edit.command-handlers/load-character-file
+           (-> (dirs/get-save-dir-search-list)
+               (first)
+               (io/file "_Odie/player.gdc")
+               (.getPath)
+               ))
+          nil))

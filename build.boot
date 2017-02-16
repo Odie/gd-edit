@@ -20,7 +20,8 @@
                             [com.dropbox.core/dropbox-core-sdk "2.1.2" :scope "test"]
 
                             [org.clojure/data.json "0.2.6" :scope "test"]
-                            [digest "1.4.5" :scope "test"]])
+                            [digest "1.4.5" :scope "test"]
+                            [me.raynes/fs "1.4.6"]])
 
 
 
