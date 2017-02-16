@@ -1230,8 +1230,12 @@
         ;; Recursively copy the original character directory
         (fs/copy-dir from-char-dir-file to-char-dir-file)
 
-        ;; Write out the character to the new location also
-        (write-character-file modified-character)
+        ;; Write out the character to the new location
+        (gd-edit.gdc-reader/write-character-file modified-character
+                                                 (-> modified-character
+                                                     (get-savepath)
+                                                     (io/file)
+                                                     (.getCanonicalPath)))
         [:done (str to-char-dir-file)]))))
 
 (defn write-handler
@@ -1256,7 +1260,12 @@
             (println savepath))
 
           :else
-          (println (green "Ok!"))
+          (do
+            (println (green "Ok!"))
+            (newline)
+            (println "If you're running steam with cloud saves, please remember to restart steam.")
+            (println "Otherwise, your copied character will not show up in the character selection menu.")
+            )
           )))))
 
 (defn load-db
