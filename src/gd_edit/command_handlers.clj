@@ -1346,6 +1346,9 @@
     false
     true))
 
+(declare item-base-record-get-base-name
+         item-base-record-get-quality-name)
+
 (defn- item-name
   [item db]
 
@@ -1356,8 +1359,7 @@
           base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
                           (first))
 
-          base-name (or (get base-record "itemNameTag") (-> (get base-record "description")
-                                                            (string/replace "^k" "")))
+          base-name (item-base-record-get-base-name base-record)
 
           is-set-item (some #(contains? %1 "itemSetName") related-records)]
 
@@ -1378,7 +1380,7 @@
                 suffix-name (-> (filter #(string/includes? (:recordname %1) "/suffix/") related-records)
                                 (first)
                                 (get "lootRandomizerName"))
-                quality-name (base-record "itemQualityTag")
+                quality-name (item-base-record-get-quality-name base-record)
                 ]
 
             (->> [prefix-name quality-name base-name suffix-name]
@@ -1424,13 +1426,22 @@
   [affix-record]
   (affix-record "lootRandomizerName"))
 
+(defn- item-base-record-get-base-name
+  [base-record]
+
+  (or (get base-record "itemNameTag") (-> (get base-record "description")
+                                          (string/replace "^k" ""))))
+
+(defn- item-base-record-get-quality-name
+  [base-record]
+
+  (or (base-record "itemQualityTag") (base-record "itemStyleTag")))
+
 (defn- item-base-record-get-name
   [item-base-record]
 
-  (let [base-name (or (get item-base-record "itemNameTag") (get item-base-record "description"))
-        base-name (string/replace base-name "^k" "")
-
-        quality-name (item-base-record "itemQualityTag")]
+  (let [base-name (item-base-record-get-base-name item-base-record)
+        quality-name (item-base-record-get-quality-name item-base-record)]
 
     (->> [quality-name base-name]
          (filter #(not (nil? %1)))
@@ -2606,3 +2617,5 @@
                (.getPath)
                ))
           nil))
+
+#_(construct-item "Exalted Treads" @globals/db 100)
