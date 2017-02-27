@@ -458,13 +458,14 @@
     val))
 
 (defn enc-next-state-with-byte
-  "Given a byte array, the current encryption state, and an encryption table, return the next enc state"
+  "Given a single byte, the current encryption state, and an encryption table, return the next enc state"
   [byte-data enc-state enc-table]
 
-  (bit-xor enc-state (enc-table (Byte/toUnsignedInt byte-data))))
+  (bit-and 0x00000000ffffffff
+           (bit-xor enc-state (enc-table (Byte/toUnsignedInt byte-data)))))
 
 (defn enc-next-state-with-byte-array
-  "Given a single byte, the current encryption state, and an encryption table, return the next enc state"
+  "Given a byte array, the current encryption state, and an encryption table, return the next enc state"
   [byte-data enc-state enc-table]
 
   (loop [i 0

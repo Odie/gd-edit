@@ -1115,7 +1115,7 @@
       [(.renameTo f (io/file backup-path)) backup-path]
       [:nothing-to-backup backup-path])))
 
-(defn- load-character-file
+(defn load-character-file
   [savepath]
 
   (reset! globals/character
