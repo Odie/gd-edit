@@ -21,7 +21,9 @@
 
                             [org.clojure/data.json "0.2.6" :scope "test"]
                             [digest "1.4.5" :scope "test"]
-                            [me.raynes/fs "1.4.6"]])
+                            [me.raynes/fs "1.4.6"]
+                            [midje "1.9.0-alpha6" :scope "test"]
+                            [zilti/boot-midje "0.2.2-SNAPSHOT" :scope "test"]])
 
 
 
@@ -34,6 +36,7 @@
          '[boot.core :as c]
          '[boot.util :as u]
          '[digest]
+         '[zilti.boot-midje :refer [midje]]
          )
 
 (import com.dropbox.core.DbxRequestConfig
@@ -122,7 +125,9 @@
   []
   (comp (cider) (launch-nrepl) (run)))
 
-(require '[adzerk.boot-test :refer [test]])
+(deftask autotest
+  []
+  (comp (watch) (midje) (speak)))
 
 (defn- await-exe-build
   [exe-file jar-file]

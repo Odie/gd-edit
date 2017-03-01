@@ -1,7 +1,15 @@
 (ns gd-edit.core-test
-  (:require [clojure.test :refer :all]
+  (:require [midje.sweet :refer :all]  
             [gd-edit.core :refer :all]))
 
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+(let [input "Hello world"]
+  (fact "tokenization should return the input itself as the first value"
+
+        (first (#'gd-edit.core/tokenize-input input))
+        => input))
+
+(let [input "Hi \"This is a long string\""]
+  (fact "tokenization extracts quoted strings"
+        (#'gd-edit.core/tokenize-input input)
+        => [input '("Hi" "This is a long string")]))
+
