@@ -2,7 +2,6 @@
   (:require [clojure
              [set :refer [intersection]]
              [string :as string]]
-            [gd-edit.utils :as u]
             [jansi-clj.core :refer :all]
             [clojure.java.io :as io]
             [clojure.edn :as edn])
