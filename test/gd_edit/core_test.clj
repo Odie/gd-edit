@@ -13,3 +13,19 @@
         (#'gd-edit.core/tokenize-input input)
         => [input '("Hi" "This is a long string")]))
 
+(let [command-map {["command1"] 1
+                   ["command2"] 2
+                   ["command2" "sub-command"] 3
+                   ["command3" "sub-command"] 4}]
+  (fact
+   (#'gd-edit.core/find-command ["command1"] command-map)
+   => ["command1"]
+
+   (#'gd-edit.core/find-command ["command2" "sub-command"] command-map)
+   => ["command2" "sub-command"]
+
+   )
+  (fact "commands must start with a base command then go on with subcommands"
+   (#'gd-edit.core/find-command ["command3" "sub-command"] command-map)
+   => [])
+  )
