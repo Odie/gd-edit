@@ -118,7 +118,7 @@
 
       (print-paginated-result @globals/query-state))))
 
-(defn query-comand-handler
+(defn query-command-handler
   [[input tokens]]
 
   (cond

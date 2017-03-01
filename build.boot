@@ -125,9 +125,13 @@
   []
   (comp (cider) (launch-nrepl) (run)))
 
+(deftask test
+  []
+  (comp (midje)))
+
 (deftask autotest
   []
-  (comp (watch) (midje) (speak)))
+  (comp (watch) (test) (speak)))
 
 (defn- await-exe-build
   [exe-file jar-file]
