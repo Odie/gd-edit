@@ -125,12 +125,30 @@
   []
   (comp (cider) (launch-nrepl) (run)))
 
+(defn add-test-resources!
+  []
+
+  (set-env! :resource-paths (fn [oldval]
+                              (if (contains? oldval "test-resources")
+                                oldval
+                                (conj oldval "test-resources")))))
+
 (deftask test
   []
+
+  (add-test-resources!)
   (comp (midje)))
+
+(deftask bla
+  []
+
+  (clojure.pprint/pprint (get-env :resource-paths))
+  )
 
 (deftask autotest
   []
+
+  (add-test-resources!)
   (comp (watch) (test) (speak)))
 
 (defn- await-exe-build

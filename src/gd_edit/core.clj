@@ -367,7 +367,7 @@
 #_(time (do
           (gd-edit.command-handlers/load-character-file
            (-> (dirs/get-save-dir-search-list)
-               (second)
+               (first)
                (io/file "_Odie/player.gdc")
                (.getPath)
                ))
