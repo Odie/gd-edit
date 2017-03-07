@@ -4,7 +4,8 @@
             [clojure.core.async :as async :refer [thread >!!]]
             [progress.file :as progress]
             [gd-edit
-             [utils :as utils]]))
+             [utils :as utils]]
+            [me.raynes.fs :as fs]))
 
 (defn get-build-info
   "Get the build info associated with the current build"
@@ -23,7 +24,13 @@
   "Get the information about the latest available build from network
   WARNING: This may block for a long time."
   []
-  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.edn")
+  (let [url (cond
+              (or (= (System/getProperty "os.name") "Mac OS X")
+                  (= (System/getProperty "os.name") "Linux"))
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.edn")
+
+              :else
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.edn"))
         conn (.openConnection url)]
 
     ;; Setup reasonable timeouts to contact the server with
@@ -37,7 +44,13 @@
 
 (defn fetch-latest-build
   [build-info]
-  (let [url (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.exe")
+  (let [url (cond
+              (or (= (System/getProperty "os.name") "Mac OS X")
+                  (= (System/getProperty "os.name") "Linux"))
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.bin")
+
+              :else
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.exe"))
         conn (.openConnection url)
         file (java.io.File/createTempFile "gd-edit" ".exe")]
 
@@ -101,7 +114,7 @@
   []
   (io/file (utils/working-directory) "restart.bat"))
 
-(defn- restart-self
+(defn- restart-for-win
   [new-exe]
 
   (println "Restarting...")
@@ -153,9 +166,40 @@
 
     ;; Start the restart script
     (-> (ProcessBuilder. ["cmd.exe" "/C" "start" (str restart-script-path)])
-        (.start))
+        (.start))))
 
-    (System/exit 0)))
+(defn- restart-for-nix
+  [new-exe]
+
+  (let [running-exe-path (io/file (System/getProperty "java.class.path"))
+        backup-path (io/file (str running-exe-path ".bak"))]
+
+
+    ;; Make a backup of the current exe/binary
+    (if-not (.renameTo (io/file running-exe-path) (io/file backup-path))
+      (println "Sorry. Could not rename the current executable.")
+
+      ;; Replace the current binary with the new one
+      (if-not (.renameTo (io/file new-exe) (io/file running-exe-path))
+        (println "Sorry. Could not rename the new version.")
+
+        (do
+          (.setExecutable (io/file running-exe-path) true)
+          (println "Please restart the editor manually."))))))
+
+(defn- restart-self
+  [new-exe]
+
+  (cond
+    (or
+     (= (System/getProperty "os.name") "Mac OS X")
+     (= (System/getProperty "os.name") "Linux"))
+    (restart-for-nix new-exe)
+
+    :else
+    (restart-for-win new-exe))
+
+    (System/exit 0))
 
 (defn cleanup-restart-script
   []

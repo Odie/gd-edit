@@ -19,8 +19,14 @@
   "Get the game's expected installation path"
   []
 
-  (if (= (System/getProperty "os.name") "Mac OS X")
+  (cond
+    (= (System/getProperty "os.name") "Mac OS X")
     (u/expand-home "~/Dropbox/Public/GrimDawn")
+
+    (= (System/getProperty "os.name") "Linux")
+    ""
+
+    :else
     (str (get-steam-path) "\\steamapps\\common\\Grim Dawn")))
 
 (defn- clean-list
@@ -44,9 +50,13 @@
 (defn get-steam-cloud-save-dirs
   []
 
-  (if (= (System/getProperty "os.name") "Mac OS X")
+  (cond
+    (or
+     (= (System/getProperty "os.name") "Mac OS X")
+     (= (System/getProperty "os.name") "Linux"))
     ""
 
+    :else
     (let [userdata-dir (io/file (get-steam-path) "userdata")]
       (->> (io/file userdata-dir)
            (.listFiles)
@@ -60,9 +70,14 @@
 (defn get-local-save-dir
   []
 
-  (if (= (System/getProperty "os.name") "Mac OS X")
+  (cond
+    (= (System/getProperty "os.name") "Mac OS X")
     (u/expand-home "~/Dropbox/Public/GrimDawn/main")
 
+    (= (System/getProperty "os.name") "Linux")
+    ""
+
+    :else
     (let [user-dir (System/getProperty "user.home")]
       (.getPath (io/file user-dir "Documents\\My Games\\Grim Dawn\\save\\main")))))
 
@@ -72,8 +87,10 @@
   Note that this function respects the :save-dir setting in the user's setting.edn file."
   []
 
-  (if (= (System/getProperty "os.name") "Mac OS X")
+  (cond
+    (= (System/getProperty "os.name") "Mac OS X")
     (clean-list [(get @globals/settings :save-dir) (get-local-save-dir)])
+    :else
     (clean-list (concat [(get @globals/settings :save-dir) (get-local-save-dir)] (get-steam-cloud-save-dirs)))))
 
 (defn save-dir->mod-save-dir
