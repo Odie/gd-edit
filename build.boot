@@ -34,6 +34,7 @@
          '[boot.core :as c]
          '[boot.util :as u]
          '[digest]
+         '[me.raynes.fs :as fs]
          )
 
 (import com.dropbox.core.DbxRequestConfig
@@ -166,6 +167,56 @@
     true
     false))
 
+(defn make-bin-edn-pair-name
+  [upload-filename]
+
+
+  {:filename
+   :edn-filename
+   }
+  )
+
+(defn replace-path-extension
+  [path new-ext]
+
+  (as-> (io/file path) $
+    (fs/base-name $ true)
+    (io/file (fs/parent path) $)
+    (str $ new-ext)))
+
+(defn replace-base-name-extension
+  [basename new-ext]
+
+  (-> (io/file basename)
+      (fs/base-name true)
+      (str new-ext)))
+
+(defn upload-bin-edn-pair-to-dropbox
+  [dropbox-client bin-file upload-filename]
+
+  (let [edn-base-name (replace-base-name-extension upload-filename ".edn")]
+
+       ;; Write the gd-editor.exe file
+       (println (format "Uploading %s build..." upload-filename))
+       (with-open [exe-stream (io/input-stream bin-file)]
+         (-> dropbox-client
+             (.files)
+             (.uploadBuilder (str (io/file "/Public/GrimDawn/editor-test/" upload-filename)))
+             (.withMode WriteMode/OVERWRITE)
+             (.uploadAndFinish exe-stream)))
+
+       ;; Write the gd-editor.edn file to describe the latest version
+       (println (format "Uploading %s edn file..." upload-filename))
+       (-> dropbox-client
+           (.files)
+           (.uploadBuilder (str (io/file "/Public/GrimDawn/editor-test/" edn-base-name)))
+           (.withMode WriteMode/OVERWRITE)
+           (.uploadAndFinish (-> (make-build-info {:filesize (.length bin-file)
+                                                   :file-sha1 (digest/sha1 bin-file)})
+                                 (pr-str)
+                                 (.getBytes)
+                                 (io/input-stream))))))
+
 (deftask publish-exe
   "Publish the built windows exe to dropbox"
   []
@@ -199,29 +250,23 @@
         (await-exe-build output-file output-jar-file)
 
         (let [client (make-dropbox-client)]
-          ;; Write the gd-editor.exe file
-          (println "Uploading new build...")
-          (with-open [exe-stream (io/input-stream output-file)]
-            (-> client
-                (.files)
-                (.uploadBuilder "/Public/GrimDawn/editor/gd-edit.exe")
-                (.withMode WriteMode/OVERWRITE)
-                (.uploadAndFinish exe-stream)))
+          ;; Upload the windows exe
+          (upload-bin-edn-pair-to-dropbox client
+                                          output-file
+                                          "gd-edit.exe")
 
-          ;; Write the gd-editor.edn file to describe the latest version
-          (println "Uploading new build's edn file...")
-          (-> client
-              (.files)
-              (.uploadBuilder "/Public/GrimDawn/editor/gd-edit.edn")
-              (.withMode WriteMode/OVERWRITE)
-              (.uploadAndFinish (-> (make-build-info {:filesize (.length output-file)
-                                                      :file-sha1 (digest/sha1 output-file)})
-                                    (pr-str)
-                                    (.getBytes)
-                                    (io/input-stream))))
+          ;; Upload wrapped binary suitable for platforms
+          (upload-bin-edn-pair-to-dropbox client
+                                          (replace-path-extension output-file "")
+                                          "gd-edit.nix.bin")
           ))
       fileset)))
 
 (deftask publish
   []
   (comp (build) (publish-exe)))
+
+(-> (io/file "test.nix.bin")
+     (fs/base-name true)
+     (str ".edn")
+     )
