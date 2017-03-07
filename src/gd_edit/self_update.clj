@@ -27,10 +27,10 @@
   (let [url (cond
               (or (= (System/getProperty "os.name") "Mac OS X")
                   (= (System/getProperty "os.name") "Linux"))
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor-test/gd-edit.nix.edn")
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.edn")
 
               :else
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor-test/gd-edit.edn"))
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.edn"))
         conn (.openConnection url)]
 
     ;; Setup reasonable timeouts to contact the server with
@@ -47,10 +47,10 @@
   (let [url (cond
               (or (= (System/getProperty "os.name") "Mac OS X")
                   (= (System/getProperty "os.name") "Linux"))
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor-test/gd-edit.nix.bin")
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.bin")
 
               :else
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor-test/gd-edit.exe"))
+              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.exe"))
         conn (.openConnection url)
         file (java.io.File/createTempFile "gd-edit" ".exe")]
 

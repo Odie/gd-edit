@@ -201,7 +201,7 @@
        (with-open [exe-stream (io/input-stream bin-file)]
          (-> dropbox-client
              (.files)
-             (.uploadBuilder (str (io/file "/Public/GrimDawn/editor-test/" upload-filename)))
+             (.uploadBuilder (str (io/file "/Public/GrimDawn/editor/" upload-filename)))
              (.withMode WriteMode/OVERWRITE)
              (.uploadAndFinish exe-stream)))
 
@@ -209,7 +209,7 @@
        (println (format "Uploading %s edn file..." upload-filename))
        (-> dropbox-client
            (.files)
-           (.uploadBuilder (str (io/file "/Public/GrimDawn/editor-test/" edn-base-name)))
+           (.uploadBuilder (str (io/file "/Public/GrimDawn/editor/" edn-base-name)))
            (.withMode WriteMode/OVERWRITE)
            (.uploadAndFinish (-> (make-build-info {:filesize (.length bin-file)
                                                    :file-sha1 (digest/sha1 bin-file)})
