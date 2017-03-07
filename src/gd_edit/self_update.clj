@@ -182,7 +182,10 @@
       ;; Replace the current binary with the new one
       (if-not (.renameTo (io/file new-exe) (io/file running-exe-path))
         (println "Sorry. Could not rename the new version.")
-        (println "Please restart the editor manually.")))))
+
+        (do
+          (.setExecutable (io/file running-exe-path) true)
+          (println "Please restart the editor manually."))))))
 
 (defn- restart-self
   [new-exe]
