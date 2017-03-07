@@ -4,7 +4,8 @@
             [clojure.core.async :as async :refer [thread >!!]]
             [progress.file :as progress]
             [gd-edit
-             [utils :as utils]]))
+             [utils :as utils]]
+            [me.raynes.fs :as fs]))
 
 (defn get-build-info
   "Get the build info associated with the current build"
@@ -113,7 +114,7 @@
   []
   (io/file (utils/working-directory) "restart.bat"))
 
-(defn- restart-self
+(defn- restart-for-win
   [new-exe]
 
   (println "Restarting...")
@@ -165,9 +166,37 @@
 
     ;; Start the restart script
     (-> (ProcessBuilder. ["cmd.exe" "/C" "start" (str restart-script-path)])
-        (.start))
+        (.start))))
 
-    (System/exit 0)))
+(defn- restart-for-nix
+  [new-exe]
+
+  (let [running-exe-path (io/file (System/getProperty "java.class.path"))
+        backup-path (io/file (str running-exe-path ".bak"))]
+
+
+    ;; Make a backup of the current exe/binary
+    (if-not (.renameTo (io/file running-exe-path) (io/file backup-path))
+      (println "Sorry. Could not rename the current executable.")
+
+      ;; Replace the current binary with the new one
+      (if-not (.renameTo (io/file new-exe) (io/file running-exe-path))
+        (println "Sorry. Could not rename the new version.")
+        (println "Please restart the editor manually.")))))
+
+(defn- restart-self
+  [new-exe]
+
+  (cond
+    (or
+     (= (System/getProperty "os.name") "Mac OS X")
+     (= (System/getProperty "os.name") "Linux"))
+    (restart-for-nix new-exe)
+
+    :else
+    (restart-for-win new-exe))
+
+    (System/exit 0))
 
 (defn cleanup-restart-script
   []
