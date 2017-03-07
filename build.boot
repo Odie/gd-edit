@@ -257,7 +257,7 @@
 
           ;; Upload wrapped binary suitable for platforms
           (upload-bin-edn-pair-to-dropbox client
-                                          (replace-path-extension output-file "")
+                                          (io/file (replace-path-extension output-file ""))
                                           "gd-edit.nix.bin")
           ))
       fileset)))
