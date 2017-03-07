@@ -1063,7 +1063,7 @@
         _ (s/write-struct Header bb (get-block updated-block-list :header) (:primitive-specs @enc-context) enc-context)
         _ (.putInt bb (int ^long (:enc-state @enc-context)))
         _ (write-int! bb (:data-version fileinfo) enc-context)
-        _ (write-bytes! bb (byte-array 16) enc-context)
+        _ (write-bytes! bb (fileinfo :mystery-field) enc-context)
 
         ]
 
