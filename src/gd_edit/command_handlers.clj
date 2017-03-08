@@ -649,7 +649,7 @@
                 (map #(format (yellow "%02X") %1) obj)))
      )))
 
-(declare is-skill? skill-name)
+(declare is-skill? skill-name is-faction? faction-name)
 
 (defn print-sequence
   [obj]
@@ -678,7 +678,6 @@
 
                        (associative? item)
                        (do
-                         (newline)
 
                          ;; If we've encountered something that requires annotation,
                          ;; print the annotation now.
@@ -690,11 +689,21 @@
                                  (is-skill? item)
                                  (skill-name item)
 
+                                 (is-faction? item)
+                                 (faction-name i)
+
                                  :else
                                  nil)]
-                               (when-not (nil? annotation)
-                                 (println (yellow annotation))
-                                 (newline)))
+                               (if-not (nil? annotation)
+                                 (do
+                                   ;; Print annotation on the same line as the index
+                                   (println (yellow annotation))
+                                   (newline))
+
+                                 ;; No annotation needs to be printed,
+                                 ;; close the line that prints the index
+                                 (newline))
+                               )
 
                          (print-map item :skip-item-count true)
                          (if-not (= i (dec (count obj)))
@@ -1436,6 +1445,28 @@
                    (record-by-name))]
     (or (record "FileDescription")
         (record "skillDisplayName"))))
+
+(defn- is-faction?
+  [coll]
+
+  (and (associative? coll)
+       (contains? coll :faction-value)))
+
+(defn- faction-name
+  [index]
+
+  (let [faction-names {1  "Devil's Crossing"
+                       2  "Aetherials"
+                       3  "Chthonians"
+                       4  "Cronley's Gang"
+                       6  "Rovers"
+                       8  "Homestead"
+                       10 "The Outcast"
+                       11 "Death's Vigil"
+                       12 "Undead"
+                       13 "Black Legion"
+                       14 "Kymon's Chosen"}]
+      (faction-names index)))
 
 (defn- is-item?
   "Does the given collection look like something that represents an in-game item?"
