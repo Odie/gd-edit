@@ -16,9 +16,10 @@
 
             [clojure.string :as str]
             [gd-edit.utils :as utils]
-            [me.raynes.fs :as fs]))
+            [me.raynes.fs :as fs]
+            ))
 
-(declare load-db-in-background build-db-index clean-display-string)
+(declare load-db-in-background build-db-index clean-display-string item-name)
 
 ;;--------------------------------------------------------------------
 ;; Stack functions
@@ -648,6 +649,62 @@
                 (map #(format (yellow "%02X") %1) obj)))
      )))
 
+(declare is-skill? skill-name)
+
+(defn print-sequence
+  [obj]
+
+  (u/doseq-indexed i [item obj]
+                   ;; Print the index of the object
+                   (print (format
+                           (format "%%%dd: " (-> (count obj)
+                                                 (Math/log10)
+                                                 (Math/ceil)
+                                                 (max 1)
+                                                 (int)))
+                           i))
+
+
+                   ;; Print some representation of the object
+                   ;; We don't call print-object here
+                   ;; because we do not want to recursively print the data tree.
+                   (let [item-type (type item)]
+                     (cond
+                       (is-primitive? item)
+                       (print-primitive item)
+
+                       (sequential? item)
+                       (println (format "collection of %d items" (count item)))
+
+                       (associative? item)
+                       (do
+                         (newline)
+
+                         ;; If we've encountered something that requires annotation,
+                         ;; print the annotation now.
+                         (let [annotation
+                               (cond
+                                 (is-item? item)
+                                 (item-name item @gd-edit.globals/db)
+
+                                 (is-skill? item)
+                                 (skill-name item)
+
+                                 :else
+                                 nil)]
+                               (when-not (nil? annotation)
+                                 (println (yellow annotation))
+                                 (newline)))
+
+                         (print-map item :skip-item-count true)
+                         (if-not (= i (dec (count obj)))
+                           (newline))
+                         )
+
+                       :else
+                       (println item))))
+  )
+
 (defn print-object
   [obj]
 
@@ -657,33 +714,9 @@
       (print-primitive obj 1)
 
       (sequential? obj)
-      (u/doseq-indexed i [item obj]
-                       (print (format
-                               (format "%%%dd: " (-> (count obj)
-                                                     (Math/log10)
-                                                     (Math/ceil)
-                                                     (max 1)
-                                                     (int)))
-                               i))
-                       (let [item-type (type item)]
-                         (cond
-                           (is-primitive? item)
-                           (print-primitive item)
+      (print-sequence obj)
 
-                           (sequential? item)
-                           (println (format "collection of %d items" (count item)))
-
-                           (associative? item)
-                           (do
-                             (newline)
-                             (print-map item :skip-item-count true)
-                             (if-not (= i (dec (count obj)))
-                               (newline))
-                             )
-
-                           :else
-                           (println item))))
-
+      ;; If we're looking at an item, print all of its details and related records
       (is-item? obj)
       (show-item obj)
 
@@ -1388,6 +1421,21 @@
                  (string/join " "))
             ))
         ))))
+
+(defn- is-skill?
+  "Does the given collection look like something that represents an in-game skill?"
+  [coll]
+
+  (and (associative? coll)
+       (contains? coll :skill-name)))
+
+(defn- skill-name
+  [skill]
+
+  (let [record (-> (:skill-name skill)
+                   (record-by-name))]
+    (or (record "FileDescription")
+        (record "skillDisplayName"))))
 
 (defn- is-item?
   "Does the given collection look like something that represents an in-game item?"
