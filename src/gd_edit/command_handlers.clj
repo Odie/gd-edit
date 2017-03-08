@@ -11,7 +11,8 @@
              [globals :as globals]
              [utils :as u]
              [self-update :as su]
-             [equation-eval :as eq]]
+             [equation-eval :as eq]
+             [stack :as stack]]
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]
@@ -20,40 +21,6 @@
             ))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
-
-;;--------------------------------------------------------------------
-;; Stack functions
-;;
-;; Simple functions that makes dealing with stack less verbose
-(defn stack-push!
-  [stack-atom item]
-
-  (when-not (nil? item)
-    (swap! stack-atom conj item)))
-
-(defn stack-pop!
-  "Pop an item off of the stack"
-  [stack-atom]
-
-  (when-not (empty? @stack-atom)
-    (let [item (peek @stack-atom)]
-      (swap! stack-atom pop)
-      item)))
-
-(defn pop-safe
-  [coll]
-  (if-not (empty? coll)
-    (pop coll)
-    coll))
-
-(defn stack-replace-last!
-  [stack-atom item]
-
-  (when-not (nil? item)
-    (swap! stack-atom (fn [stack]
-                        (-> stack
-                            (pop-safe)
-                            (conj item))))))
 
 
 ;;--------------------------------------------------------------------
@@ -152,7 +119,7 @@
 
       (print-paginated-result @globals/query-state))))
 
-(defn query-comand-handler
+(defn query-command-handler
   [[input tokens]]
 
   (cond
@@ -351,14 +318,14 @@
                                  ;; Reload the database
                                  (load-db-in-background)
 
-                                 (stack-pop! globals/menu-stack)
+                                 (stack/pop! globals/menu-stack)
                                  )])))
                     []
                     (map-indexed vector mods))})))
 
 
-(defn character-selection-screen! [] (stack-replace-last! gd-edit.globals/menu-stack (character-selection-screen)))
-(defn character-manipulation-screen! [] (stack-replace-last! gd-edit.globals/menu-stack (character-manipulation-screen)))
+(defn character-selection-screen! [] (stack/replace-last! gd-edit.globals/menu-stack (character-selection-screen)))
+(defn character-manipulation-screen! [] (stack/replace-last! gd-edit.globals/menu-stack (character-manipulation-screen)))
 
 (defn choose-character-handler
   [[input tokens]]
@@ -2401,7 +2368,7 @@
 (defn mod-pick-handler
   [[input tokens]]
 
-  (stack-push! globals/menu-stack (mod-selection-screen)))
+  (stack/push! globals/menu-stack (mod-selection-screen)))
 
 (defn mod-clear-handler
   [[input tokens]]
@@ -2440,9 +2407,7 @@
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
-        ;; level (dec level)
-        ]
+  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")]
 
     (if (= level 1)
       0

@@ -50,7 +50,7 @@
 (def command-map
   {
    ["exit"]  (fn [input] (System/exit 0))
-   ["q"]     (fn [input] (handlers/query-comand-handler input))
+   ["q"]     (fn [input] (handlers/query-command-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
    ["qn"]    (fn [input] (handlers/query-show-handler input))
    ["db"]    (fn [input] (handlers/db-show-handler input))
@@ -367,7 +367,7 @@
 #_(time (do
           (gd-edit.command-handlers/load-character-file
            (-> (dirs/get-save-dir-search-list)
-               (second)
+               (first)
                (io/file "_Odie/player.gdc")
                (.getPath)
                ))
