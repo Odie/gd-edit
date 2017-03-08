@@ -123,7 +123,7 @@
 (defn make-localization-filepath
   [game-dir]
 
-  (io/file game-dir "resources" "text_en.arc"))
+  (io/file game-dir "resources" "Text_EN.arc"))
 
 (defn make-mod-db-filepath
   [mod-dir]
