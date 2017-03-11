@@ -31,6 +31,10 @@
   (apply str
          (map #(format "%02x " (byte %)) s)))
 
+
+;;------------------------------------------------------------------------------
+;; Timing functions
+;;------------------------------------------------------------------------------
 (defmacro timed
   "Times the execution time of the given expression. Returns a vector of [elapsed-time sexp-result]"
   [sexp]
@@ -45,6 +49,10 @@
   [time]
   (/ (float time) 1000000000))
 
+
+;;------------------------------------------------------------------------------
+;; String comparison
+;;------------------------------------------------------------------------------
 (defn case-insensitive=
   "Check if str2 can be found in str1"
   [str1 str2]
@@ -59,6 +67,23 @@
 
 (def ci-match case-insensitive-match)
 
+(defn bigrams [s]
+  (->> (clojure.string/split s #"\s+")
+       (mapcat #(partition 2 1 %))
+       (set)))
+
+(defn string-similarity [a b]
+  (let [a-pairs (bigrams a)
+        b-pairs (bigrams b)
+        total-count (+ (count a-pairs) (count b-pairs))
+        match-count (count (intersection a-pairs b-pairs))
+        similarity (/ (* 2 match-count) total-count)]
+    similarity))
+
+
+;;------------------------------------------------------------------------------
+;; Path related functions
+;;------------------------------------------------------------------------------
 (defn expand-home [s]
   (if (.startsWith s "~")
     (clojure.string/replace-first s "~" (System/getProperty "user.home"))
@@ -79,6 +104,17 @@
 
   (last (clojure.string/split path #"[/\\]")))
 
+(defn path-exists
+  [path]
+
+  (if (and (not (nil? path))
+           (.exists (io/file path)))
+    true
+    false))
+
+;;------------------------------------------------------------------------------
+;; Core lib extensions
+;;------------------------------------------------------------------------------
 (defmacro doseq-indexed [index-sym [item-sym coll] & body]
   `(doseq [[~item-sym ~index-sym]
            (map vector ~coll (range))]
@@ -86,27 +122,49 @@
 
 (def byte-array-type (Class/forName "[B"))
 
-(defn bigrams [s]
-  (->> (clojure.string/split s #"\s+")
-       (mapcat #(partition 2 1 %))
-       (set)))
-
-(defn string-similarity [a b]
-  (let [a-pairs (bigrams a)
-        b-pairs (bigrams b)
-        total-count (+ (count a-pairs) (count b-pairs))
-        match-count (count (intersection a-pairs b-pairs))
-        similarity (/ (* 2 match-count) total-count)]
-    similarity))
-
 (defn byte-array?
   [obj]
   (= byte-array-type (type obj)))
+
+(defmacro fmt
+  [^String string]
+  "Like 'format' but with string interpolation"
+  (let [-re #"#\{(.*?)\}"
+        fstr (clojure.string/replace string -re "%s")
+        fargs (map #(read-string (second %)) (re-seq -re string))]
+    `(format ~fstr ~@fargs)
+    ))
+
+
+;;------------------------------------------------------------------------------
+;; Environment info
+;;------------------------------------------------------------------------------
 
 (defn working-directory
   []
   (System/getProperty "user.dir"))
 
+(defn running-linux?
+  []
+  (= (System/getProperty "os.name") "Linux"))
+
+(defn running-osx?
+  []
+  (= (System/getProperty "os.name") "Mac OS X"))
+
+(defn running-nix?
+  []
+  (or (running-osx?)
+      (running-linux?)))
+
+(defn running-windows?
+  []
+  (string/starts-with? (System/getProperty "os.name") "Windows"))
+
+
+;;------------------------------------------------------------------------------
+;; Settings file
+;;------------------------------------------------------------------------------
 (defn settings-file-path
   []
   (.getAbsolutePath (io/file (working-directory) "settings.edn")))
@@ -120,38 +178,3 @@
 (defn write-settings
   [settings]
   (spit (settings-file-path) (pr-str settings)))
-
-(defn path-exists
-  [path]
-
-  (if (and (not (nil? path))
-           (.exists (io/file path)))
-    true
-    false))
-
-(defmacro fmt [^String string]
-  (let [-re #"#\{(.*?)\}"
-        fstr (clojure.string/replace string -re "%s")
-        fargs (map #(read-string (second %)) (re-seq -re string))]
-    `(format ~fstr ~@fargs)
-    ))
-
-(defn running-linux?
-  []
-
-  (= (System/getProperty "os.name") "Linux"))
-
-(defn running-osx?
-  []
-
-  (= (System/getProperty "os.name") "Mac OS X"))
-
-(defn running-nix?
-  []
-  (or (running-osx?)
-      (running-linux?)))
-
-(defn running-windows?
-  []
-
-  (string/starts-with? (System/getProperty "os.name") "Windows"))
