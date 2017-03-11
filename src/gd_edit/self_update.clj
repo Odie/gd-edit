@@ -25,8 +25,7 @@
   WARNING: This may block for a long time."
   []
   (let [url (cond
-              (or (= (System/getProperty "os.name") "Mac OS X")
-                  (= (System/getProperty "os.name") "Linux"))
+              (utils/running-nix?)
               (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.edn")
 
               :else
@@ -45,8 +44,7 @@
 (defn fetch-latest-build
   [build-info]
   (let [url (cond
-              (or (= (System/getProperty "os.name") "Mac OS X")
-                  (= (System/getProperty "os.name") "Linux"))
+              (utils/running-nix?)
               (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.bin")
 
               :else
@@ -191,9 +189,7 @@
   [new-exe]
 
   (cond
-    (or
-     (= (System/getProperty "os.name") "Mac OS X")
-     (= (System/getProperty "os.name") "Linux"))
+    (utils/running-nix?)
     (restart-for-nix new-exe)
 
     :else

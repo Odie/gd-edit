@@ -135,3 +135,23 @@
         fargs (map #(read-string (second %)) (re-seq -re string))]
     `(format ~fstr ~@fargs)
     ))
+
+(defn running-linux?
+  []
+
+  (= (System/getProperty "os.name") "Linux"))
+
+(defn running-osx?
+  []
+
+  (= (System/getProperty "os.name") "Mac OS X"))
+
+(defn running-nix?
+  []
+  (or (running-osx?)
+      (running-linux?)))
+
+(defn running-windows?
+  []
+
+  (string/starts-with? (System/getProperty "os.name") "Windows"))

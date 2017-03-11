@@ -20,10 +20,10 @@
   []
 
   (cond
-    (= (System/getProperty "os.name") "Mac OS X")
+    (u/running-osx?)
     (u/expand-home "~/Dropbox/Public/GrimDawn")
 
-    (= (System/getProperty "os.name") "Linux")
+    (u/running-linux?)
     ""
 
     :else
@@ -51,9 +51,7 @@
   []
 
   (cond
-    (or
-     (= (System/getProperty "os.name") "Mac OS X")
-     (= (System/getProperty "os.name") "Linux"))
+    (u/running-nix?)
     ""
 
     :else
@@ -71,10 +69,10 @@
   []
 
   (cond
-    (= (System/getProperty "os.name") "Mac OS X")
+    (u/running-osx?)
     (u/expand-home "~/Dropbox/Public/GrimDawn/main")
 
-    (= (System/getProperty "os.name") "Linux")
+    (u/running-linux?)
     ""
 
     :else
@@ -88,7 +86,7 @@
   []
 
   (cond
-    (= (System/getProperty "os.name") "Mac OS X")
+    (u/running-osx?)
     (clean-list [(get @globals/settings :save-dir) (get-local-save-dir)])
     :else
     (clean-list (concat [(get @globals/settings :save-dir) (get-local-save-dir)] (get-steam-cloud-save-dirs)))))
