@@ -5,7 +5,26 @@
             [progress.file :as progress]
             [gd-edit
              [utils :as utils]]
-            [me.raynes.fs :as fs]))
+            [me.raynes.fs :as fs]
+            [clj-http.client :as client])
+  (:import java.io.IOException))
+
+(defn fetch-url [url-str]
+  (let [response (client/get url-str
+                             {:headers {"User-Agent" "curl/7.43.0"}})]
+    (if (not= (response :status) 200)
+      (throw (IOException. (str "Got response status:" (response :status))))
+
+      (response :body))))
+
+(defn fetch-url-as-stream [url-str]
+  (let [response (client/get url-str
+                             {:headers {"User-Agent" "curl/7.43.0"}
+                              :as :stream})]
+    (if (not= (response :status) 200)
+      (throw (IOException. (str "Got response status:" (response :status))))
+
+      (response :body))))
 
 (defn get-build-info
   "Get the build info associated with the current build"
@@ -26,43 +45,29 @@
   []
   (let [url (cond
               (utils/running-nix?)
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.edn")
+              "http://tiny.cc/gdednixedn"
 
               :else
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.edn"))
-        conn (.openConnection url)]
-
-    ;; Setup reasonable timeouts to contact the server with
-    (doto conn
-      (.setConnectTimeout 10000)
-      ;; (.setReadTimeout 1000)
-      )
+              "http://tiny.cc/gdededn")]
 
     ;; Return the contents of the file to the caller
-    (edn/read-string (slurp (.getInputStream conn)))))
+    (edn/read-string (fetch-url url))))
 
 (defn fetch-latest-build
   [build-info]
   (let [url (cond
               (utils/running-nix?)
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.nix.bin")
+              "http://tiny.cc/gdednixbin"
 
               :else
-              (java.net.URL. "https://dl.dropboxusercontent.com/u/3848680/grimdawn/editor/gd-edit.exe"))
-        conn (.openConnection url)
+              "http://tiny.cc/gdedexe")
         file (java.io.File/createTempFile "gd-edit" ".exe")]
-
-    ;; Setup reasonable timeouts to contact the server with
-    (doto conn
-      (.setConnectTimeout 10000)
-      ;; (.setReadTimeout 1000)
-      )
 
     ;; Try to copy the file contents to a temp location
     (println "Downloading new version")
 
     (progress/with-file-progress file :filesize (:filesize build-info)
-      (io/copy (.getInputStream conn) file))
+      (io/copy (fetch-url-as-stream url) file))
 
     ;; Return the temp location to caller
     file))

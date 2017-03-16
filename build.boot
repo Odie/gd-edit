@@ -3,7 +3,7 @@
 
 (set-env! :resource-paths #{"resources" "src"}
           :source-paths   #{"test"}
-          :dependencies   '[[org.clojure/clojure "RELEASE"]
+          :dependencies   '[[org.clojure/clojure "1.9.0-alpha14"]
                             [org.clojure/tools.namespace "0.2.11" :scope "test"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
                             [jline/jline "2.14.2"]
@@ -23,7 +23,8 @@
                             [digest "1.4.5" :scope "test"]
                             [me.raynes/fs "1.4.6"]
                             [midje "1.9.0-alpha6" :scope "test"]
-                            [zilti/boot-midje "0.2.2-SNAPSHOT" :scope "test"]])
+                            [zilti/boot-midje "0.2.2-SNAPSHOT" :scope "test"]
+                            [clj-http "2.3.0"]])
 
 
 
