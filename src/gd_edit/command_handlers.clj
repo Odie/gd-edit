@@ -860,38 +860,17 @@
     (= java.lang.Double type)
     (Double/parseDouble val-str)
 
+    (= java.lang.Short type)
+    (Short/parseShort val-str)
+
     (= java.lang.Integer type)
     (Integer/parseInt val-str)
 
     (= java.lang.Long type)
-    (Integer/parseInt val-str)
+    (Long/parseLong  val-str)
 
     (= java.lang.Boolean type)
     (parseBoolean val-str)))
-
-(defn coerce-int-to-type
-  [val-int to-type]
-
-  (cond
-    (= java.lang.String to-type)
-    (.toString val-int)
-
-    (= java.lang.Float to-type)
-    (float val-int)
-
-    (= java.lang.Double to-type)
-    (double val-int)
-
-    (= java.lang.Integer to-type)
-    (Integer. val-int)
-
-    (= java.lang.Long to-type)
-    (Long. val-int)
-
-    (= java.lang.Boolean to-type)
-    (if (= val-int 0)
-      false
-      true)))
 
 (defn coerce-number-to-type
   [val-number to-type]
@@ -906,11 +885,19 @@
     (= java.lang.Double to-type)
     (double val-number)
 
+    (= java.lang.Short type)
+    (Short. val-number)
+
     (= java.lang.Integer to-type)
     (int val-number)
 
     (= java.lang.Long to-type)
     (long val-number)
+
+    (= java.lang.Boolean to-type)
+    (if (= val-number 0)
+      false
+      true)
 
     :else
     (throw (Throwable. (format "Don't know how to coerce %s => %s"
@@ -922,9 +909,6 @@
   (cond
     (string? val)
     (coerce-str-to-type val to-type)
-
-    (int? val)
-    (coerce-int-to-type val to-type)
 
     (number? val)
     (coerce-number-to-type val to-type)
