@@ -963,7 +963,7 @@
   (let [bb ^ByteBuffer (utils/file-contents filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
-        seed (bit-xor (.getInt bb) 1431655765)
+        seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) 1431655765)
         enc-table (generate-encryption-table seed)
         enc-context (make-enc-context seed enc-table)
 
