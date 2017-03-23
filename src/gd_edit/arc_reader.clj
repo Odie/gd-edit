@@ -38,6 +38,31 @@
    :compressed-size :int32
    :decompressed-size :int32))
 
+(def tex-header
+  (s/ordered-map
+   :magic          (s/string :ascii
+                             :length 3)
+   :version      :byte
+   :fps          :int32
+   :frame-length :int32))
+
+
+(def dds-preamble
+  (s/ordered-map
+   :magic          (s/string :ascii
+                             :length 3)
+   :variant      :byte))
+
+(def dds-header
+  (s/ordered-map
+   :size         :int32
+   :flags        :int32
+   :height       :int32
+   :width        :int32
+   :linear-size  :int32
+   :depth        :int32
+   :mipmap-count :int32))
+
 
 (defn- load-header
   [^ByteBuffer bb]
@@ -217,6 +242,58 @@
                        (conj accum record))))
                  []))))
 
+(defn load-arc-tex-file
+  [filepath]
+
+  (let [bb (utils/mmap filepath)
+        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
+        header (load-header bb)
+        record-headers (load-record-headers bb header)]
+
+    (->> record-headers
+         (reduce (fn [accum record-header]
+                   (let [record {:recordname (load-record-filename bb header record-header)
+                                 }]
+                     (header (empty? (:recordname record))
+                       accum
+                       (conj accum record))))
+                 []))))
+
+(defn read-tex-header
+  [bb]
+
+  (s/read-struct tex-header bb)
+  (s/read-struct dds-preamble bb)
+  (s/read-struct dds-header bb))
+
+(defn texture-dimensions
+  [dds-header]
+
+  (select-keys dds-header [:width :height]))
+
+(defn make-load-tex-fn
+  [tex-arc-filepath load-fn]
+
+  (let [bb (utils/file-contents tex-arc-filepath)
+        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
+        header (load-header bb)
+        record-headers (->>  (load-record-headers bb header)
+                             (map (fn [record-header]
+                                    {:recordname (load-record-filename bb header record-header)
+                                     :record-header record-header})))]
+
+    (fn [tex-name]
+
+      (if-let [target (->> record-headers
+                           (filter #(= (:recordname %) tex-name))
+                           (first))]
+
+        (let [target-bb (as-> (load-record bb header (:record-header target)) $
+                          (ByteBuffer/wrap $)
+                          (.order $ java.nio.ByteOrder/LITTLE_ENDIAN))]
+
+          (load-fn target-bb))))))
+
 (defn unpack-arc-file
   [filepath outpath]
 
@@ -258,3 +335,6 @@
 
 #_(def l (load-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc"))
 #_(unpack-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc" (io/file (utils/working-directory) "templates"))
+
+#_(def t (make-load-tex-fn "/Users/Odie/Dropbox/Public/GrimDawn2/resources/Items.arc" (comp texture-dimensions read-tex-header)))
+#_(t "gearweapons/hammers1h/bitmaps/f002_blunt.tex")
