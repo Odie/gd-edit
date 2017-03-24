@@ -65,8 +65,6 @@
            (fn [key settings old-state new-state]
              (if (not= (old-state :game-dir) (new-state :game-dir))
                (bind-texture-slot-dims-fn))))
-(if-not (bound? #'texture-slot-dims)
-  (bind-texture-slot-dims-fn))
 
 (defn- coord->slot-id
   [{:keys [X Y]} stride]
@@ -96,6 +94,9 @@
 (defn items->dims
   [items]
 
+  (if-not (bound? #'texture-slot-dims)
+    (bind-texture-slot-dims-fn))
+
   (->> items
        (map :basename)
        (map @globals/db-index)
@@ -105,6 +106,9 @@
 
 (defn item->dims
   [item]
+
+  (if-not (bound? #'texture-slot-dims)
+    (bind-texture-slot-dims-fn))
 
   (->> item
        (:basename)
