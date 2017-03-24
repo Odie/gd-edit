@@ -12,20 +12,24 @@
              [utils :as u]
              [self-update :as su]
              [equation-eval :as eq]
-             [stack :as stack]]
+             [stack :as stack]
+             [structure-walk :as sw]
+             [db-utils :as dbu]]
+            [gd-edit.commands.item]
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]
             [gd-edit.utils :as utils]
             [me.raynes.fs :as fs]
-            ))
+
+            [gd-edit.printer :as printer]))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
 
 ;;--------------------------------------------------------------------
 ;; Query and pagination functions
-(declare is-item? show-item set-item-handler record-by-name)
+(declare show-item set-item-handler)
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -67,23 +71,6 @@
                                      :result new-result
                                      :page 0)))
 
-
-(defn print-result-records
-  [results]
-  {:pre [(sequential? results)]}
-
-  (doseq [kv-map results]
-    (println (:recordname kv-map))
-    (doseq [[key value] (->> kv-map
-                             seq
-                             (filter #(not (keyword? (first %1))))
-                             (sort-by first))]
-
-      (println (format "\t%s: %s" key (yellow value))))
-
-    (newline)))
-
-
 (defn print-paginated-result
   [query-state]
 
@@ -92,7 +79,7 @@
         start-entry (* page pagination-size)
         end-entry (+ start-entry (min (count paginated-result) pagination-size))]
 
-    (print-result-records paginated-result)
+    (printer/print-result-records paginated-result)
     (println)
     (println (format "%d-%d / %d %s" start-entry end-entry (count result) (yellow "matched records")))))
 
@@ -199,8 +186,8 @@
     ;; list of matched paths
     ;; Try to fetch the full recordname of the match now
     (if (= 1 (count sorted-matches))
-      (print-result-records
-       [(record-by-name (first sorted-matches))])
+      (printer/print-result-records
+       [(dbu/record-by-name (first sorted-matches))])
 
 
       ;; If we have multiple record matches...
@@ -255,8 +242,6 @@
       (.append builder " custom"))
     (.toString builder)))
 
-(declare print-indent)
-
 (defn- character-selection-screen
   []
 
@@ -283,7 +268,7 @@
                              (fn []                               ; function to run when selected
                                (let [savepath (.getPath (io/file dir "player.gdc"))]
                                  (println "Loading from:")
-                                 (print-indent 1)
+                                 (u/print-indent 1)
                                  (println (yellow savepath))
                                  (load-character-file savepath)
                                  (character-manipulation-screen!))
@@ -338,383 +323,12 @@
   (and (not (nil? @gd-edit.globals/character))
        (not (empty? @gd-edit.globals/character))))
 
-(defn- keyword->str
-  [k]
-  (if (keyword? k)
-    (subs (str k) 1)
-    k))
-
-(defn- without-meta-fields
-  [kv-pair]
-
-  (not (.startsWith (str (first kv-pair)) ":meta-")))
-
 (defn- without-recordname
   [[key value]]
   (not= key :recordname))
 
-(defn print-map
-  [character-map & {:keys [skip-item-count]
-                    :or {skip-item-count false}}]
 
-  (let [character (->> character-map
-                       (filter without-meta-fields)
-                       (sort-by first))
 
-        max-key-length (reduce
-                        (fn [max-length key-str]
-                          (if (> (count key-str) max-length)
-                            (count key-str)
-                            max-length))
-                        0
-
-                        ;; Map the keys to a more readable string format
-                        (->> character
-                             (keys)
-                             (map keyword->str))
-                        )]
-
-    (doseq [[key value] character]
-      (println
-
-       ;; Print the key name
-       (format (format "%%%ds :" (+ max-key-length 2))
-               (keyword->str key))
-
-       ;; Print the value
-       (cond
-         (coll? value)
-         (format "collection of %d items" (count value))
-
-         (and (string? value) (empty? value))
-         "\"\""
-
-         :else
-         (yellow value))))
-
-    (when-not skip-item-count
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
-
-(defn print-map-difference
-  [[only-in-a only-in-b _]]
-
-  (if (empty? only-in-a)
-    (println "Nothing has been changed")
-
-    (let [max-key-length (->> (keys only-in-a)
-                              (map (comp count keyword->str))
-                              (apply max))]
-
-      (doseq [[key value] (sort only-in-a)]
-        (println
-
-         ;; Print the key name
-         (format (format "%%%ds :" (+ max-key-length 2))
-                 (keyword->str key))
-
-         ;; Print the value
-         (cond
-           (coll? value)
-           (format "collection with %d items changed" (->> value
-                                                         (filter some?)
-                                                         (count)))
-
-           :else
-           (do
-             ;; (println (format "%s => %s" (yellow (type value)) (yellow (type (only-in-b key)))))
-             (format "%s => %s" (yellow value) (yellow (only-in-b key)))))))
-
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count only-in-a)) "fields changed"))))
-
-(defn str-without-dash
-  [str]
-  (string/replace str "-" ""))
-
-(defn- partially-match-key
-  "Given a map and a partial key, return a list of pairs that partially matches the key"
-  [m search-target]
-
-  (let [haystack (filter without-meta-fields m)
-
-        ;; Locate all partial matches
-        partial-matches (filter (fn [[key value]]
-                                  (let [k-str (keyword->str key)]
-                                    (or (u/ci-match k-str search-target)
-                                        (u/ci-match (str-without-dash k-str) search-target))))
-                                haystack)
-
-        ;; Are any of the partial matches actual exact matches?
-        ;; If we don't look for
-        exact-match (filter (fn [[key value]]
-                              (let [k-str (keyword->str key)]
-                                (or (and (u/ci-match k-str search-target)
-                                         (= (count k-str) (count search-target)))
-                                    (and (u/ci-match (str-without-dash k-str) search-target)
-                                         (= (count (str-without-dash k-str)) (count search-target))))))
-                            partial-matches)]
-
-    ;; If we can find an exact match, use that.
-    ;; Otherwise, return the partial matches
-    (if (= (count exact-match) 1)
-      exact-match
-      partial-matches)))
-
-(defn- coerce-to-int
-  [input]
-
-  (cond
-    (number? input)
-    (int input)
-
-    (string? input)
-    (Integer/parseInt input)
-
-    :else
-    (throw (Throwable. "Can't deal with input"))))
-
-(defn- nav-into
-  [coll key]
-
-  (cond
-    ;; If we're looking at a sequential collection, try to interpret key as an index
-    (sequential? coll)
-    (get coll (coerce-to-int key))
-
-    (associative? coll)
-    (get coll key)
-
-    :else
-    (throw (Throwable. "Can't deal with coll with type: " (type coll)))))
-
-(defn walk-structure
-  [m ks-all]
-
-  (letfn [;; We want to return a slightly more complex set of data to the caller.
-          ;; This helper function helps us construct the return map so we don't have
-          ;; to sprinkle this everywhere.
-          (return-result [result end-ks actual-path & others]
-            (merge {;; Report the result the caller said to report
-                    :status result
-
-                    ;; Calculate the longest path traversed
-                    :longest-path (take (- (count ks-all) (count end-ks)) ks-all)
-                    :actual-path actual-path
-                    }
-
-                   (first others))
-            )]
-    ;; For each item in the specified ks
-    ;; Try to iterate a level deeper using the next key
-    (loop [cursor m
-           ks ks-all
-           actual-path []
-           ]
-
-      ;; Which key are we trying to navigate to?
-      (let [k (first ks)]
-        (cond
-          ;; Did we try navigating into a location that doesn't exist?
-          (nil? cursor)
-          (return-result :not-found ks actual-path)
-
-          ;; Did we exhaust all the keys?
-          ;; If so, we're done navigating into the hierarchy.
-          ;; The cursor should be pointing at the item the user wants
-          (nil? k)
-          (return-result :found ks actual-path {:found-item cursor})
-
-          ;; If we have a sequential collection, just try to navigate into
-          ;; the collection with the key
-          (sequential? cursor)
-          (recur (nav-into cursor k) (rest ks) (conj actual-path (coerce-to-int k)))
-
-          ;; If we're looking at an associative collection, then we want to
-          ;; perform partial matching on the current key
-          (associative? cursor)
-          (let [matches (partially-match-key cursor k)]
-            (cond
-              ;; If we can't get a match at all, we cannot navigate to the key
-              (= (count matches) 0)
-              (return-result :not-found (rest ks) actual-path)
-
-              ;; If we have more than one match, tell the caller we cannot
-              ;; resolve this ambiguity.
-              (> (count matches) 1)
-              (return-result :too-many-matches (rest ks) actual-path {:ambiguous-matches matches})
-
-              :else
-              (let [[matched-key matched-value] (first matches)]
-                (recur matched-value (rest ks) (conj actual-path matched-key)))))
-
-          :else
-          (return-result :cannot-traverse ks actual-path))))))
-
-
-(defn print-details
-  [data]
-
-  (assert (associative? data))
-  (assert (= (count data) 1))
-
-  (let [[key value] (first data)]
-    (println (format "%s:" (keyword->str key)))
-
-    (cond
-      (or (number? value) (string? value))
-      (do
-        (print "        ")
-        (println value))
-
-      (sequential? value)
-      (do
-        (u/doseq-indexed i [item value]
-                         (println i ":")
-                         (cond
-                           (sequential? item)
-                           (println
-                            (format "collection of %d items" (count item)))
-
-                           (associative? item)
-                           (do
-                             (print-map item :skip-item-count true)
-                             (if-not (= item (last value))
-                               (newline)))
-
-                           :else
-                           (throw (Throwable. "Don't know how to print details for a sequence of this type yet!")))
-                         )))))
-
-(defn print-indent
-  [indent-level]
-
-  (dotimes [i indent-level]
-    (print "    ")))
-
-
-(defn- is-primitive?
-  [val]
-
-  (or (number? val) (string? val) (u/byte-array? val) (boolean? val)))
-
-(defn print-primitive
-  ([obj]
-   (print-primitive obj 0))
-
-  ([obj indent-level]
-   (cond
-     (or (number? obj) (string? obj) (boolean? obj))
-     (do
-       (print-indent indent-level)
-       (println (yellow obj)))
-
-     (u/byte-array? obj)
-     (do
-       (print-indent indent-level)
-       (println (format "byte array[%d]" (count obj))
-                (map #(format (yellow "%02X") %1) obj)))
-     )))
-
-(declare is-skill? skill-name is-faction? faction-name)
-
-(defn print-sequence
-  [obj]
-
-  (u/doseq-indexed i [item obj]
-                   ;; Print the index of the object
-                   (print (format
-                           (format "%%%dd: " (-> (count obj)
-                                                 (Math/log10)
-                                                 (Math/ceil)
-                                                 (max 1)
-                                                 (int)))
-                           i))
-
-
-                   ;; Print some representation of the object
-                   ;; We don't call print-object here
-                   ;; because we do not want to recursively print the data tree.
-                   (let [item-type (type item)]
-                     (cond
-                       (is-primitive? item)
-                       (print-primitive item)
-
-                       (sequential? item)
-                       (println (format "collection of %d items" (count item)))
-
-                       (associative? item)
-                       (do
-
-                         ;; If we've encountered something that requires annotation,
-                         ;; print the annotation now.
-                         (let [annotation
-                               (cond
-                                 (is-item? item)
-                                 (item-name item @gd-edit.globals/db)
-
-                                 (is-skill? item)
-                                 (skill-name item)
-
-                                 (is-faction? item)
-                                 (faction-name i)
-
-                                 :else
-                                 nil)]
-                               (if-not (nil? annotation)
-                                 (do
-                                   ;; Print annotation on the same line as the index
-                                   (println (yellow annotation))
-                                   (newline))
-
-                                 ;; No annotation needs to be printed,
-                                 ;; close the line that prints the index
-                                 (newline))
-                               )
-
-                         (print-map item :skip-item-count true)
-                         (if-not (= i (dec (count obj)))
-                           (newline))
-                         )
-
-                       :else
-                       (println item))))
-  )
-
-(defn print-object
-  [obj]
-
-  (let [t (type obj)]
-    (cond
-      (is-primitive? obj)
-      (print-primitive obj 1)
-
-      (sequential? obj)
-      (print-sequence obj)
-
-      ;; If we're looking at an item, print all of its details and related records
-      (is-item? obj)
-      (show-item obj)
-
-      (associative? obj)
-      (print-map obj)
-
-      :else
-      (throw (Throwable. "Unhandled case"))
-      )))
-
-(defn print-ambiguous-walk-result
-  [result]
-
-  (println (format "Cannot traverse path because \"%s\""
-                   (clojure.string/join "/" (:longest-path result)))
-           "matches more than one item:")
-
-  (doseq [ambiguous-item (->> (:ambiguous-matches result)
-                              (keys)
-                              (map keyword->str))]
-    (print-indent 1)
-    (println ambiguous-item)))
 
 (defn- classname
   [obj]
@@ -754,7 +368,7 @@
     ;; The character is loaded
     ;; If there aren't any filter conditions, just display all the character fields
     (= (count tokens) 0)
-    (print-map @globals/character)
+    (printer/print-map @globals/character)
 
     :else
     (do
@@ -766,7 +380,7 @@
 
                         ;; If the user supplied a long path, we should try to walk the
                         ;; data structure first and arrive at a base object
-                        (let [result (walk-structure @globals/character (butlast path-keys))
+                        (let [result (sw/walk @globals/character (butlast path-keys))
                               {:keys [status found-item]} result]
 
                           (cond
@@ -774,7 +388,7 @@
                             (println "No matches found")
 
                             (= status :too-many-matches)
-                            (print-ambiguous-walk-result result)
+                            (sw/print-ambiguous-walk-result result)
 
                             (= status :cannot-traverse)
                             (print-cannot-traverse-walk-result result)
@@ -786,7 +400,7 @@
         ;; Now that we've found a base object to navigate into...
         (when-not (nil? base-obj)
           ;; Walk into it one more level...
-          (let [result (walk-structure base-obj [(last path-keys)])
+          (let [result (sw/walk base-obj [(last path-keys)])
                 {:keys [status]} result
 
                 matched-obj (cond
@@ -797,15 +411,15 @@
                               (into {} (:ambiguous-matches result))
 
                               (= status :cannot-traverse)
-                              (let [result (walk-structure @globals/character path-keys)]
+                              (let [result (sw/walk @globals/character path-keys)]
                                 (print-cannot-traverse-walk-result result))
 
                               ;; If we found a result and it looks like a primitive...
                               ;; We want to print the path to that primitive then the value
-                              (and (= status :found) (is-primitive? (:found-item result)))
-                              (let [result (walk-structure @globals/character path-keys)]
+                              (and (= status :found) (u/is-primitive? (:found-item result)))
+                              (let [result (sw/walk @globals/character path-keys)]
                                 (println (->> (:actual-path result)
-                                              (map keyword->str)
+                                              (map u/keyword->str)
                                               (string/join "/")))
                                 (:found-item result))
 
@@ -820,7 +434,7 @@
             ;; This might be a piece of data in the character sheet or a list of partially matched result
             ;; for some structure represented as a map
             (if-not (nil? matched-obj)
-              (print-object matched-obj))))))))
+              (printer/print-object matched-obj))))))))
 
 
 (defn- parseBoolean
@@ -998,7 +612,7 @@
       ;; Split a path into components.
       ;; We're going to use these as keys to navigate into the character sheet
       (let [path-keys (string/split (first tokens) #"/")
-            walk-result (walk-structure @globals/character path-keys)
+            walk-result (sw/walk @globals/character path-keys)
             {:keys [status]} walk-result]
 
         (cond
@@ -1006,7 +620,7 @@
           (println "No matches found")
 
           (= status :too-many-matches)
-          (print-ambiguous-walk-result walk-result)
+          (sw/print-ambiguous-walk-result walk-result)
 
           (= status :found)
           (do
@@ -1015,23 +629,29 @@
                   ;; What is the type of the value? We'll have to coerce the supplied new value
                   ;; to the same type first.
                   newval (try (coerce-to-type (second tokens) (type value))
-                              (catch Exception e :failed))]
+                              (catch Exception e :failed))
+                  val-path (:actual-path walk-result)]
 
               (cond
                 ;; Is the targetted value an item?
                 ;; Let the set-item handler deal with it
-                (is-item? value)
+                (u/is-item? value)
+                (set-item-handler [input tokens])
+
+                ;; Did the user specify the some inventory items collection?
+                (and (= (first val-path) :inventory-sacks)
+                     (= (last val-path) :inventory-items))
                 (set-item-handler [input tokens])
 
                 (and
-                 (is-item? (get-in @globals/character (butlast (:actual-path walk-result))))
-                 (= :relic-name (last (:actual-path walk-result))))
+                 (u/is-item? (get-in @globals/character (butlast val-path)))
+                 (= :relic-name (last val-path)))
                 (do
-                  (set-item--relic-name @globals/db (:actual-path walk-result) newval)
+                  (set-item--relic-name @globals/db val-path newval)
                   (swap! globals/character
                          set-character-field
                          ;; Set the item's relic-completion-level field...
-                         (path-sibling (:actual-path walk-result)
+                         (path-sibling val-path
                                        :relic-completion-level)
 
                          ;; to 4
@@ -1054,7 +674,7 @@
                 :else
                 ;; Set the new value into the character sheet
                 (reset! globals/character
-                        (update-in @globals/character (:actual-path walk-result) (fn [oldval] newval)))
+                        (update-in @globals/character val-path (fn [oldval] newval)))
                 )
               nil
               ))
@@ -1126,17 +746,17 @@
       (= backup-status true)
       (do
         (println "Save file backed up to:")
-        (print-indent 1)
+        (u/print-indent 1)
         (println (yellow backup-path)))
 
       (= backup-status false)
       (do
         (println "Cannot backup file up to:")
-        (print-indent 1)
+        (u/print-indent 1)
         (println (yellow backup-path))))
 
     (println "Saving file:" )
-    (print-indent 1)
+    (u/print-indent 1)
     (println (yellow savepath))
 
     (gd-edit.gdc-reader/write-character-file character (.getCanonicalPath (io/file savepath)))))
@@ -1178,7 +798,7 @@
         (if (.exists (.getParentFile (io/file (get-savepath character))))
           (do
             (println "Unable to rename save directory because it conflicts with an existing directory: ")
-            (print-indent 1)
+            (u/print-indent 1)
             (println (yellow (.getCanonicalPath (.getParentFile (io/file (get-savepath character))))))
             (newline)
             (println "Please rename your character before trying again."))
@@ -1249,7 +869,7 @@
           (= status :new-path-already-exists)
           (do
             (println (red "Cannot copy character because the directory already exists:"))
-            (print-indent 1)
+            (u/print-indent 1)
             (println savepath))
 
           :else
@@ -1309,518 +929,6 @@
 
   (intern 'gd-edit.globals 'db (future (load-db)))
   (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
-
-(defn record-by-name
-  [recordname]
-
-  (@globals/db-index recordname))
-
-(defn related-db-records
-  [record db]
-
-  (let [;; Collect all values in the record that look like a db record
-        related-recordnames (->> record
-                                 (reduce (fn [coll [key value]]
-                                           (if (and (string? value) (.startsWith value "records/"))
-                                             (conj coll value)
-                                             coll
-                                             ))
-                                         #{}))
-
-        ;; Retrieve all related records by name
-        related-records (filter #(contains? related-recordnames (:recordname %1)) db)]
-
-    related-records))
-
-(defn- is-valid-item?
-  [item]
-
-  (if (or  (nil? (:basename item)) (empty? (:basename item)))
-    false
-    true))
-
-(declare item-base-record-get-base-name
-         item-base-record-get-quality-name)
-
-(defn- item-name
-  [item db]
-
-  (if-not (is-valid-item? item)
-    nil
-
-    (let [related-records (related-db-records item db)
-          base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
-                          (first))
-
-          base-name (item-base-record-get-base-name base-record)
-
-          is-set-item (some #(contains? %1 "itemSetName") related-records)]
-
-      ;; If we can't find a base name for the item, this is not a valid item
-      ;; We can't generate a name for an invalid item
-      (if (not (nil? base-name))
-
-        ;; If we've found an item with a unique name, just return the name without any
-        ;; prefix or suffix
-        (if is-set-item
-          base-name
-
-          ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
-          ;; of the item
-          (let [prefix-name (-> (filter #(string/includes? (:recordname %1) "/prefix/") related-records)
-                                (first)
-                                (get "lootRandomizerName"))
-                suffix-name (-> (filter #(string/includes? (:recordname %1) "/suffix/") related-records)
-                                (first)
-                                (get "lootRandomizerName"))
-                quality-name (item-base-record-get-quality-name base-record)
-                ]
-
-            (->> [prefix-name quality-name base-name suffix-name]
-                 (filter #(not (nil? %1)))
-                 (string/join " "))
-            ))
-        ))))
-
-(defn- is-skill?
-  "Does the given collection look like something that represents an in-game skill?"
-  [coll]
-
-  (and (associative? coll)
-       (contains? coll :skill-name)))
-
-(defn- skill-name
-  [skill]
-
-  (let [record (-> (:skill-name skill)
-                   (record-by-name))]
-    (or (record "FileDescription")
-        (record "skillDisplayName"))))
-
-(defn- is-faction?
-  [coll]
-
-  (and (associative? coll)
-       (contains? coll :faction-value)))
-
-(defn- faction-name
-  [index]
-
-  (let [faction-names {1  "Devil's Crossing"
-                       2  "Aetherials"
-                       3  "Chthonians"
-                       4  "Cronley's Gang"
-                       6  "Rovers"
-                       8  "Homestead"
-                       10 "The Outcast"
-                       11 "Death's Vigil"
-                       12 "Undead"
-                       13 "Black Legion"
-                       14 "Kymon's Chosen"}]
-      (faction-names index)))
-
-(defn- is-item?
-  "Does the given collection look like something that represents an in-game item?"
-  [coll]
-
-  (and (associative? coll)
-       (contains? coll :basename)))
-
-(defn- show-item
-  "Print all related records for an item"
-  [item]
-
-  (cond
-
-    (not (is-item? item))
-    (println "Sorry, this doesn't look like an item")
-
-    (empty? (:basename item))
-    (do
-      (println "This isn't a valid item (no basename)")
-      (print-map item))
-
-    :else
-    (let [related-records (related-db-records item @gd-edit.globals/db)
-          name (item-name item @gd-edit.globals/db)
-          ]
-      (when (not (nil? name))
-        (println (yellow name))
-        (newline))
-      (print-map item :skip-item-count true)
-      (newline)
-      (print-result-records related-records)
-      )))
-
-(defn- affix-record-get-name
-  [affix-record]
-  (affix-record "lootRandomizerName"))
-
-(defn- item-base-record-get-base-name
-  [base-record]
-
-  (or (get base-record "itemNameTag") (-> (get base-record "description")
-                                          (string/replace "^k" ""))))
-
-(defn- item-base-record-get-quality-name
-  [base-record]
-
-  (or (base-record "itemQualityTag") (base-record "itemStyleTag")))
-
-(defn- item-base-record-get-name
-  [item-base-record]
-
-  (let [base-name (item-base-record-get-base-name item-base-record)
-        quality-name (item-base-record-get-quality-name item-base-record)]
-
-    (->> [quality-name base-name]
-         (filter #(not (nil? %1)))
-         (string/join " "))))
-
-(defn item-or-affix-get-name
-  [record]
-
-  (or (affix-record-get-name record) (item-base-record-get-name record)))
-
-(defn name-idx-best-matches
-  [name-idx target-name]
-
-  (->> name-idx
-
-       ;; Score and sort the item name index
-       ;; First, we rank by the name's overall similiarity
-       ;; This should help to filter out items that are not at all similar
-       (map (fn [[item-name item-record]]
-              [(u/string-similarity (string/lower-case item-name) (string/lower-case target-name)) item-name item-record]))
-       (sort-by first >)
-       ))
-
-(defn compare-match-candidates
-  "Expects 2 items in the form of [score candidate matched-name matched-records]. Return true or false indicating if c1 > c2."
-  [c1 c2]
-
-  (cond
-    ;; If we're compare two items with the same score, prefer the one that matched the longer
-    ;; token. This applies specifically when we found more than one item that perfectly
-    ;; matched the partial name of an item.
-    (= (first c1) (first c2))
-    (> (count (second c1)) (count (second c2)))
-
-    ;; If the scores are clearly different, then just compare the score
-    (> (first c1) (first c2))
-    true
-
-    :else
-    false))
-
-(defn idx-best-match
-  "Take the index and an array of 'tokenized' item name, try to find the best match.
-  Returns [score candidate matched-name matched-records]]"
-  [idx item-name-tokens]
-
-  (let [;; Build a list of candidates to attempt matching against know prefixes
-        candidates (->> item-name-tokens
-                        (reduce (fn [results token]
-                                  (conj results (conj (last results) token)))
-
-                                [[]]
-                                )
-                        (drop 1))
-
-        ;; Try to locate a best match by ranking all candidates
-        best-match (->> candidates
-                        (map (fn [candidate]
-                               ;; For each candidate, return a pair [best-match, candidate]
-                               (let [[score matched-name matched-records] (->> (clojure.string/join " " candidate)
-                                                                               (name-idx-best-matches idx)
-                                                                               (first))]
-                                 [score candidate matched-name matched-records])))
-                        (sort compare-match-candidates)
-                        (first))]
-
-    ;; Does the best match seem "good enough"?
-    (if (and (not (nil? best-match))
-             (> (nth best-match 0) 0.85))
-      best-match
-      nil)))
-
-(defn analyze-multipart-item-name
-  [item-name-idx prefix-name-idx suffix-name-idx item-name]
-
-  (let [tokens (clojure.string/split item-name #" ")
-        tokens-cursor tokens
-
-        ;; See if we can match part of the item name against the prefix index
-        prefix-best-match (idx-best-match prefix-name-idx tokens-cursor)
-        prefix-record (if (nil? prefix-best-match)
-                        nil
-                        (do
-                          (get-in prefix-best-match [3 0])))
-
-        ;; Advance the tokens cursor if possible
-        tokens-cursor (if (not (nil? prefix-best-match))
-                        (drop (count (nth prefix-best-match 1)) tokens-cursor)
-                        tokens-cursor)
-
-        ;; See if we can match part of the item name against the item name index
-        base-best-match (idx-best-match item-name-idx tokens-cursor)
-        base-record (if (nil? base-best-match)
-                      nil
-                      (do
-                        (get-in base-best-match [3 0])))
-
-        ;; Advance the tokens cursor if possible
-        tokens-cursor (if (not (nil? base-best-match))
-                        (drop (count (nth base-best-match 1)) tokens-cursor)
-                        tokens-cursor
-                        )
-
-        ;; See if we can match part of the item name against the suffix name index
-        suffix-best-match (idx-best-match suffix-name-idx tokens-cursor)
-        suffix-record (if (nil? suffix-best-match)
-                      nil
-                      (do
-                        (get-in suffix-best-match [3 0])))
-
-        ;; Advance the tokens cursor if possible
-        tokens-cursor (if (not (nil? suffix-best-match))
-                        (drop (count (nth suffix-best-match 1)) tokens-cursor)
-                        tokens-cursor)
-        ]
-
-    {:base base-record
-     :prefix prefix-record
-     :suffix suffix-record
-     :remaining-tokens tokens-cursor
-     }))
-
-
-(defn- item-def->item
-  [def]
-
-  {:basename       (or (get-in def [:base :recordname]) "")
-   :prefix-name    (or (get-in def [:prefix :recordname]) "")
-   :suffix-name    (or (get-in def [:suffix :recordname]) "")
-   :modifier-name  ""
-   :transmute-name ""
-   :seed           (rand-int Integer/MAX_VALUE)
-
-   :relic-name     ""
-   :relic-bonus    ""
-   :relic-seed     0
-
-   :augment-name   ""
-   :unknown        0
-   :augment-seed   0
-
-   :var1        0
-   :stack-count 1})
-
-
-(defn analyze-item-name
-  [item-name-idx prefix-name-idx suffix-name-idx target-name]
-
-  (let [tokens (clojure.string/split target-name #" ")
-        tokens-cursor tokens
-
-        ;; Try to match against the whole name directly
-        whole-item-match {:base (get-in (idx-best-match item-name-idx tokens-cursor) [3 0])}
-
-        ;; Try to break down the item into multiple part components
-        multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
-
-        ;; Of the two results, figure out which one matches the input name more closely
-        ;; Return that item
-        match (->> [whole-item-match multi-part-match]
-                   (sort-by #(u/string-similarity
-                              (string/lower-case target-name)
-                              (string/lower-case (or
-                                                  (item-name (item-def->item %1) @globals/db)
-                                                  "")))
-                            >)
-                   (first))
-        ]
-
-     match))
-
-(defn name-idx-highest-level-by-name
-  [idx name level-cap]
-
-  ;; Grab the records referenced by the name
-  (let [records (idx name)]
-
-    ;; Locate the highest level item that does not exceed the level-cap
-    (->> records
-         (filter #(>= level-cap (or (%1 "levelRequirement") (%1 "itemLevel") 0)))
-         (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
-         (first))))
-
-(defn- record-has-display-name?
-  [record]
-
-  (or (get record "itemNameTag") (get record "description")))
-
-(defn swap-first-two
-  [vec]
-
-  (->> (apply conj [] (second vec) (first vec) (drop 2 vec))))
-
-(defn prefer-material-over-blueprint
-  [coll]
-
-  (if (and (> (count coll) 1)
-
-           ;; Do the items have the exact same name?
-           (= (item-base-record-get-name (first coll)) (item-base-record-get-name (second coll)))
-
-           ;; Is the preferred one a blueprint?
-           (utils/ci-match (:recordname (first coll)) "/items/crafting/blueprints/")
-           (utils/ci-match (:recordname (second coll)) "/items/crafting/materials/"))
-    (swap-first-two coll)
-    coll))
-
-
-(defn build-item-name-idx
-  [db]
-  (let [item-records (filter (fn [record]
-                               (and
-                                (some #(string/starts-with? (:recordname record) %1)
-                                      #{"records/items/"})
-                                (not (string/starts-with? (:recordname record) "records/items/lootaffixes"))
-                                (record-has-display-name? record)
-                               ))
-
-                             db)
-
-        item-name-idx (->> (group-by #(item-base-record-get-name %1) item-records)
-                           (map (fn [[k v]] [k (prefer-material-over-blueprint v)]))
-                           (into {})
-                           )]
-    item-name-idx
-    ))
-
-(defn item-is-materia?
-  [item]
-
-  (and (string/starts-with? (:basename item) "records/items/materia/")
-       (= ((record-by-name (:basename item)) "Class") "ItemRelic")))
-
-(defn item-materia-fill-completion-level
-  [item]
-
-  (if (item-is-materia? item)
-    (assoc item :relic-completion-level 4)
-    item))
-
-(defn construct-item
-  [target-name db level-cap]
-
-  ;; Build a list of base item names with their quality name
-  ;; The index takes the form of: item-name => [item-records]
-  ;; Multiple records may have the same name, but differ in strength
-  (let [item-name-idx (build-item-name-idx @globals/db)
-
-        ;; Build a prefix index
-        prefix-records (->> db
-                            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/prefix/"))
-                            (filter #(-> (:recordname %1)
-                                         (string/split #"/")
-                                         (count)
-                                         (= 5))))
-
-        prefix-name-idx (group-by #(%1 "lootRandomizerName") prefix-records)
-
-        ;; Build a suffix index
-        suffix-records (->> db
-                            (filter #(string/starts-with? (:recordname %1) "records/items/lootaffixes/suffix/"))
-                            (filter #(-> (:recordname %1)
-                                         (string/split #"/")
-                                         (count)
-                                         (= 5))))
-
-        suffix-name-idx (group-by #(%1 "lootRandomizerName") suffix-records)
-
-
-        ;; Try to decompose the complete item name into its prefix, base, and suffix
-        analysis (analyze-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
-
-        ;; Now that we know what the item is composed of, try to bring up the strength/level of each part
-        ;; as the level cap allows
-        ;; For example, there are 16 different suffixes all named "of Potency". Which one do we choose?
-        ;; We choose highest level one that is less or equal to the level cap
-        results (->> (select-keys analysis [:base :prefix :suffix])
-                     (map (fn [[key record]]
-                            [key
-
-                             (if (nil? record)
-                               nil
-                               (name-idx-highest-level-by-name
-                                (cond
-                                  (= key :base)
-                                  item-name-idx
-                                  (= key :prefix)
-                                  prefix-name-idx
-                                  (= key :suffix)
-                                  suffix-name-idx)
-                                (item-or-affix-get-name record)
-                                level-cap))])
-                          )
-                     (into {}))]
-
-    ;; An item must have a basename, which should refer to a item record
-    ;; If we could not find one that satisfies the target-name, then return nothing.
-    (if (nil? (:base results))
-      nil
-
-      ;; Otherwise, create a hashmap that represents the item
-      (->> (item-def->item results)
-           (item-materia-fill-completion-level)))))
-
-(defn set-item-handler
-  [[input [path target-name level-cap-str]]]
-
-  (let [path-keys (string/split path #"/")
-        result (walk-structure @gd-edit.globals/character path-keys)
-        {:keys [status found-item actual-path]} result
-
-        level-cap (if-not (nil? level-cap-str)
-                    (Integer/parseInt level-cap-str)
-                    (:character-level @globals/character))
-        ]
-
-    (cond
-      (= status :not-found)
-      (println "The path does not specify an item")
-
-      (= status :too-many-matches)
-      (print-ambiguous-walk-result result)
-
-      (not (contains? found-item :basename))
-      (println "Something was found at the path, but it does not look like an item")
-
-      :else
-      ;; Try to construct the requested item
-      (let [item (construct-item target-name @globals/db level-cap)]
-        ;; If construction was not successful, inform the user and abort
-        (cond
-          (nil? item)
-          (println "Sorry, the item could not be constructed")
-
-          (not (> (u/string-similarity (string/lower-case target-name) (string/lower-case (item-name item @globals/db))) 0.8))
-          (do
-            (show-item item)
-            (println "Sorry, the item generated doesn't look like the item you asked for.")
-            (println (red "Item not altered")))
-
-          ;; Otherwise, put the item into the character sheet
-          :else
-          (do
-            (swap! globals/character assoc-in (:actual-path result)
-                   (merge (get-in @globals/character actual-path) item))
-
-            ;; Show the user what was constructed and placed
-            (show-item (get-in @globals/character actual-path))))
-        ))))
 
 (def command-help-map
   [["exit"  "Exits the program"]
@@ -2046,7 +1154,7 @@
 
   (->> (map-indexed vector (character :skills))
        (filter (fn [[idx skill]] (= "Skill_Mastery" (-> (:skill-name skill)
-                                                        (record-by-name)
+                                                        (dbu/record-by-name)
                                                         (get "Class")
                                                          ))))))
 
@@ -2059,7 +1167,7 @@
 (defn- db-class-ui-records
   []
 
-  (->> (record-by-name "records/ui/skills/skills_mastertable.dbr")
+  (->> (dbu/record-by-name "records/ui/skills/skills_mastertable.dbr")
        ;; Grab all the fields named "skillCtrlPaneXXX"
        (filter (fn [[k v]] (string/starts-with? (str k) "skillCtrlPane")))
 
@@ -2068,7 +1176,7 @@
                   (Integer/parseInt (subs k (count "skillCtrlPane")))))
 
        ;; Follow the link to the classtable
-       (map (fn [[k v]] (record-by-name v)))
+       (map (fn [[k v]] (dbu/record-by-name v)))
        (filter #(not (empty? %)))))
 
 (defn- db-class-ui-record->class-name
@@ -2083,9 +1191,9 @@
 
       ;; Look up the records and grab the "skillName" field
       ;; This shoud give us the _classtraining db records
-      (record-by-name)
+      (dbu/record-by-name)
       (get "skillName")
-      (record-by-name)))
+      (dbu/record-by-name)))
 
 (defn- db-class-records
   []
@@ -2129,11 +1237,11 @@
     (println "classes:")
     (if (empty? classes)
       (do
-        (print-indent 1)
+        (u/print-indent 1)
         (println (yellow "None")))
 
       (doseq [klass classes]
-        (print-indent 1)
+        (u/print-indent 1)
         (println (yellow (:skill-display-name klass)))
                  (format "(skills/%d)" (:idx klass)))
                  )))
@@ -2151,7 +1259,7 @@
   (println "Known classes:")
   (doseq [classname (->> (db-class-ui-records)
                          (map db-class-ui-record->class-name))]
-    (print-indent 1)
+    (u/print-indent 1)
     (println classname)))
 
 (defn class-remove-handler
@@ -2344,7 +1452,7 @@
   [[input tokens]]
 
   (println "currently selected mod:")
-  (print-indent 1)
+  (u/print-indent 1)
   (if (:moddir @globals/settings)
     (println (u/last-path-component (:moddir @globals/settings)))
     (println "none")))
@@ -2371,7 +1479,7 @@
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+  (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
         level (dec level)]
 
     (* level (data-record "characterModifierPoints"))))
@@ -2381,7 +1489,7 @@
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+  (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
         level (dec level)]
 
     (apply + (take level (data-record "skillModifierPoints")))))
@@ -2391,7 +1499,7 @@
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")]
+  (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")]
 
     (if (= level 1)
       0
@@ -2436,7 +1544,7 @@
      "usage: level <new-level>")
 
     :else
-    (let [data-record (record-by-name "records/creatures/pc/playerlevels.dbr")
+    (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
           level (coerce-str-to-type (first tokens) java.lang.Integer)
           level-limit (data-record "maxPlayerLevel")
           ]
@@ -2454,7 +1562,7 @@
           (newline)
 
           (println "Updating the following fields:")
-          (print-map-difference (clojure.data/diff @globals/character modified-character))
+          (printer/print-map-difference (clojure.data/diff @globals/character modified-character))
 
           (swap! globals/character modify-character-level level)))
       )))
@@ -2490,7 +1598,7 @@
   [character]
 
   (let [base-attr-points 50
-        data-record (record-by-name "records/creatures/pc/playerlevels.dbr")]
+        data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")]
 
     (merge character
            (coerce-map-numbers-using-reference
@@ -2561,7 +1669,7 @@
       (do
         (println "Please choose from one of the valid respec types:")
         (doseq [r-type (sort valid-modes)]
-          (print-indent 1)
+          (u/print-indent 1)
           (println r-type)))
 
       ;; Try to modify the character according to the chosen mocd
@@ -2590,7 +1698,7 @@
 
         ;; Print how we're going to update the character
         (println "Updating the following fields:")
-        (print-map-difference differences)
+        (printer/print-map-difference differences)
 
         ;; Actually update the character
         (swap! globals/character (fn [oldval] modified-character))))))
@@ -2647,3 +1755,8 @@
           nil))
 
 #_(construct-item "Exalted Treads" @globals/db 100)
+
+#_(set-item-handler  [nil ["inv/1/items" "legion warhammer of valor" "64"]])
+
+
+#_(show-handler [nil ["inv/1/items"]])

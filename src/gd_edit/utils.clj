@@ -1,10 +1,11 @@
 (ns gd-edit.utils
   (:require [clojure
              [set :refer [intersection]]
-             [string :as string]]
+             [string :as str]]
             [jansi-clj.core :refer :all]
             [clojure.java.io :as io]
-            [clojure.edn :as edn])
+            [clojure.edn :as edn]
+            [gd-edit.db-utils :as dbu])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.nio.file.Paths
@@ -57,18 +58,18 @@
   "Check if str2 can be found in str1"
   [str1 str2]
 
-  (= (string/lower-case (str str1)) (string/lower-case (str str2))))
+  (= (str/lower-case (str str1)) (str/lower-case (str str2))))
 
 (defn case-insensitive-match
   "Check if str2 can be found in str1"
   [str1 str2]
 
-  (.contains (string/lower-case (str str1)) (string/lower-case (str str2))))
+  (.contains (str/lower-case (str str1)) (str/lower-case (str str2))))
 
 (def ci-match case-insensitive-match)
 
 (defn bigrams [s]
-  (->> (clojure.string/split s #"\s+")
+  (->> (str/split s #"\s+")
        (mapcat #(partition 2 1 %))
        (set)))
 
@@ -86,23 +87,23 @@
 ;;------------------------------------------------------------------------------
 (defn expand-home [s]
   (if (.startsWith s "~")
-    (clojure.string/replace-first s "~" (System/getProperty "user.home"))
+    (str/replace-first s "~" (System/getProperty "user.home"))
     s))
 
 (defn filepath->components
   [path]
 
-  (clojure.string/split path #"[/\\]"))
+  (str/split path #"[/\\]"))
 
 (defn components->filepath
   [components]
 
-  (clojure.string/join File/separator components))
+  (str/join File/separator components))
 
 (defn last-path-component
   [path]
 
-  (last (clojure.string/split path #"[/\\]")))
+  (last (str/split path #"[/\\]")))
 
 (defn path-exists
   [path]
@@ -130,7 +131,7 @@
   [^String string]
   "Like 'format' but with string interpolation"
   (let [-re #"#\{(.*?)\}"
-        fstr (clojure.string/replace string -re "%s")
+        fstr (str/replace string -re "%s")
         fargs (map #(read-string (second %)) (re-seq -re string))]
     `(format ~fstr ~@fargs)
     ))
@@ -159,7 +160,7 @@
 
 (defn running-windows?
   []
-  (string/starts-with? (System/getProperty "os.name") "Windows"))
+  (str/starts-with? (System/getProperty "os.name") "Windows"))
 
 
 ;;------------------------------------------------------------------------------
@@ -178,3 +179,82 @@
 (defn write-settings
   [settings]
   (spit (settings-file-path) (pr-str settings)))
+
+
+;;------------------------------------------------------------------------------
+;; Generic utils
+;;------------------------------------------------------------------------------
+(defn keyword->str
+  [k]
+  (if (keyword? k)
+    (subs (str k) 1)
+    k))
+
+(defn print-indent
+  [indent-level]
+
+  (dotimes [i indent-level]
+    (print "    ")))
+
+;;------------------------------------------------------------------------------
+;; gd-edit specific utils
+;;------------------------------------------------------------------------------
+(defn without-meta-fields
+  [kv-pair]
+
+  (not (.startsWith (str (first kv-pair)) ":meta-")))
+
+(defn is-primitive?
+  [val]
+
+  (or (number? val) (string? val) (byte-array? val) (boolean? val)))
+
+(defn is-item?
+  "Does the given collection look like something that represents an in-game item?"
+  [coll]
+
+  (and (associative? coll)
+       (contains? coll :basename)))
+
+(defn is-skill?
+  "Does the given collection look like something that represents an in-game skill?"
+  [coll]
+
+  (and (associative? coll)
+       (contains? coll :skill-name)))
+
+(defn is-faction?
+  [coll]
+
+  (and (associative? coll)
+       (contains? coll :faction-value)))
+
+(defn skill-name
+  [skill]
+
+  (let [record (-> (:skill-name skill)
+                   (dbu/record-by-name))]
+    (or (record "FileDescription")
+        (record "skillDisplayName"))))
+
+(defn faction-name
+  [index]
+
+  (let [faction-names {1  "Devil's Crossing"
+                       2  "Aetherials"
+                       3  "Chthonians"
+                       4  "Cronley's Gang"
+                       6  "Rovers"
+                       8  "Homestead"
+                       10 "The Outcast"
+                       11 "Death's Vigil"
+                       12 "Undead"
+                       13 "Black Legion"
+                       14 "Kymon's Chosen"}]
+    (faction-names index)))
+
+(defn item-is-materia?
+  [item]
+
+  (and (str/starts-with? (:basename item) "records/items/materia/")
+       (= ((dbu/record-by-name (:basename item)) "Class") "ItemRelic")))
