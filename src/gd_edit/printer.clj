@@ -3,8 +3,7 @@
              [db-utils :as dbu]
              [utils :as u]]
             [jansi-clj.core :refer :all]
-            [gd-edit.db-utils :as dbu]
-            [gd-edit.printer :as printer]))
+            [gd-edit.db-utils :as dbu]))
 
 
 
