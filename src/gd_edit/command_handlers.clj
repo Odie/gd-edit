@@ -177,13 +177,19 @@
                      #{})
 
              ;; Sort the matches
-             (sort))]
+             (sort))
+
+        exact-match (->> matches
+                         (some #(if (= path %)
+                                  %)))
+        ]
 
     ;; It's possible for the user to target a single record using "db show".
     ;; It that happens, we should just display the contents of that record instead of a
     ;; list of matched paths
     ;; Try to fetch the full recordname of the match now
-    (if (= 1 (count sorted-matches))
+    (if (or (= 1 (count sorted-matches))
+            (some? exact-match))
       (printer/print-result-records
        [(dbu/record-by-name (first sorted-matches))])
 
