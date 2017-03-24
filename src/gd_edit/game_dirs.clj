@@ -146,6 +146,11 @@
 
   (make-localization-filepath (get-game-dir)))
 
+(defn get-resources-file
+  [filename]
+
+  (io/file (get-game-dir) "resources" filename))
+
 (defn looks-like-game-dir
   [path]
 

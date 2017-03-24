@@ -12,6 +12,7 @@
              [jline :as jl]
              [utils :as utils]
              [self-update :as su]]
+            [gd-edit.commands.item]
             [jansi-clj.core :refer :all]
             [gd-edit.utils :as u]
             [clojure.core.async :as async :refer [thread >!!]]
@@ -84,23 +85,20 @@
   ;; directly in the command map and figure out which one should be
   ;; called
   (reduce
-   (fn [accum item]
+   (fn [accum tok-count]
      ;; accum will be the longest match we found so far
      ;; Check if we can match against a command if we put one more token
      ;; into the command
-     (let [command (conj accum item)]
-
+     (let [command (take tok-count tokens)]
        ;; Is the new command in the command-map?
        (if (command-map command)
          ;; If so, we've found a slightly longer match
          command
 
-         ;; If not, we can't find a longer match and we're
-         ;; done with the reduce
-         (reduced accum)
+         accum
          )))
    []
-   tokens))
+   (range (max (count tokens) 3))))
 
 (defn- find-menu-command
   "Returns a menu item that matches the given target string, or nil"

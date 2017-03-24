@@ -1,5 +1,5 @@
 (ns gd-edit.core-test
-  (:require [midje.sweet :refer :all]  
+  (:require [midje.sweet :refer :all]
             [gd-edit.core :refer :all]))
 
 (let [input "Hello world"]
@@ -22,10 +22,9 @@
    => ["command1"]
 
    (#'gd-edit.core/find-command ["command2" "sub-command"] command-map)
-   => ["command2" "sub-command"]
+   => ["command2" "sub-command"])
 
-   )
   (fact "commands must start with a base command then go on with subcommands"
    (#'gd-edit.core/find-command ["command3" "sub-command"] command-map)
-   => [])
+   => ["command3" "sub-command"])
   )
