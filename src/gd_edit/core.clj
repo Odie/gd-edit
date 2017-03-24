@@ -64,7 +64,6 @@
    ["class" "list"] (fn [input] (handlers/class-list-handler input))
    ["class" "add"] (fn [input] (handlers/class-add-handler input))
    ["class" "remove"] (fn [input] (handlers/class-remove-handler input))
-   ["item" "add"] (fn [input] (gd-edit.commands.item/item-add-handler input))
    ["gamedir"] (fn [input] (handlers/gamedir-handler input))
    ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
    ["savedir"] (fn [input] (handlers/savedir-handler input))

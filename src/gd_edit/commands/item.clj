@@ -306,7 +306,7 @@
 (defn- path-is-item?
   [character path]
 
-  (contains? (get-in character path) :basename))
+  (contains? (get-in @character path) :basename))
 
 (defn- path-is-inventory?
   [character path]
@@ -323,8 +323,8 @@
     ;; replace it with the new given item.
     (path-is-item? character val-path)
     (do
-      (swap! character assoc-in (val-path)
-             (merge (get-in @globals/character val-path) item))
+      (swap! character assoc-in val-path
+             (merge (get-in character val-path) item))
       true)
 
     ;; Did the call ask to have an item added to an inventory/sack?
@@ -351,8 +351,7 @@
 
         level-cap (if-not (nil? level-cap-str)
                     (Integer/parseInt level-cap-str)
-                    (:character-level @globals/character))
-        ]
+                    (:character-level @globals/character))]
 
     (cond
       (= status :not-found)
@@ -380,21 +379,6 @@
           :else
           (if-not (place-item-in-inventory! globals/character actual-path item)
             (println "Sorry, there is no room to fit the item.")
-            (printer/show-item item))))
-        )))
+            (printer/show-item item)))))))
 
-(defn item-add-handler
-  [[input tokens]]
-
-
-  (println "hello world!")
-  ;; (let [path-keys (str/split path #"/")
-  ;;       result (sw/walk @gd-edit.globals/character path-keys)
-  ;;       {:keys [status found-item actual-path]} result
-
-  ;;       level-cap (if-not (nil? level-cap-str)
-  ;;                   (Integer/parseInt level-cap-str)
-  ;;                   (:character-level @globals/character))
-  ;;       ]
-  ;;   )
-  )
+#_(set-item-handler  [nil ["inv/1/items/0" "legion warhammer of valor" "64"]])

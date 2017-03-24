@@ -15,7 +15,7 @@
              [stack :as stack]
              [structure-walk :as sw]
              [db-utils :as dbu]]
-            [gd-edit.commands.item]
+            [gd-edit.commands.item :as item-commands]
             [jansi-clj.core :refer :all]
 
             [clojure.string :as str]
@@ -29,8 +29,6 @@
 
 ;;--------------------------------------------------------------------
 ;; Query and pagination functions
-(declare show-item set-item-handler)
-
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
 
@@ -636,12 +634,12 @@
                 ;; Is the targetted value an item?
                 ;; Let the set-item handler deal with it
                 (u/is-item? value)
-                (set-item-handler [input tokens])
+                (item-commands/set-item-handler [input tokens])
 
                 ;; Did the user specify the some inventory items collection?
                 (and (= (first val-path) :inventory-sacks)
                      (= (last val-path) :inventory-items))
-                (set-item-handler [input tokens])
+                (item-commands/set-item-handler [input tokens])
 
                 (and
                  (u/is-item? (get-in @globals/character (butlast val-path)))
