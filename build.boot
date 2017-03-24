@@ -56,8 +56,8 @@
                     "http://www.eclipse.org/legal/epl-v10.html"}}
  jar {:main        'gd-edit.core
       :file        (str "gd-edit-" version "-standalone.jar")}
- bin {:jvm-opt #{"-Xms128m" "-Xmx512m"}}
- exe {:jvm-opt #{"-Xms128m" "-Xmx512m"}
+ bin {:jvm-opt #{"-Xms128m" "-Xmx1024m"}}
+ exe {:jvm-opt #{"-Xms128m" "-Xmx1024m"}
       :name      project
       :main      'gd_edit.core
       :version   "0.1.0"
