@@ -27,6 +27,9 @@
 
   (->> (apply conj [] (second vec) (first vec) (drop 2 vec))))
 
+;;------------------------------------------------------------------------------
+;; Item generation
+;;------------------------------------------------------------------------------
 (defn compare-match-candidates
   "Expects 2 items in the form of [score candidate matched-name matched-records]. Return true or false indicating if c1 > c2."
   [c1 c2]
@@ -342,6 +345,9 @@
     :else
     (throw (Throwable. "Unhandled case"))))
 
+;;------------------------------------------------------------------------------
+;; Command handlers
+;;------------------------------------------------------------------------------
 (defn set-item-handler
   [[input [path target-name level-cap-str]]]
 
