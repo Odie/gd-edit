@@ -1,4 +1,5 @@
 (ns gd-edit.printer
+  "Deals with printing output of structured data"
   (:require [gd-edit
              [db-utils :as dbu]
              [utils :as u]]
@@ -6,8 +7,10 @@
             [gd-edit.db-utils :as dbu]))
 
 
+(declare show-item)
 
 (defn print-primitive
+  "Prints numbers, strings, booleans, and byte arrays"
   ([obj]
    (print-primitive obj 0))
 
@@ -22,10 +25,50 @@
      (do
        (u/print-indent indent-level)
        (println (format "byte array[%d]" (count obj))
-                (map #(format (yellow "%02X") %1) obj)))
-     )))
+                (map #(format (yellow "%02X") %1) obj))))))
 
-(declare print-map show-item)
+(defn print-map
+  [character-map & {:keys [skip-item-count]
+                    :or {skip-item-count false}}]
+
+  (let [character (->> character-map
+                       (filter u/without-meta-fields)
+                       (sort-by first))
+
+        max-key-length (reduce
+                        (fn [max-length key-str]
+                          (if (> (count key-str) max-length)
+                            (count key-str)
+                            max-length))
+                        0
+
+                        ;; Map the keys to a more readable string format
+                        (->> character
+                             (keys)
+                             (map u/keyword->str))
+                        )]
+
+    (doseq [[key value] character]
+      (println
+
+       ;; Print the key name
+       (format (format "%%%ds :" (+ max-key-length 2))
+               (u/keyword->str key))
+
+       ;; Print the value
+       (cond
+         (coll? value)
+         (format "collection of %d items" (count value))
+
+         (and (string? value) (empty? value))
+         "\"\""
+
+         :else
+         (yellow value))))
+
+    (when-not skip-item-count
+      (newline)
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
 (defn print-sequence
   [obj]
@@ -89,6 +132,7 @@
                        (println item)))))
 
 (defn print-object
+  "Given some kind of thing in the character sheet, try to print it."
   [obj]
 
   (let [t (type obj)]
@@ -109,49 +153,6 @@
       :else
       (throw (Throwable. "Unhandled case"))
       )))
-
-(defn print-map
-  [character-map & {:keys [skip-item-count]
-                    :or {skip-item-count false}}]
-
-  (let [character (->> character-map
-                       (filter u/without-meta-fields)
-                       (sort-by first))
-
-        max-key-length (reduce
-                        (fn [max-length key-str]
-                          (if (> (count key-str) max-length)
-                            (count key-str)
-                            max-length))
-                        0
-
-                        ;; Map the keys to a more readable string format
-                        (->> character
-                             (keys)
-                             (map u/keyword->str))
-                        )]
-
-    (doseq [[key value] character]
-      (println
-
-       ;; Print the key name
-       (format (format "%%%ds :" (+ max-key-length 2))
-               (u/keyword->str key))
-
-       ;; Print the value
-       (cond
-         (coll? value)
-         (format "collection of %d items" (count value))
-
-         (and (string? value) (empty? value))
-         "\"\""
-
-         :else
-         (yellow value))))
-
-    (when-not skip-item-count
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
 (defn print-details
   [data]
