@@ -274,7 +274,7 @@
 (defn make-load-tex-fn
   [tex-arc-filepath load-fn]
 
-  (let [bb (utils/file-contents tex-arc-filepath)
+  (let [bb (utils/mmap tex-arc-filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
         record-headers (->>  (load-record-headers bb header)
