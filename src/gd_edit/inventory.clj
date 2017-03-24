@@ -9,7 +9,8 @@
             [gd-edit.arc-reader :as arc]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.utils :as u]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.string :as str]))
 
 (defn pixel-dims->slot-dims
   [dims]
@@ -33,7 +34,7 @@
 
   (->> (u/filepath->components path)
        (drop 1)
-       (u/components->filepath)))
+       (str/join "/")))
 
 (defn- stride
   [inv-idx]
@@ -64,10 +65,8 @@
            (fn [key settings old-state new-state]
              (if (not= (old-state :game-dir) (new-state :game-dir))
                (bind-texture-slot-dims-fn))))
-;; (if-not (and (resolve 'texture-slot-dims)
-;;             (some? texture-slot-dims))
-;;   (bind-texture-slot-dims-fn))
-
+(if-not (bound? #'texture-slot-dims)
+  (bind-texture-slot-dims-fn))
 
 (defn- coord->slot-id
   [{:keys [X Y]} stride]
