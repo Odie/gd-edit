@@ -327,7 +327,7 @@
     (path-is-item? character val-path)
     (do
       (swap! character assoc-in val-path
-             (merge (get-in character val-path) item))
+             (merge (get-in @character val-path) item))
       true)
 
     ;; Did the call ask to have an item added to an inventory/sack?
@@ -388,3 +388,5 @@
             (printer/show-item item)))))))
 
 #_(set-item-handler  [nil ["inv/1/items/0" "legion warhammer of valor" "64"]])
+#_(set-item-handler  [nil ["equipment/3" "stonehide Dreeg-Sect Legguards of the boar" "75"]])
+#_(gd-edit.command-handlers/show-handler [nil ["equipment/3"]])
