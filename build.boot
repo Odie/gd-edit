@@ -141,12 +141,6 @@
   (add-test-resources!)
   (comp (midje)))
 
-(deftask bla
-  []
-
-  (clojure.pprint/pprint (get-env :resource-paths))
-  )
-
 (deftask autotest
   []
 
