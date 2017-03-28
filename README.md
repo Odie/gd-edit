@@ -1,50 +1,23 @@
 # gd-edit
 
-FIXME: description
-
-## Installation
-
-Download from http://example.com/FIXME.
+gd-edit is a save file editor for the game Grim Dawn.
 
 ## Usage
-
-FIXME: explanation
 
 Run the project directly:
 
     $ boot run
 
-Run the project's tests (they'll fail until you edit them):
+Run the project's tests:
 
     $ boot test
 
-Build an uberjar from the project:
+Build and wrap an executable for all platforms:
 
     $ boot build
 
-Run the uberjar:
-
-    $ java -jar target/gd-edit-0.1.0-SNAPSHOT-standalone.jar [args]
-
-## Options
-
-FIXME: listing of options this app accepts.
-
-## Examples
-
-...
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
-
 ## License
 
-Copyright © 2016 FIXME
+Copyright © 2016 Jonathan Shieh
 
-Distributed under the Eclipse Public License either version 1.0 or (at
-your option) any later version.
+Licensed under Eclipse Public License (see [LICENSE](LICENSE)).
