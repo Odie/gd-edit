@@ -22,7 +22,8 @@
             [gd-edit.utils :as utils]
             [me.raynes.fs :as fs]
 
-            [gd-edit.printer :as printer]))
+            [gd-edit.printer :as printer]
+            [clojure.java.shell :refer [sh]]))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
@@ -206,7 +207,8 @@
          write-character-file
          write-loaded-character-file!
          character-selection-screen!
-         character-manipulation-screen!)
+         character-manipulation-screen!
+         write-handler)
 
 (defn- character-manipulation-screen
   []
@@ -216,7 +218,7 @@
      (println "Character: " (:character-name @globals/character)))
 
    :choice-map [["r" "reload" (fn [] (load-character-file (@globals/character :meta-character-loaded-from)))]
-                ["w" "write" (fn[] (write-loaded-character-file!))]]})
+                ["w" "write" (fn[] (write-handler [nil]))]]})
 
 (defn- is-cloud-save?
   [dir]
@@ -855,35 +857,72 @@
                                                      (.getCanonicalPath)))
         [:done (str to-char-dir-file)]))))
 
+
+(defn get-process-list
+  []
+
+  (if (u/running-windows?)
+    (let [plist-csv (:out (sh "tasklist.exe" "/fo" "csv" "/nh"))
+          plist (for [row (str/split-lines plist-csv)]
+                  (->> row
+                       (re-seq #"\"(.*?)\"")
+                       (map second)
+                       (zipmap [:image-name :pid :session-name :session-num :mem-usage])))]
+      plist)))
+
+(defn find-running-process
+  [plist process-name]
+
+  (filter #(= (:image-name %) process-name) plist))
+
+(defn is-grim-dawn-running?
+  []
+
+  (let [plist (get-process-list)]
+    ;; If the process list cannot be retrieved for some reason...
+    (if (nil? plist)
+      false ;; Assume the program isn't running
+
+      ;; If we can't find any items in the process list named grim dawn...
+      (if (empty? (find-running-process plist "Grim Dawn.exe"))
+        false ;; The program isn't runing...
+        true))))
+
 (defn write-handler
   [[input tokens]]
 
   (if (not (character-loaded?))
     (println "Don't have a character loaded yet!")
 
-    ;; If the user invoked the command without any parameters...
-    (if (nil? (first tokens))
+    ;; Make sure GD isn't running
+    (if (is-grim-dawn-running?)
+      (do
+        (println "Please quit Grim Dawn before saving the file.")
+        (println (red "File not saved!")))
 
-      ;; Write out the currently loaded character
-      (write-loaded-character-file!)
+      ;; If the user invoked the command without any parameters...
+      (if (nil? (first tokens))
 
-      ;; Otherwise, try to write out a new copy of the character
-      (let [[status savepath] (write-separate-copy @globals/character (first tokens))]
-        (cond
-          (= status :new-path-already-exists)
-          (do
-            (println (red "Cannot copy character because the directory already exists:"))
-            (u/print-indent 1)
-            (println savepath))
+        ;; Write out the currently loaded character
+        (write-loaded-character-file!)
 
-          :else
-          (do
-            (println (green "Ok!"))
-            (newline)
-            (println "If you're running steam with cloud saves, please remember to restart steam.")
-            (println "Otherwise, your copied character will not show up in the character selection menu.")
-            )
-          )))))
+        ;; The user supplied some parameter with the command...
+        ;; Try to write out a new copy of the character
+        (let [[status savepath] (write-separate-copy @globals/character (first tokens))]
+          (cond
+            (= status :new-path-already-exists)
+            (do
+              (println (red "Cannot copy character because the directory already exists:"))
+              (u/print-indent 1)
+              (println savepath))
+
+            :else
+            (do
+              (println (green "Ok!"))
+              (newline)
+              (println "If you're running steam with cloud saves, please remember to restart steam.")
+              (println "Otherwise, your copied character will not show up in the character selection menu.")
+              )))))))
 
 (defn load-db
   []
