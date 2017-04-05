@@ -5,7 +5,8 @@
             [jansi-clj.core :refer :all]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
-            [gd-edit.db-utils :as dbu])
+            [gd-edit.db-utils :as dbu]
+            [taoensso.timbre :as t])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.nio.file.Paths
@@ -34,6 +35,26 @@
 
 
 ;;------------------------------------------------------------------------------
+;; Logging related functions
+;;------------------------------------------------------------------------------
+(defmacro log-exp
+  [sexp]
+
+  `(t/debug (format "%s => %s" (quote ~sexp) ~sexp)))
+
+(defmacro log-exceptions
+  [& body]
+
+  `(try
+     ~@body
+     (catch Exception e#
+       (println "Caught exception:" (.getMessage e#))
+       (clojure.stacktrace/print-stack-trace e#)
+       (newline)
+
+       (t/info e#))))
+
+;;------------------------------------------------------------------------------
 ;; Timing functions
 ;;------------------------------------------------------------------------------
 (defmacro timed
@@ -49,7 +70,6 @@
   "Given duration in nanoseconds, return the duration in seconds"
   [time]
   (/ (float time) 1000000000))
-
 
 ;;------------------------------------------------------------------------------
 ;; String comparison

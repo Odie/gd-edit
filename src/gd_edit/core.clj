@@ -18,7 +18,7 @@
             [clojure.core.async :as async :refer [thread >!!]]
             [progress.file :as progress]
             [clojure.string :as str]
-            [taoensso.timbre :as timbre]
+            [taoensso.timbre :as t]
             [taoensso.timbre.appenders.core :as appenders])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
@@ -202,38 +202,31 @@
   []
 
   (while true
-    (try
-      (repl-iter)
-      (catch Exception e
-        (do
-          (println "caught exception: " (.getMessage e))
-          (clojure.stacktrace/print-stack-trace e)
-          (newline))))))
+    (u/log-exceptions
+      (repl-iter))))
 
-(declare startup-sanity-checks)
+(declare startup-sanity-checks print-build-info log-build-info)
 
-(defn- initialize
-  []
-
-  ;; Run sanity checks and print any error messages
-  (startup-sanity-checks)
-
-  ;; Try to load the game db
-  (handlers/load-db-in-background)
-
-  ;; Setup the first screen in the program
-  (handlers/character-selection-screen!)
-
-  ;; Remove any left over restart scripts from last time we ran "update"
-  (su/cleanup-restart-script)
-  )
-
-(defn- print-build-info
+(defn- get-build-info-str
   []
 
   (if-let [info-file (io/resource "build.edn")]
     (let [build-info (edn/read-string (slurp info-file))]
-      (println (bold (black (format "%s %s [build %s]" (build-info :app-name) (build-info :version)(build-info :sha))))))))
+      (format "%s %s [build %s]" (build-info :app-name) (build-info :version)(build-info :sha)))))
+
+(defn- log-build-info
+  []
+
+  (if-let [build-info (get-build-info-str)]
+    (t/info build-info)
+    (t/info "No build info available")))
+
+(defn- print-build-info
+  []
+
+  (if-let [build-info (get-build-info-str)]
+    (println (bold (black build-info)))
+    (println (red "No build info available"))))
 
 (defn- check-save-dir-found?!
   [verbose]
@@ -348,16 +341,14 @@
   ([log-level]
 
    (let [log-filename "gd-edit.log"]
-     ;;(timbre/refer-timbre)
 
      (io/delete-file log-filename :quiet)
 
-     (timbre/merge-config!
+     (t/merge-config!
       {:appenders {:println {:enabled? true}
                    :spit (appenders/spit-appender {:fname log-filename})}})
 
-     (timbre/set-level! log-level))))
-
+     (t/set-level! log-level))))
 
 (defn jvm-prop-as-str
   [prop-name]
@@ -365,33 +356,49 @@
   (format "%s: %s" prop-name (System/getProperty prop-name)))
 
 (defn log-environment
+  "Outputs some basic information regarding the running environment"
   []
 
-  (debug (jvm-prop-as-str "java.vm.name"))
-  (debug (jvm-prop-as-str "java.runtime.version"))
-  (debug (jvm-prop-as-str "os.name"))
-  (debug (jvm-prop-as-str "os.version")))
+  (t/debug (jvm-prop-as-str "java.vm.name"))
+  (t/debug (jvm-prop-as-str "java.runtime.version"))
+  (t/debug (jvm-prop-as-str "os.name"))
+  (t/debug (jvm-prop-as-str "os.version")))
 
-(defn -main
-  [& args]
+(defn- initialize
+  []
 
   ;; Try to load the settings file if it exists
   (handlers/load-settings-file)
 
   ;; Setup logs
-  (setup-log (or (@globals/settings :log-level) :info))
+  (setup-log (or (@globals/settings :log-level) :debug))
   (log-environment)
 
   ;; Enable cross-platform ansi color handling
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!)
 
-  ;; (println (clojure-version))
   (print-build-info)
   (println)
+  (log-build-info)
 
+  ;; Run sanity checks and print any error messages
+  (startup-sanity-checks)
 
-  (do
+  ;; Try to load the game db
+  (handlers/load-db-in-background)
+
+  ;; Setup the first screen in the program
+  (handlers/character-selection-screen!)
+
+  ;; Remove any left over restart scripts from last time we ran "update"
+  (su/cleanup-restart-script))
+
+(defn -main
+  [& args]
+
+  (u/log-exceptions
+
     (initialize)
 
     (thread (notify-repl-if-latest-version-available))

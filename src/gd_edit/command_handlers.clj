@@ -23,7 +23,8 @@
             [me.raynes.fs :as fs]
 
             [gd-edit.printer :as printer]
-            [clojure.java.shell :refer [sh]]))
+            [clojure.java.shell :refer [sh]]
+            [taoensso.timbre :as t]))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
@@ -686,8 +687,7 @@
               ))
 
           :else
-          (throw (Throwable. "Unhandled case")))
-        ))))
+          (throw (Throwable. "Unhandled case")))))))
 
 (defn- get-loadpath
   [character]
@@ -927,6 +927,7 @@
 (defn load-db
   []
 
+  (t/debug "Entering load-db")
   (let [mod-dir (:moddir @globals/settings)
 
         ;; Try to load the localization table for the selected mod if available
@@ -970,7 +971,7 @@
 (defn load-db-in-background
   []
 
-  (intern 'gd-edit.globals 'db (future (load-db)))
+  (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db))))
   (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
 
 (def command-help-map
@@ -1383,10 +1384,14 @@
 (defn setting-gamedir-clear!
   []
 
+  (t/debug "Clearing gamedir")
   (swap! globals/settings dissoc :game-dir))
 
 (defn setting-gamedir-set!
   [game-dir]
+
+  (t/debug "Setting gamedir")
+  (u/log-exp game-dir)
 
   ;; Verify that this looks like a game directory
   (if-not (dirs/looks-like-game-dir game-dir)
@@ -1430,6 +1435,10 @@
 
 (defn gamedir-handler
   [[input tokens]]
+
+  (t/debug "Entering gamedir-handler")
+  (u/log-exp input)
+  (u/log-exp tokens)
 
   (cond
     (= 0 (count tokens))
