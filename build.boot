@@ -24,7 +24,8 @@
                             [me.raynes/fs "1.4.6"]
                             [midje "1.9.0-alpha6" :scope "test"]
                             [zilti/boot-midje "0.2.2-SNAPSHOT" :scope "test"]
-                            [clj-http "2.3.0"]])
+                            [clj-http "2.3.0"]
+                            [com.taoensso/timbre "4.8.0"]])
 
 
 

@@ -17,7 +17,9 @@
             [gd-edit.utils :as u]
             [clojure.core.async :as async :refer [thread >!!]]
             [progress.file :as progress]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [taoensso.timbre :as timbre]
+            [taoensso.timbre.appenders.core :as appenders])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.lang.ProcessBuilder
@@ -213,9 +215,6 @@
 (defn- initialize
   []
 
-  ;; Try to load the settings file if it exists
-  (handlers/load-settings-file)
-
   ;; Run sanity checks and print any error messages
   (startup-sanity-checks)
 
@@ -342,8 +341,46 @@
                         ["New version available!"
                          "Run the \"update\" command to get it!"])))))))
 
+(defn setup-log
+  ([]
+   (setup-log :info))
+
+  ([log-level]
+
+   (let [log-filename "gd-edit.log"]
+     ;;(timbre/refer-timbre)
+
+     (io/delete-file log-filename :quiet)
+
+     (timbre/merge-config!
+      {:appenders {:println {:enabled? true}
+                   :spit (appenders/spit-appender {:fname log-filename})}})
+
+     (timbre/set-level! log-level))))
+
+
+(defn jvm-prop-as-str
+  [prop-name]
+
+  (format "%s: %s" prop-name (System/getProperty prop-name)))
+
+(defn log-environment
+  []
+
+  (debug (jvm-prop-as-str "java.vm.name"))
+  (debug (jvm-prop-as-str "java.runtime.version"))
+  (debug (jvm-prop-as-str "os.name"))
+  (debug (jvm-prop-as-str "os.version")))
+
 (defn -main
   [& args]
+
+  ;; Try to load the settings file if it exists
+  (handlers/load-settings-file)
+
+  ;; Setup logs
+  (setup-log (or (@globals/settings :log-level) :info))
+  (log-environment)
 
   ;; Enable cross-platform ansi color handling
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
