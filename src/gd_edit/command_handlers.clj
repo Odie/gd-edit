@@ -1410,25 +1410,34 @@
   (u/write-settings @globals/settings)
   (println "Ok!"))
 
+(defn- gamedir-show
+  []
+
+  (println "Currently using this as game dir:")
+  (println "    " (let [game-dir  (dirs/get-game-dir)]
+                    (if (nil? game-dir)
+                      (red "None")
+                      game-dir))))
+
+;; TODO Use better error handling here so we're not printing "Ok!" when there's an error
+(defn- gamedir-set
+  [game-dir]
+
+  (if (empty? game-dir)
+    (setting-gamedir-clear!)
+    (setting-gamedir-set! game-dir))
+  (println "Ok!"))
+
 (defn gamedir-handler
   [[input tokens]]
 
   (cond
     (= 0 (count tokens))
-    (do
-      (println "Currently using this as game dir:")
-      (println "    " (let [game-dir  (dirs/get-game-dir)]
-                        (if (nil? game-dir)
-                          (red "None")
-                          game-dir))))
+    (gamedir-show)
 
     :else
     (let [game-dir (first tokens)]
-
-      (if (empty? game-dir)
-        (setting-gamedir-clear!)
-        (setting-gamedir-set! game-dir))
-      (println "Ok!"))))
+      (gamedir-set game-dir))))
 
 (defn setting-savedir-clear!
   []
