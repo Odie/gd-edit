@@ -305,7 +305,6 @@
                                (fn []
                                  ;; Update the global state and save the settings file
                                  (swap! globals/settings assoc :moddir (str moddir))
-                                 (u/write-settings @globals/settings)
 
                                  ;; Reload the database
                                  (load-db-in-background)
@@ -1402,9 +1401,6 @@
       ;; If this *is* a valid game directory, set it into a global variable.
       (swap! globals/settings update :game-dir #(identity %2) game-dir)
 
-      ;; Save the location to a settings file.
-      (u/write-settings @globals/settings)
-
       ;; Reload game db using the new game directory.
       (load-db-in-background))))
 
@@ -1412,7 +1408,6 @@
   [[input tokens]]
 
   (setting-gamedir-clear!)
-  (u/write-settings @globals/settings)
   (println "Ok!"))
 
 (defn- gamedir-show
@@ -1451,14 +1446,12 @@
 (defn setting-savedir-clear!
   []
 
-  (swap! globals/settings dissoc :save-dir)
-  (u/write-settings @globals/settings))
+  (swap! globals/settings dissoc :save-dir))
 
 (defn setting-savedir-set!
   [save-dir]
 
-  (swap! globals/settings update :save-dir #(identity %2) save-dir)
-  (u/write-settings @globals/settings))
+  (swap! globals/settings update :save-dir #(identity %2) save-dir))
 
 
 (defn- maybe-return-to-character-selection-screen
@@ -1479,7 +1472,6 @@
   [[input tokens]]
 
   (setting-savedir-clear!)
-  (u/write-settings @globals/settings)
   (println "Ok!")
   (maybe-return-to-character-selection-screen))
 
@@ -1527,7 +1519,6 @@
   [[input tokens]]
 
   (swap! globals/settings dissoc :moddir)
-  (u/write-settings @globals/settings)
 
   ;; Reload the database
   (load-db-in-background)
@@ -1799,14 +1790,12 @@
         (= log-level-str "clear")
         (do
           (swap! globals/settings log-level-clear)
-          (u/write-settings @globals/settings)
           (println (green "Ok!")))
 
         ;; The user asked to set a specific log level?
         (contains? t/-levels-set (keyword log-level-str))
         (let [log-level (keyword log-level-str)]
           (swap! globals/settings log-level-set (keyword log-level))
-          (u/write-settings @globals/settings)
           (t/set-level! log-level)
           (println (green "Ok!")))
 
