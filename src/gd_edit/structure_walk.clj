@@ -1,5 +1,6 @@
 (ns gd-edit.structure-walk
   (:require [gd-edit.utils :as u]
+            [gd-edit.db-utils :as dbu]
             [clojure.string :as string]))
 
 (defn- str-without-dash
@@ -37,7 +38,7 @@
   "Given a map and a partial key, return a list of pairs that partially matches the key"
   [m search-target]
 
-  (let [haystack (filter u/without-meta-fields m)
+  (let [haystack (filter dbu/without-meta-fields m)
 
         ;; Locate all partial matches
         partial-matches (filter (fn [[key value]]

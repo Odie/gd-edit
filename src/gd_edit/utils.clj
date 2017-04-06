@@ -5,7 +5,6 @@
             [jansi-clj.core :refer :all]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
-            [gd-edit.db-utils :as dbu]
             [taoensso.timbre :as t])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
@@ -53,6 +52,10 @@
        (newline)
 
        (t/info e#))))
+
+(defmacro print-stack []
+  `(doseq [s# (.getStackTrace (Thread/currentThread))]
+     (println s#)))
 
 ;;------------------------------------------------------------------------------
 ;; Timing functions
@@ -215,66 +218,3 @@
 
   (dotimes [i indent-level]
     (print "    ")))
-
-;;------------------------------------------------------------------------------
-;; gd-edit specific utils
-;;------------------------------------------------------------------------------
-(defn without-meta-fields
-  [kv-pair]
-
-  (not (.startsWith (str (first kv-pair)) ":meta-")))
-
-(defn is-primitive?
-  [val]
-
-  (or (number? val) (string? val) (byte-array? val) (boolean? val)))
-
-(defn is-item?
-  "Does the given collection look like something that represents an in-game item?"
-  [coll]
-
-  (and (associative? coll)
-       (contains? coll :basename)))
-
-(defn is-skill?
-  "Does the given collection look like something that represents an in-game skill?"
-  [coll]
-
-  (and (associative? coll)
-       (contains? coll :skill-name)))
-
-(defn is-faction?
-  [coll]
-
-  (and (associative? coll)
-       (contains? coll :faction-value)))
-
-(defn skill-name
-  [skill]
-
-  (let [record (-> (:skill-name skill)
-                   (dbu/record-by-name))]
-    (or (record "FileDescription")
-        (record "skillDisplayName"))))
-
-(defn faction-name
-  [index]
-
-  (let [faction-names {1  "Devil's Crossing"
-                       2  "Aetherials"
-                       3  "Chthonians"
-                       4  "Cronley's Gang"
-                       6  "Rovers"
-                       8  "Homestead"
-                       10 "The Outcast"
-                       11 "Death's Vigil"
-                       12 "Undead"
-                       13 "Black Legion"
-                       14 "Kymon's Chosen"}]
-    (faction-names index)))
-
-(defn item-is-materia?
-  [item]
-
-  (and (str/starts-with? (:basename item) "records/items/materia/")
-       (= ((dbu/record-by-name (:basename item)) "Class") "ItemRelic")))

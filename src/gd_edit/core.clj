@@ -75,6 +75,7 @@
    ["mod" "clear"] (fn [input] (handlers/mod-clear-handler input))
    ["level"] (fn [input] (handlers/level-handler input))
    ["respec"] (fn [input] (handlers/respec-handler input))
+   ["log"] (fn [input] (handlers/log-handler input))
    ["update"] (fn [input] (handlers/update-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
@@ -345,7 +346,7 @@
      (io/delete-file log-filename :quiet)
 
      (t/merge-config!
-      {:appenders {:println {:enabled? true}
+      {:appenders {:println {:enabled? false}
                    :spit (appenders/spit-appender {:fname log-filename})}})
 
      (t/set-level! log-level))))
@@ -371,7 +372,7 @@
   (handlers/load-settings-file)
 
   ;; Setup logs
-  (setup-log (or (@globals/settings :log-level) :debug))
+  (setup-log (or (@globals/settings :log-level) :info))
   (log-environment)
 
   ;; Enable cross-platform ansi color handling

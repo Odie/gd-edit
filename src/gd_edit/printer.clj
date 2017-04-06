@@ -32,7 +32,7 @@
                     :or {skip-item-count false}}]
 
   (let [character (->> character-map
-                       (filter u/without-meta-fields)
+                       (filter dbu/without-meta-fields)
                        (sort-by first))
 
         max-key-length (reduce
@@ -88,7 +88,7 @@
                    ;; because we do not want to recursively print the data tree.
                    (let [item-type (type item)]
                      (cond
-                       (u/is-primitive? item)
+                       (dbu/is-primitive? item)
                        (print-primitive item)
 
                        (sequential? item)
@@ -101,14 +101,14 @@
                          ;; print the annotation now.
                          (let [annotation
                                (cond
-                                 (u/is-item? item)
+                                 (dbu/is-item? item)
                                  (dbu/item-name item @gd-edit.globals/db)
 
-                                 (u/is-skill? item)
-                                 (u/skill-name item)
+                                 (dbu/is-skill? item)
+                                 (dbu/skill-name item)
 
-                                 (u/is-faction? item)
-                                 (u/faction-name i)
+                                 (dbu/is-faction? item)
+                                 (dbu/faction-name i)
 
                                  :else
                                  nil)]
@@ -137,14 +137,14 @@
 
   (let [t (type obj)]
     (cond
-      (u/is-primitive? obj)
+      (dbu/is-primitive? obj)
       (print-primitive obj 1)
 
       (sequential? obj)
       (print-sequence obj)
 
       ;; If we're looking at an item, print all of its details and related records
-      (u/is-item? obj)
+      (dbu/is-item? obj)
       (show-item obj)
 
       (associative? obj)
@@ -241,7 +241,7 @@
 
   (cond
 
-    (not (u/is-item? item))
+    (not (dbu/is-item? item))
     (println "Sorry, this doesn't look like an item")
 
     (empty? (:basename item))

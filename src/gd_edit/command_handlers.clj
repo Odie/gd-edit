@@ -423,7 +423,7 @@
 
                               ;; If we found a result and it looks like a primitive...
                               ;; We want to print the path to that primitive then the value
-                              (and (= status :found) (u/is-primitive? (:found-item result)))
+                              (and (= status :found) (dbu/is-primitive? (:found-item result)))
                               (let [result (sw/walk @globals/character path-keys)]
                                 (println (->> (:actual-path result)
                                               (map u/keyword->str)
@@ -642,7 +642,7 @@
               (cond
                 ;; Is the targetted value an item?
                 ;; Let the set-item handler deal with it
-                (u/is-item? value)
+                (dbu/is-item? value)
                 (item-commands/set-item-handler [input tokens])
 
                 ;; Did the user specify the some inventory items collection?
@@ -651,7 +651,7 @@
                 (item-commands/set-item-handler [input tokens])
 
                 (and
-                 (u/is-item? (get-in @globals/character (butlast val-path)))
+                 (dbu/is-item? (get-in @globals/character (butlast val-path)))
                  (= :relic-name (last val-path)))
                 (do
                   (set-item--relic-name @globals/db val-path newval)
@@ -1763,6 +1763,55 @@
 
         ;; Actually update the character
         (swap! globals/character (fn [oldval] modified-character))))))
+
+(defn- log-level-get
+  [settings]
+
+  (:log-level settings))
+
+(defn- log-level-set
+  [settings log-level]
+
+  (assoc settings :log-level log-level))
+
+(defn- log-level-clear
+  [settings]
+
+  (dissoc settings :log-level))
+
+(defn log-handler
+  [[input token]]
+
+  ;; If the user supplied no params, show the current log level
+  (if (zero? (count token))
+    (do
+      (println "Current log level:")
+      (u/print-indent 1)
+      (println
+       (yellow
+        (u/keyword->str
+         (or (log-level-get @globals/settings)
+             :info)))))
+
+    (let [log-level-str (str/lower-case (first token))]
+      (cond
+        ;; Did the user asked to stop logging?
+        (= log-level-str "clear")
+        (do
+          (swap! globals/settings log-level-clear)
+          (u/write-settings @globals/settings)
+          (println (green "Ok!")))
+
+        ;; The user asked to set a specific log level?
+        (contains? t/-levels-set (keyword log-level-str))
+        (let [log-level (keyword log-level-str)]
+          (swap! globals/settings log-level-set (keyword log-level))
+          (u/write-settings @globals/settings)
+          (t/set-level! log-level)
+          (println (green "Ok!")))
+
+        :else
+        (println (red "Unknown log level: " log-level-str))))))
 
 #_(help-handler [nil []])
 

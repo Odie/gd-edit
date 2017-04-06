@@ -238,7 +238,7 @@
 (defn item-materia-fill-completion-level
   [item]
 
-  (if (u/item-is-materia? item)
+  (if (dbu/item-is-materia? item)
     (assoc item :relic-completion-level 4)
     item))
 
