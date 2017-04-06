@@ -1,8 +1,9 @@
 (ns gd-edit.arc-reader
   (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils]
+            [gd-edit.utils :as u]
             [clojure.java.io :as io]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [taoensso.timbre :as t])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
@@ -214,7 +215,10 @@
 (defn load-localization-table
   [filepath]
 
-  (let [bb (utils/mmap filepath)
+  (t/debug "Entering load-localization-table")
+  (u/log-exp filepath)
+
+  (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
         record-headers (load-record-headers bb header)]
@@ -228,7 +232,7 @@
 (defn load-arc-file
   [filepath]
 
-  (let [bb (utils/mmap filepath)
+  (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
         record-headers (load-record-headers bb header)]
@@ -245,7 +249,7 @@
 (defn load-arc-tex-file
   [filepath]
 
-  (let [bb (utils/mmap filepath)
+  (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
         record-headers (load-record-headers bb header)]
@@ -274,7 +278,7 @@
 (defn make-load-tex-fn
   [tex-arc-filepath load-fn]
 
-  (let [bb (utils/mmap tex-arc-filepath)
+  (let [bb (u/mmap tex-arc-filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
         record-headers (->>  (load-record-headers bb header)
@@ -297,7 +301,7 @@
 (defn unpack-arc-file
   [filepath outpath]
 
-  (let [bb (utils/mmap filepath)
+  (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
         record-headers (load-record-headers bb header)]
@@ -327,14 +331,14 @@
 
 #_(time (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
 #_(def l (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn2/resources/text_en.arc"))
-#_(def f (utils/mmap "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
+#_(def f (u/mmap "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
 #_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
 #_(def h (load-header f))
 #_(time (def dt (load-record-headers f h)))
 #_(time (def r (load-record f h (nth dt 0))))
 
 #_(def l (load-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc"))
-#_(unpack-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc" (io/file (utils/working-directory) "templates"))
+#_(unpack-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc" (io/file (u/working-directory) "templates"))
 
 #_(def t (make-load-tex-fn "/Users/Odie/Dropbox/Public/GrimDawn2/resources/Items.arc" (comp texture-dimensions read-tex-header)))
 #_(t "gearweapons/hammers1h/bitmaps/f002_blunt.tex")

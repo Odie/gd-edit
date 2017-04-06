@@ -9,11 +9,10 @@
   "Get steam installation path"
   []
 
-  (try
+  (u/log-exceptions
     (Advapi32Util/registryGetStringValue WinReg/HKEY_CURRENT_USER
                                          "SOFTWARE\\Valve\\Steam"
-                                         "SteamPath")
-    (catch Exception e nil)))
+                                         "SteamPath")))
 
 (defn- standard-game-dirs
   "Get the game's expected installation path"

@@ -17,7 +17,9 @@
             [gd-edit.utils :as u]
             [clojure.core.async :as async :refer [thread >!!]]
             [progress.file :as progress]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [taoensso.timbre :as t]
+            [taoensso.timbre.appenders.core :as appenders])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.lang.ProcessBuilder
@@ -73,6 +75,7 @@
    ["mod" "clear"] (fn [input] (handlers/mod-clear-handler input))
    ["level"] (fn [input] (handlers/level-handler input))
    ["respec"] (fn [input] (handlers/respec-handler input))
+   ["log"] (fn [input] (handlers/log-handler input))
    ["update"] (fn [input] (handlers/update-handler input))
    ["help"] (fn [input] (handlers/help-handler input))
    })
@@ -200,41 +203,31 @@
   []
 
   (while true
-    (try
-      (repl-iter)
-      (catch Exception e
-        (do
-          (println "caught exception: " (.getMessage e))
-          (clojure.stacktrace/print-stack-trace e)
-          (newline))))))
+    (u/log-exceptions
+      (repl-iter))))
 
-(declare startup-sanity-checks)
+(declare startup-sanity-checks print-build-info log-build-info)
 
-(defn- initialize
-  []
-
-  ;; Try to load the settings file if it exists
-  (handlers/load-settings-file)
-
-  ;; Run sanity checks and print any error messages
-  (startup-sanity-checks)
-
-  ;; Try to load the game db
-  (handlers/load-db-in-background)
-
-  ;; Setup the first screen in the program
-  (handlers/character-selection-screen!)
-
-  ;; Remove any left over restart scripts from last time we ran "update"
-  (su/cleanup-restart-script)
-  )
-
-(defn- print-build-info
+(defn- get-build-info-str
   []
 
   (if-let [info-file (io/resource "build.edn")]
     (let [build-info (edn/read-string (slurp info-file))]
-      (println (bold (black (format "%s %s [build %s]" (build-info :app-name) (build-info :version)(build-info :sha))))))))
+      (format "%s %s [build %s]" (build-info :app-name) (build-info :version)(build-info :sha)))))
+
+(defn- log-build-info
+  []
+
+  (if-let [build-info (get-build-info-str)]
+    (t/info build-info)
+    (t/info "No build info available")))
+
+(defn- print-build-info
+  []
+
+  (if-let [build-info (get-build-info-str)]
+    (println (bold (black build-info)))
+    (println (red "No build info available"))))
 
 (defn- check-save-dir-found?!
   [verbose]
@@ -332,7 +325,6 @@
 
       ;; Update the last check time in the settings file
       (swap! globals/settings assoc :last-version-check (Date.))
-      (u/write-settings @globals/settings)
 
       ;; Notify the user there is a new version
       (if (= status :new-version-available)
@@ -342,19 +334,154 @@
                         ["New version available!"
                          "Run the \"update\" command to get it!"])))))))
 
-(defn -main
-  [& args]
+(defn setup-log
+  ([]
+   (setup-log :info))
+
+  ([log-level]
+
+   (let [log-filename "gd-edit.log"]
+
+     (io/delete-file log-filename :quiet)
+
+     (t/merge-config!
+      {:appenders {:println {:enabled? false}
+                   :spit (appenders/spit-appender {:fname log-filename})}})
+
+     (t/set-level! log-level))))
+
+(defn jvm-prop-as-str
+  [prop-name]
+
+  (format "%s: %s" prop-name (System/getProperty prop-name)))
+
+(defn human-readable-byte-count
+  [byte-count]
+
+  (cond
+    (>= byte-count (* 1024 1024 1024 1024))
+    (str (quot byte-count (* 1024 1024 1024 1024)) " TB")
+
+    (>= byte-count (* 1024 1024 1024))
+    (str (quot byte-count (* 1024 1024 1024)) " GB")
+
+    (>= byte-count (* 1024 1024))
+    (str (quot byte-count (* 1024 1024)) " MB")
+
+    (>= byte-count 1024)
+    (str (quot byte-count 1024) " KB")
+
+    :else
+    (str byte-count " bytes")))
+
+(defn get-system-info
+  []
+
+  (let [jvm-props ["java.vm.name" "java.runtime.version" "os.name" "os.version"]
+        os-info (java.lang.management.ManagementFactory/getOperatingSystemMXBean)]
+
+    (partition 2
+               (concat
+                (interleave jvm-props
+                            (map #(System/getProperty %) jvm-props))
+
+                (list
+
+                 "Free System Memory"
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getFreePhysicalMemorySize os-info))
+                  "Not available")
+
+                 "Committed System Memory"
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getCommittedVirtualMemorySize os-info))
+                  "Not available")
+
+                 "Total System Memory"
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getTotalPhysicalMemorySize os-info))
+                  "Not available")
+
+                 "Free Swap Memory"
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getFreeSwapSpaceSize os-info))
+                  "Not available")
+
+                 "Total Swap Memory"
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getTotalSwapSpaceSize os-info))
+                  "Not available")
+
+                 "Current file handle"
+                 (u/try-or
+                   (.getOpenFileDescriptorCount os-info)
+                   "Not available")
+
+                 "Max file handle count"
+                 (u/try-or
+                   (.getMaxFileDescriptorCount os-info)
+                   "Not available"))))))
+
+(defn log-environment
+  "Outputs some basic information regarding the running environment"
+  []
+
+  (let [sys-info (get-system-info)
+        max-key-length (reduce max 0 (map (comp count first) sys-info))]
+
+    (doseq [pair sys-info]
+      (t/debug
+       (format (format "%%-%ds : %%s" max-key-length)
+
+               (str (first pair))
+               (str (second pair)))))))
+
+(defn- initialize
+  []
+
+  ;; Try to load the settings file if it exists
+  (handlers/load-settings-file)
+
+  ;; Settings should autosave when it is changed
+  (add-watch globals/settings ::settings-autosave
+             (fn [key settings old-state new-state]
+               (if (not= old-state new-state)
+                 (u/write-settings @globals/settings))))
+
+  ;; Setup logs
+  (setup-log (or (@globals/settings :log-level) :info))
 
   ;; Enable cross-platform ansi color handling
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!)
 
-  ;; (println (clojure-version))
   (print-build-info)
   (println)
+  (log-build-info)
+  (log-environment)
 
+  ;; Run sanity checks and print any error messages
+  (startup-sanity-checks)
 
-  (do
+  ;; Try to load the game db
+  (handlers/load-db-in-background)
+
+  ;; Setup the first screen in the program
+  (handlers/character-selection-screen!)
+
+  ;; Remove any left over restart scripts from last time we ran "update"
+  (su/cleanup-restart-script))
+
+(defn -main
+  [& args]
+
+  (u/log-exceptions
+
     (initialize)
 
     (thread (notify-repl-if-latest-version-available))
@@ -370,3 +497,9 @@
                (.getPath)
                ))
           nil))
+
+(comment
+
+  (let [os-info (java.lang.management.ManagementFactory/getOperatingSystemMXBean)]
+    os
+  ))

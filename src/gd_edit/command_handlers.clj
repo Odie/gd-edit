@@ -23,7 +23,8 @@
             [me.raynes.fs :as fs]
 
             [gd-edit.printer :as printer]
-            [clojure.java.shell :refer [sh]]))
+            [clojure.java.shell :refer [sh]]
+            [taoensso.timbre :as t]))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
@@ -304,7 +305,6 @@
                                (fn []
                                  ;; Update the global state and save the settings file
                                  (swap! globals/settings assoc :moddir (str moddir))
-                                 (u/write-settings @globals/settings)
 
                                  ;; Reload the database
                                  (load-db-in-background)
@@ -422,7 +422,7 @@
 
                               ;; If we found a result and it looks like a primitive...
                               ;; We want to print the path to that primitive then the value
-                              (and (= status :found) (u/is-primitive? (:found-item result)))
+                              (and (= status :found) (dbu/is-primitive? (:found-item result)))
                               (let [result (sw/walk @globals/character path-keys)]
                                 (println (->> (:actual-path result)
                                               (map u/keyword->str)
@@ -641,7 +641,7 @@
               (cond
                 ;; Is the targetted value an item?
                 ;; Let the set-item handler deal with it
-                (u/is-item? value)
+                (dbu/is-item? value)
                 (item-commands/set-item-handler [input tokens])
 
                 ;; Did the user specify the some inventory items collection?
@@ -650,7 +650,7 @@
                 (item-commands/set-item-handler [input tokens])
 
                 (and
-                 (u/is-item? (get-in @globals/character (butlast val-path)))
+                 (dbu/is-item? (get-in @globals/character (butlast val-path)))
                  (= :relic-name (last val-path)))
                 (do
                   (set-item--relic-name @globals/db val-path newval)
@@ -686,8 +686,7 @@
               ))
 
           :else
-          (throw (Throwable. "Unhandled case")))
-        ))))
+          (throw (Throwable. "Unhandled case")))))))
 
 (defn- get-loadpath
   [character]
@@ -927,6 +926,7 @@
 (defn load-db
   []
 
+  (t/debug "Entering load-db")
   (let [mod-dir (:moddir @globals/settings)
 
         ;; Try to load the localization table for the selected mod if available
@@ -970,7 +970,7 @@
 (defn load-db-in-background
   []
 
-  (intern 'gd-edit.globals 'db (future (load-db)))
+  (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db))))
   (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
 
 (def command-help-map
@@ -1383,10 +1383,14 @@
 (defn setting-gamedir-clear!
   []
 
+  (t/debug "Clearing gamedir")
   (swap! globals/settings dissoc :game-dir))
 
 (defn setting-gamedir-set!
   [game-dir]
+
+  (t/debug "Setting gamedir")
+  (u/log-exp game-dir)
 
   ;; Verify that this looks like a game directory
   (if-not (dirs/looks-like-game-dir game-dir)
@@ -1397,9 +1401,6 @@
       ;; If this *is* a valid game directory, set it into a global variable.
       (swap! globals/settings update :game-dir #(identity %2) game-dir)
 
-      ;; Save the location to a settings file.
-      (u/write-settings @globals/settings)
-
       ;; Reload game db using the new game directory.
       (load-db-in-background))))
 
@@ -1407,40 +1408,50 @@
   [[input tokens]]
 
   (setting-gamedir-clear!)
-  (u/write-settings @globals/settings)
+  (println "Ok!"))
+
+(defn- gamedir-show
+  []
+
+  (println "Currently using this as game dir:")
+  (println "    " (let [game-dir  (dirs/get-game-dir)]
+                    (if (nil? game-dir)
+                      (red "None")
+                      game-dir))))
+
+;; TODO Use better error handling here so we're not printing "Ok!" when there's an error
+(defn- gamedir-set
+  [game-dir]
+
+  (if (empty? game-dir)
+    (setting-gamedir-clear!)
+    (setting-gamedir-set! game-dir))
   (println "Ok!"))
 
 (defn gamedir-handler
   [[input tokens]]
 
+  (t/debug "Entering gamedir-handler")
+  (u/log-exp input)
+  (u/log-exp tokens)
+
   (cond
     (= 0 (count tokens))
-    (do
-      (println "Currently using this as game dir:")
-      (println "    " (let [game-dir  (dirs/get-game-dir)]
-                        (if (nil? game-dir)
-                          (red "None")
-                          game-dir))))
+    (gamedir-show)
 
     :else
     (let [game-dir (first tokens)]
-
-      (if (empty? game-dir)
-        (setting-gamedir-clear!)
-        (setting-gamedir-set! game-dir))
-      (println "Ok!"))))
+      (gamedir-set game-dir))))
 
 (defn setting-savedir-clear!
   []
 
-  (swap! globals/settings dissoc :save-dir)
-  (u/write-settings @globals/settings))
+  (swap! globals/settings dissoc :save-dir))
 
 (defn setting-savedir-set!
   [save-dir]
 
-  (swap! globals/settings update :save-dir #(identity %2) save-dir)
-  (u/write-settings @globals/settings))
+  (swap! globals/settings update :save-dir #(identity %2) save-dir))
 
 
 (defn- maybe-return-to-character-selection-screen
@@ -1461,7 +1472,6 @@
   [[input tokens]]
 
   (setting-savedir-clear!)
-  (u/write-settings @globals/settings)
   (println "Ok!")
   (maybe-return-to-character-selection-screen))
 
@@ -1509,7 +1519,6 @@
   [[input tokens]]
 
   (swap! globals/settings dissoc :moddir)
-  (u/write-settings @globals/settings)
 
   ;; Reload the database
   (load-db-in-background)
@@ -1745,6 +1754,53 @@
 
         ;; Actually update the character
         (swap! globals/character (fn [oldval] modified-character))))))
+
+(defn- log-level-get
+  [settings]
+
+  (:log-level settings))
+
+(defn- log-level-set
+  [settings log-level]
+
+  (assoc settings :log-level log-level))
+
+(defn- log-level-clear
+  [settings]
+
+  (dissoc settings :log-level))
+
+(defn log-handler
+  [[input token]]
+
+  ;; If the user supplied no params, show the current log level
+  (if (zero? (count token))
+    (do
+      (println "Current log level:")
+      (u/print-indent 1)
+      (println
+       (yellow
+        (u/keyword->str
+         (or (log-level-get @globals/settings)
+             :info)))))
+
+    (let [log-level-str (str/lower-case (first token))]
+      (cond
+        ;; Did the user asked to stop logging?
+        (= log-level-str "clear")
+        (do
+          (swap! globals/settings log-level-clear)
+          (println (green "Ok!")))
+
+        ;; The user asked to set a specific log level?
+        (contains? t/-levels-set (keyword log-level-str))
+        (let [log-level (keyword log-level-str)]
+          (swap! globals/settings log-level-set (keyword log-level))
+          (t/set-level! log-level)
+          (println (green "Ok!")))
+
+        :else
+        (println (red "Unknown log level: " log-level-str))))))
 
 #_(help-handler [nil []])
 

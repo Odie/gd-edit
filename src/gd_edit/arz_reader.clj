@@ -5,7 +5,8 @@
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
             ;; [fipp.clojure :as pp]
-            [clojure.pprint :as pp])
+            [clojure.pprint :as pp]
+            [taoensso.timbre :as t])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
@@ -245,6 +246,9 @@
 
 (defn load-game-db
   [filepath localization-table]
+
+  (t/debug "Entering load-game-db")
+  (u/log-exp filepath)
 
   ;; Open the database file
   (let [bb (utils/mmap filepath)
