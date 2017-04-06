@@ -355,14 +355,77 @@
 
   (format "%s: %s" prop-name (System/getProperty prop-name)))
 
+(defn human-readable-byte-count
+  [byte-count]
+
+  (cond
+    (>= byte-count (* 1024 1024 1024 1024))
+    (str (quot byte-count (* 1024 1024 1024 1024)) " TB")
+
+    (>= byte-count (* 1024 1024 1024))
+    (str (quot byte-count (* 1024 1024 1024)) " GB")
+
+    (>= byte-count (* 1024 1024))
+    (str (quot byte-count (* 1024 1024)) " MB")
+
+    (>= byte-count 1024)
+    (str (quot byte-count 1024) " KB")
+
+    :else
+    (str byte-count " bytes")))
+
+(defn get-system-info
+  []
+
+  (let [jvm-props ["java.vm.name" "java.runtime.version" "os.name" "os.version"]
+        os-info (java.lang.management.ManagementFactory/getOperatingSystemMXBean)]
+
+    (partition 2
+               (concat
+                (interleave jvm-props
+                            (map #(System/getProperty %) jvm-props))
+
+                (list
+
+                 "Free System Memory"
+                 (human-readable-byte-count
+                  (.getFreePhysicalMemorySize os-info))
+
+                 "Committed System Memory"
+                 (human-readable-byte-count
+                  (.getCommittedVirtualMemorySize os-info))
+
+                 "Total System Memory"
+                 (human-readable-byte-count
+                  (.getTotalPhysicalMemorySize os-info))
+
+                 "Free Swap Memory"
+                 (human-readable-byte-count
+                  (.getFreeSwapSpaceSize os-info))
+
+                 "Total Swap Memory"
+                 (human-readable-byte-count
+                  (.getTotalSwapSpaceSize os-info))
+
+                 "Current file handle"
+                 (.getOpenFileDescriptorCount os-info)
+
+                 "Max file handle count"
+                 (.getMaxFileDescriptorCount os-info))))))
+
 (defn log-environment
   "Outputs some basic information regarding the running environment"
   []
 
-  (t/debug (jvm-prop-as-str "java.vm.name"))
-  (t/debug (jvm-prop-as-str "java.runtime.version"))
-  (t/debug (jvm-prop-as-str "os.name"))
-  (t/debug (jvm-prop-as-str "os.version")))
+  (let [sys-info (get-system-info)
+        max-key-length (reduce max 0 (map (comp count first) sys-info))]
+
+    (doseq [pair sys-info]
+      (t/debug
+       (format (format "%%-%ds : %%s" max-key-length)
+
+               (str (first pair))
+               (str (second pair)))))))
 
 (defn- initialize
   []
@@ -378,7 +441,6 @@
 
   ;; Setup logs
   (setup-log (or (@globals/settings :log-level) :info))
-  (log-environment)
 
   ;; Enable cross-platform ansi color handling
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
@@ -387,6 +449,7 @@
   (print-build-info)
   (println)
   (log-build-info)
+  (log-environment)
 
   ;; Run sanity checks and print any error messages
   (startup-sanity-checks)
