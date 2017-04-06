@@ -388,30 +388,44 @@
                 (list
 
                  "Free System Memory"
-                 (human-readable-byte-count
-                  (.getFreePhysicalMemorySize os-info))
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getFreePhysicalMemorySize os-info))
+                  "Not available")
 
                  "Committed System Memory"
-                 (human-readable-byte-count
-                  (.getCommittedVirtualMemorySize os-info))
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getCommittedVirtualMemorySize os-info))
+                  "Not available")
 
                  "Total System Memory"
-                 (human-readable-byte-count
-                  (.getTotalPhysicalMemorySize os-info))
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getTotalPhysicalMemorySize os-info))
+                  "Not available")
 
                  "Free Swap Memory"
-                 (human-readable-byte-count
-                  (.getFreeSwapSpaceSize os-info))
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getFreeSwapSpaceSize os-info))
+                  "Not available")
 
                  "Total Swap Memory"
-                 (human-readable-byte-count
-                  (.getTotalSwapSpaceSize os-info))
+                 (u/try-or
+                  (human-readable-byte-count
+                   (.getTotalSwapSpaceSize os-info))
+                  "Not available")
 
                  "Current file handle"
-                 (.getOpenFileDescriptorCount os-info)
+                 (u/try-or
+                   (.getOpenFileDescriptorCount os-info)
+                   "Not available")
 
                  "Max file handle count"
-                 (.getMaxFileDescriptorCount os-info))))))
+                 (u/try-or
+                   (.getMaxFileDescriptorCount os-info)
+                   "Not available"))))))
 
 (defn log-environment
   "Outputs some basic information regarding the running environment"
@@ -483,3 +497,9 @@
                (.getPath)
                ))
           nil))
+
+(comment
+
+  (let [os-info (java.lang.management.ManagementFactory/getOperatingSystemMXBean)]
+    os
+  ))

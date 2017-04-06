@@ -32,6 +32,14 @@
   (apply str
          (map #(format "%02x " (byte %)) s)))
 
+(defmacro try-or
+  "Try to evaluate to the try-body. If some kind of exception is throw, evaluate to the or-body."
+  [try-body or-body]
+
+  `(try
+     ~try-body
+     (catch Exception e#
+       ~or-body)))
 
 ;;------------------------------------------------------------------------------
 ;; Logging related functions
