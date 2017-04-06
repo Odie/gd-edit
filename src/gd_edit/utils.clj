@@ -47,7 +47,7 @@
 (defmacro log-exp
   [sexp]
 
-  `(t/debug (format "%s => %s" (quote ~sexp) ~sexp)))
+  `(t/debug (format "%s => %s" (quote ~sexp) (prn-str ~sexp))))
 
 (defmacro log-exceptions
   [& body]

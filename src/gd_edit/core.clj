@@ -147,6 +147,10 @@
 (defn- repl-eval
   [[input tokens :as input-vec] command-map]
 
+  (t/debug "Evaluating command from user:")
+  (u/log-exp input)
+  (u/log-exp tokens)
+
   ;; Try to find the "longest" command match
   ;; Basically, we're trying to find the most specific match.
   ;; This means we can put command handlers like "q" and "q show"
