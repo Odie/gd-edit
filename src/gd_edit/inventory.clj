@@ -113,7 +113,7 @@
   (->> item
        (:basename)
        (@globals/db-index)
-       (#(or (get % "bitmap") (get % "relicBitmap")))
+       (#(or (get % "bitmap") (get % "relicBitmap") (get % "artifactBitmap")))
        (strip-first-component)
        (texture-slot-dims)))
 
