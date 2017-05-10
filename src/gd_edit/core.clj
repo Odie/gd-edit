@@ -445,6 +445,13 @@
                (str (first pair))
                (str (second pair)))))))
 
+(defn- init-jansi
+  []
+
+  ;; Enable cross-platform ansi color handling
+  (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
+  (jansi-clj.core/install!))
+
 (defn- initialize
   []
 
@@ -460,9 +467,6 @@
   ;; Setup logs
   (setup-log (or (@globals/settings :log-level) :info))
 
-  ;; Enable cross-platform ansi color handling
-  (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
-  (jansi-clj.core/install!)
 
   (print-build-info)
   (println)
@@ -486,24 +490,28 @@
 
   (u/log-exceptions
 
+    (init-jansi)
+
     (initialize)
 
     (thread (notify-repl-if-latest-version-available))
 
     (repl)))
 
-#_(initialize)
-#_(time (do
-          (gd-edit.command-handlers/load-character-file
-           (-> (dirs/get-save-dir-search-list)
-               (first)
-               (io/file "_Odie/player.gdc")
-               (.getPath)
-               ))
-          nil))
 
+
+;;===============================================================================
 (comment
 
-  (let [os-info (java.lang.management.ManagementFactory/getOperatingSystemMXBean)]
-    os
-  ))
+  (initialize)
+
+  (time (do
+            (gd-edit.command-handlers/load-character-file
+             (-> (dirs/get-save-dir-search-list)
+                 (first)
+                 (io/file "_Odie/player.gdc")
+                 (.getPath)
+                 ))
+            nil))
+
+  )
