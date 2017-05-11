@@ -1857,5 +1857,15 @@
 
 #_(set-item-handler  [nil ["inv/1/items" "legion warhammer of valor" "64"]])
 
-
 #_(show-handler [nil ["inv/1/items"]])
+
+
+(comment
+
+  (time
+   (set-handler  [nil ["inv/1/items/0" "stonehide iron maiden's mantle of the flesh hulk"]]))
+
+  (time
+   (set-handler  [nil ["inv/1/items/0" "vampiric legion warhammer of valor"]]))
+
+  )

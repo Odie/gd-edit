@@ -226,3 +226,11 @@
 
   (dotimes [i indent-level]
     (print "    ")))
+
+(defn collect-values-with-key-prefix
+  [coll key-prefix]
+
+  (->> coll
+       (filter (fn [kv]
+                 (str/starts-with? (key kv) key-prefix)))
+       (reduce #(conj %1 (val %2)) [])))

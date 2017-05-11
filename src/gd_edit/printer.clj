@@ -33,7 +33,7 @@
 
   (let [character (->> character-map
                        (filter dbu/without-meta-fields)
-                       (sort-by first))
+                       (sort-by #(str (first %))))
 
         max-key-length (reduce
                         (fn [max-length key-str]

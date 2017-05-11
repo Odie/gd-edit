@@ -27,6 +27,60 @@
 
   (->> (apply conj [] (second vec) (first vec) (drop 2 vec))))
 
+(defn- baseitem-loottable-path
+  [dbr]
+
+  (as-> (str/split dbr #"/") $
+        (nth $ 2)
+        (str "records/items/loottables/" $ "/")))
+
+(defn- all-loottable-records
+  [db]
+
+  (filter (fn [item]
+            (str/starts-with?
+             (:recordname item)
+             ;; (baseitem-loottable-path baseitem-dbr-path)
+             "records/items/loottables/"))
+          db))
+
+(defn- loottable-records-with-mentions
+  [loottables mentioned-value]
+
+  (filter (fn [item]
+            (some
+             #(= (val %) mentioned-value)
+             item)
+            )
+          loottables))
+
+(defn- baseitem-valid-affix-paths
+  "Given the path of a base item, try to retrieve the valid affixes"
+  [db db-index baseitem-dbr-path]
+
+  ;; Retrieve records for all loot tables for that type of item (armor, shoulders, etc)
+  (let [loottables (loottable-records-with-mentions (all-loottable-records db) baseitem-dbr-path)
+
+        prefix-tables (reduce concat
+                              '()
+                              (apply conj
+                                     (map #(u/collect-values-with-key-prefix % "prefixTableName") loottables)
+                                     (map #(u/collect-values-with-key-prefix % "rarePrefixTableName") loottables)))
+
+        suffix-tables (reduce concat
+                              '()
+                              (apply conj
+                                     (map #(u/collect-values-with-key-prefix % "suffixTableName") loottables)
+                                     (map #(u/collect-values-with-key-prefix % "rareSuffixTableName") loottables)))]
+
+    {:prefix (->> prefix-tables
+                  (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
+                  (reduce #(apply conj % %2) #{}))
+
+     :suffix (->> suffix-tables
+                  (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
+                  (reduce #(apply conj % %2) #{}))}))
+
 ;;------------------------------------------------------------------------------
 ;; Item generation
 ;;------------------------------------------------------------------------------
@@ -120,7 +174,7 @@
                         (first))]
 
     ;; Does the best match seem "good enough"?
-    (if (and (not (nil? best-match))
+    (if (and (not (nil? (get best-match 0)))
              (> (nth best-match 0) 0.85))
       best-match
       nil)))
@@ -242,39 +296,26 @@
     (assoc item :relic-completion-level 4)
     item))
 
-(defn construct-item
-  [target-name db level-cap]
+(defn build-affix-idx
+  [coll type]
 
-  ;; Build a list of base item names with their quality name
-  ;; The index takes the form of: item-name => [item-records]
-  ;; Multiple records may have the same name, but differ in strength
-  (let [item-name-idx (build-item-name-idx @globals/db)
+  (let [recordname-prefix (if (= type :prefix)
+                        "records/items/lootaffixes/prefix/"
+                        "records/items/lootaffixes/suffix/")
 
-        ;; Build a prefix index
-        prefix-records (->> db
-                            (filter #(str/starts-with? (:recordname %1) "records/items/lootaffixes/prefix/"))
-                            (filter #(-> (:recordname %1)
-                                         (str/split #"/")
-                                         (count)
-                                         (= 5))))
+        affix-records (->> coll
+                           (filter #(str/starts-with? (:recordname %1) recordname-prefix))
+                           (filter #(-> (:recordname %1)
+                                        (str/split #"/")
+                                        (count)
+                                        (= 5))))]
 
-        prefix-name-idx (group-by #(%1 "lootRandomizerName") prefix-records)
+    (group-by #(%1 "lootRandomizerName") affix-records)))
 
-        ;; Build a suffix index
-        suffix-records (->> db
-                            (filter #(str/starts-with? (:recordname %1) "records/items/lootaffixes/suffix/"))
-                            (filter #(-> (:recordname %1)
-                                         (str/split #"/")
-                                         (count)
-                                         (= 5))))
+(defn- analysis->item
+  [analysis db item-name-idx prefix-name-idx suffix-name-idx level-cap]
 
-        suffix-name-idx (group-by #(%1 "lootRandomizerName") suffix-records)
-
-
-        ;; Try to decompose the complete item name into its prefix, base, and suffix
-        analysis (analyze-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
-
-        ;; Now that we know what the item is composed of, try to bring up the strength/level of each part
+  (let [;; Now that we know what the item is composed of, try to bring up the strength/level of each part
         ;; as the level cap allows
         ;; For example, there are 16 different suffixes all named "of Potency". Which one do we choose?
         ;; We choose highest level one that is less or equal to the level cap
@@ -305,6 +346,72 @@
       ;; Otherwise, create a hashmap that represents the item
       (->> (item-def->item results)
            (item-materia-fill-completion-level)))))
+
+(defn- non-nil-value-count
+  [m]
+
+  (reduce-kv (fn [accum k v]
+                   (if-not (nil? v)
+                     (+ accum 1)
+                     accum
+                     ))
+             0
+             m))
+
+(defn- analysis-better-match
+  [a1 a2]
+
+  (let [score1 (non-nil-value-count a1)
+        score2 (non-nil-value-count a2)]
+    (if (> score2 score1)
+      a2
+      a1)))
+
+(defn construct-item
+  [target-name db db-index level-cap]
+
+  ;; Build a list of base item names with their quality name
+  ;; The index takes the form of: item-name => [item-records]
+  ;; Multiple records may have the same name, but differ in strength
+  (let [item-name-idx (build-item-name-idx db)
+
+        ;; Try to decompose the complete item name into its prefix, base, and suffix, using
+        ;; all known affixes
+        prefix-all (build-affix-idx db :prefix)
+        suffix-all (build-affix-idx db :suffix)
+        analysis-all (analyze-item-name item-name-idx
+                                        prefix-all
+                                        suffix-all
+                                        target-name)
+
+        ;; Now that we have a good idea of the basename of the item,
+        ;; try to narrow down to "legal" prefixes only.
+        legal-affixes (into {}
+                            (map (fn [[k affix-set]]
+                                   [k (map #(get db-index %)
+                                           affix-set)])
+                                 (baseitem-valid-affix-paths @globals/db @globals/db-index (:recordname (:base analysis-all)))))
+
+        prefix-narrow (build-affix-idx (legal-affixes :prefix) :prefix)
+        suffix-narrow (build-affix-idx (legal-affixes :suffix) :suffix)
+        analysis-narrow (analyze-item-name item-name-idx
+                                           prefix-narrow
+                                           suffix-narrow
+                                           target-name)
+
+        analysis-final (analysis-better-match analysis-narrow analysis-all)
+        [prefix-final suffix-final] (if (= analysis-final analysis-narrow)
+                                      [prefix-narrow suffix-narrow]
+                                      [prefix-all suffix-all])
+        ]
+
+
+    (analysis->item analysis-final db item-name-idx
+                    prefix-final
+                    suffix-final
+                    level-cap)
+    )
+  )
 
 (defn- path-is-item?
   [character path]
@@ -369,7 +476,7 @@
 
       :else
       ;; Try to construct the requested item
-      (let [item (construct-item target-name @globals/db level-cap)]
+      (let [item (construct-item target-name @globals/db @globals/db-index level-cap)]
         ;; If construction was not successful, inform the user and abort
         (cond
           (nil? item)
@@ -390,3 +497,14 @@
 #_(set-item-handler  [nil ["inv/1/items/0" "legion warhammer of valor" "64"]])
 #_(set-item-handler  [nil ["equipment/3" "stonehide Dreeg-Sect Legguards of the boar" "75"]])
 #_(gd-edit.command-handlers/show-handler [nil ["equipment/3"]])
+
+(comment
+
+  (baseitem-valid-affix-paths @globals/db @globals/db-index "records/items/gearshoulders/b020a_shoulder.dbr")
+
+  (count
+   (all-loottable-records @globals/db))
+
+  (loottable-records-with-mentions (all-loottable-records @globals/db) "records/items/faction/weapons/blunt1h/f002a_blunt.dbr")
+
+  )
