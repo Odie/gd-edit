@@ -46,6 +46,9 @@
         com.dropbox.core.v2.DbxClientV2
         com.dropbox.core.v2.files.WriteMode)
 
+(def jvm-opt
+  #{"-Xms128m" "-Xmx1024m" "-Djna.nosys=true"})
+
 (task-options!
  aot {:namespace   #{'gd-edit.core}}
  pom {:project     project
@@ -57,8 +60,8 @@
                     "http://www.eclipse.org/legal/epl-v10.html"}}
  jar {:main        'gd-edit.core
       :file        (str "gd-edit-" version "-standalone.jar")}
- bin {:jvm-opt #{"-Xms128m" "-Xmx1024m"}}
- exe {:jvm-opt #{"-Xms128m" "-Xmx1024m"}
+ bin {:jvm-opt jvm-opt}
+ exe {:jvm-opt jvm-opt
       :name      project
       :main      'gd_edit.core
       :version   "0.1.0"

@@ -485,6 +485,14 @@
   ;; Remove any left over restart scripts from last time we ran "update"
   (su/cleanup-restart-script))
 
+(defn print-runtime-info
+  []
+
+  (clojure.pprint/pprint (.getInputArguments (java.lang.management.ManagementFactory/getRuntimeMXBean)))
+  (newline)
+  (clojure.pprint/pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
+  (newline))
+
 (defn -main
   [& args]
 
