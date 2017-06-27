@@ -32,7 +32,9 @@
    :male              :bool
    :player-class-name (s/string :ascii)
    :character-level   :int32
-   :hardcore-mode     :bool))
+   :hardcore-mode     :bool
+   :header-unknown-byte :byte
+   ))
 
 (def Block1
   (s/ordered-map
@@ -206,12 +208,35 @@
   (doseq [item (get-in block [:weapon-sets 1 :items])]
     (s/write-struct EquipmentItem bb item (:primitive-specs @context) context)))
 
-(def Block4
+(def Stash
   (s/ordered-map
-    :version      :int32
-    :stash-width  :int32
-    :stash-height :int32
-    :stash-items  (s/variable-count StashItem)))
+   :width  :int32
+   :height :int32
+
+   :items  (s/variable-count StashItem)
+   ))
+
+(defn read-block4
+  [^ByteBuffer bb context]
+
+  (let [version (read-int! bb context)
+        stash-count (read-int! bb context)
+
+        stashes (reduce (fn  [accum _]
+                          (conj accum (read-block bb context {0 Stash})))
+                        []
+                        (range stash-count))]
+    {:version version
+     :stashes stashes}))
+
+(defn write-block4
+  [^ByteBuffer bb block context]
+
+  (write-int! bb (:version block) context)
+  (write-int! bb (count (:stashes block)) context)
+
+  (doseq [stash (:stashes block)]
+    (write-block bb stash context {0 Stash})))
 
 (def UID
   (s/string :bytes :length 16))
@@ -849,7 +874,9 @@
   [preamble]
 
   (if (or (not= (:magic preamble) 0x58434447)
-          (not= (:version preamble) 1))
+          ;; (not= (:version preamble) 2)
+          ;; (not= (:minor-version preamble) 4)
+          )
     (throw (Throwable. "I don't understand this gdc format!"))))
 
 
@@ -862,92 +889,118 @@
       (var-get block-spec-var)
       nil)))
 
+(defn- get-block-read-fn
+  "Retrieve a read function for block by id number"
+  [id]
 
-(defn read-block
+  (let [block-read-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "read-block" id)))]
+
+    (if-not (nil? block-read-fn-var)
+      (var-get block-read-fn-var)
+      nil)))
+
+(defn- get-block-write-fn
+  "Retrieve a read function for block by id number"
+  [id]
+
+  (let [block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" id)))]
+
+    (if-not (nil? block-write-fn-var)
+      (var-get block-write-fn-var)
+      nil)))
+
+(defn read-block-header
   [^ByteBuffer bb context]
 
-  (let [;; Read the block id
-        id (read-int! bb context)
+  {:id (read-int! bb context)
+   :length (read-int! bb context)})
 
-        ;; Try to fetch the block spec by name
-        block-spec (get-block-spec id)
+(defn read-block
+  ([^ByteBuffer bb context]
+   (read-block bb context nil))
 
-        ;; Try to fetch a custom read function by name
-        block-read-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "read-block" id)))
-        block-read-fn (if-not (nil? block-read-fn-var)
-                        (var-get block-read-fn-var)
-                        nil)
+  ([^ByteBuffer bb context block-spec-overrides]
 
-        ;; If neither a block spec or a custom read function can be found...
-        ;; We don't know how to read this block
-        _ (if (and (nil? block-spec) (nil? block-read-fn))
-            (throw (Throwable. "Don't know how to read block " id)))
+   (let [;; Read the block id
+         id (read-int! bb context)
 
-        ;; Get the total length of the block
-        length (decrypt-int (.getInt bb) (:enc-state @context))
-        expected-end-position (+ (.position bb) length)
+         ;; Get the total length of the block
+         length (decrypt-int (.getInt bb) (:enc-state @context))
+         expected-end-position (+ (.position bb) length)
 
-        ;; Try to read the block
-        ;; If a custom read function was provided, use that
-        ;; Otherwise, try to read using a block spec
-        block-data (if block-read-fn
-                     (block-read-fn bb context)
-                     (s/read-struct block-spec bb context))
+         ;; Figure out how we can read the block
+         block-spec-or-read-fn (or (get block-spec-overrides id)
+                                   (get-block-read-fn id)
+                                   (get-block-spec id))
 
-        ;; Verify we've reached the expected position
-        _ (assert (= expected-end-position (.position bb)))
+         ;; If neither a block spec or a custom read function can be found...
+         ;; We don't know how to read this block
+         _ (if (nil? block-spec-or-read-fn)
+             (throw (Throwable. "Don't know how to read block " id)))
 
-        ;; Verify we have the correct enc-state at this point
-        checksum (Integer/toUnsignedLong (.getInt bb))
-        _ (assert (= checksum (:enc-state @context)))
-        ]
+         ;; Try to read the block
+         ;; If a custom read function was provided, use that
+         ;; Otherwise, try to read using a block spec
+         block-data (cond
+                      (fn? block-spec-or-read-fn)
+                      (block-spec-or-read-fn bb context)
+                      :else
+                      (s/read-struct block-spec-or-read-fn bb context))
 
-    (assoc block-data :meta-block-id id)))
+         ;; Verify we've reached the expected position
+         _ (assert (= expected-end-position (.position bb)))
+
+         ;; Verify we have the correct enc-state at this point
+         checksum (Integer/toUnsignedLong (.getInt bb))
+         _ (assert (= checksum (:enc-state @context)))
+         ]
+
+     (assoc block-data :meta-block-id id))))
 
 (defn write-block
-  [^ByteBuffer bb block context]
-  {:pre [(not (nil? block))]}
+  ([^ByteBuffer bb block context]
+   (write-block bb block context nil))
 
-  (let [{:keys [meta-block-id]} block
+  ([^ByteBuffer bb block context block-spec-overrides]
+   {:pre [(not (nil? block))]}
 
-        block-spec (get-block-spec meta-block-id)
+   (let [{:keys [meta-block-id]} block
 
-        ;; Try to fetch a custom write function by name
-        block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" meta-block-id)))
-        block-write-fn (if-not (nil? block-write-fn-var)
-                        (var-get block-write-fn-var)
-                        nil)
+         block-spec-or-write-fn (or (get block-spec-overrides meta-block-id)
+                                    (get-block-write-fn meta-block-id)
+                                    (get-block-spec meta-block-id))
 
-        ;; If neither a block spec or a custom read function can be found...
-        ;; We don't know how to write this block
-        _ (if (and (nil? block-spec) (nil? block-write-fn))
-            (throw (Throwable. "Don't know how to write block " meta-block-id)))
+         ;; If neither a block spec or a custom read function can be found...
+         ;; We don't know how to write this block
+         _ (if (nil? block-spec-or-write-fn)
+             (throw (Throwable. "Don't know how to write block " meta-block-id)))
 
-        ;; Write the id of the block
-        _ (write-int! bb meta-block-id context)
+         ;; Write the id of the block
+         _ (write-int! bb meta-block-id context)
 
-        ;; Write a dummy block length
-        ;; We'll come back and fill it back in when we know how long the block is
-        length-field-pos (.position bb)
-        length-field-enc-state (:enc-state @context)
-        _ (.putInt bb 0)
+         ;; Write a dummy block length
+         ;; We'll come back and fill it back in when we know how long the block is
+         length-field-pos (.position bb)
+         length-field-enc-state (:enc-state @context)
+         _ (.putInt bb 0)
 
-        ;; Write the block using either a custom write function or the block spec
-        _ (if-not (nil? block-write-fn)
-            (block-write-fn bb block context)
-            (s/write-struct block-spec bb block (:primitive-specs @context) context))
+         ;; Write the block using either a custom write function or the block spec
+         _ (cond
+             (fn? block-spec-or-write-fn)
+             (block-spec-or-write-fn bb block context)
+             :else
+             (s/write-struct block-spec-or-write-fn bb block (:primitive-specs @context) context))
 
-        ;; Write out the real length of the block
-        block-end-pos (.position bb)
-        block-length (- (.position bb) length-field-pos 4)
-        _ (.position bb length-field-pos)
-        _ (.putInt bb (int (bit-and 0x00000000ffffffff (bit-xor block-length length-field-enc-state))))
-        _ (.position bb block-end-pos)
+         ;; Write out the real length of the block
+         block-end-pos (.position bb)
+         block-length (- (.position bb) length-field-pos 4)
+         _ (.position bb length-field-pos)
+         _ (.putInt bb (int (bit-and 0x00000000ffffffff (bit-xor block-length length-field-enc-state))))
+         _ (.position bb block-end-pos)
 
-        ;; Write the checksum to end the block
-        _ (.putInt bb (int (bit-and 0x00000000ffffffff (:enc-state @context))))]
-    )
-  )
+         ;; Write the checksum to end the block
+         _ (.putInt bb (int (bit-and 0x00000000ffffffff (:enc-state @context))))]
+     )))
 
 (defn block-strip-meta-info-fields
   [block]
@@ -977,7 +1030,7 @@
         _ (assert (= header-checksum (:enc-state @enc-context)))
 
         data-version (read-int! bb enc-context)
-        _ (if (not (contains? #{6 7} data-version))
+        _ (if (not (contains? #{6 7 8} data-version))
             (throw (Throwable. "I can't read this gdc format!")))
 
         mystery-field (read-bytes! bb enc-context 16)
