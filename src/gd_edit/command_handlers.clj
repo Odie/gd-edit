@@ -1169,7 +1169,10 @@
       (newline)
       (println (string/join "\n"
                             ["To more detailed help text on a command, run: "
-                             " help <command>"])))
+                             " help <command>"
+                             ""
+                             "Need more help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n"
+                             ])))
 
     :else
     ;; If the user is looking for help text on a specific command,

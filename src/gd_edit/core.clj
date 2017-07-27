@@ -503,6 +503,7 @@
     (init-jansi)
 
     (initialize)
+    (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
 
     (thread (notify-repl-if-latest-version-available))
 
