@@ -507,4 +507,6 @@
 
   (loottable-records-with-mentions (all-loottable-records @globals/db) "records/items/faction/weapons/blunt1h/f002a_blunt.dbr")
 
+  (set-item-handler  [nil ["inv/1/items" "Oleron's Wrath" "100"]])
+
   )

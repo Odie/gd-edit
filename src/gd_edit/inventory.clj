@@ -91,6 +91,15 @@
      {:X (+ X x-offset) :Y (+ Y y-offset)}
      stride)))
 
+(defn- item->bitmap-name
+  [item]
+
+  (or
+   (get item "bitmap")
+   (get item "relicBitmap")
+   (get item "artifactBitmap")
+   (get item "artifactFormulaBitmapName")))
+
 (defn items->dims
   [items]
 
@@ -100,7 +109,7 @@
   (->> items
        (map :basename)
        (map @globals/db-index)
-       (map #(or (get % "bitmap") (get % "relicBitmap")))
+       (map item->bitmap-name)
        (map strip-first-component)
        (map texture-slot-dims)))
 
@@ -113,7 +122,7 @@
   (->> item
        (:basename)
        (@globals/db-index)
-       (#(or (get % "bitmap") (get % "relicBitmap") (get % "artifactBitmap") (get % "artifactFormulaBitmapName")))
+       (item->bitmap-name)
        (strip-first-component)
        (texture-slot-dims)))
 
