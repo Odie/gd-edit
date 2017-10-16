@@ -107,7 +107,7 @@
        (filter #(.isDirectory %1))
        (filter #(.exists (io/file %1 "player.gdc")))))
 
-(defn- make-db-filepath
+(defn make-db-filepath
   [game-dir]
 
   (io/file game-dir "database" "database.arz"))

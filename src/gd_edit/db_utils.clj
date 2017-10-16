@@ -78,7 +78,9 @@
         ;; If we've found an item with a unique name, just return the name without any
         ;; prefix or suffix
         (if is-set-item
-          base-name
+          (->> [(item-base-record-get-quality-name base-record) base-name]
+               (filter some?)
+               (str/join " "))
 
           ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
           ;; of the item

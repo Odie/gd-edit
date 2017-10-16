@@ -923,39 +923,82 @@
               (println "Otherwise, your copied character will not show up in the character selection menu.")
               )))))))
 
+
+
+(defn mod-db-file
+  "Returns the configured mod's db file as a java.lang.File object or nil"
+  []
+  (let [mod-dir (:moddir @globals/settings)]
+    (when (and mod-dir (.exists (dirs/make-db-filepath mod-dir)))
+      (dirs/make-db-filepath mod-dir))))
+
+(defn dlc-db-file
+  "Returns the dlc db file as a java.lang.File object or nil"
+  []
+  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
+    (let [dlc-db-file (io/file dlc-dir "database" "GDX1.arz")]
+      (when (.exists dlc-db-file)
+        dlc-db-file))))
+
+(defn db-files
+  "Returns an array of database files to load"
+  []
+
+  (filterv some?
+           [;; Grab the localization file for the base game
+            (dirs/get-db-filepath)
+
+            ;; Grab the dlc's localization file if it exists
+            (dlc-db-file)
+
+            ;; Grab the localization file for the configured mod if it exists
+            (mod-db-file)]))
+
+
+(defn mod-localization-file
+  "Returns the configured mod's localization file as a java.lang.File object or nil"
+  []
+  (let [mod-dir (:moddir @globals/settings)]
+    (when (and mod-dir (.exists (dirs/make-localization-filepath mod-dir)))
+      (dirs/make-localization-filepath mod-dir))))
+
+(defn dlc-localiation-file
+  "Returns the dlc localization file as a java.lang.File object or nil"
+  []
+
+  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
+    (let [dlc-loc-file (dirs/make-localization-filepath dlc-dir)]
+      (when (.exists dlc-loc-file)
+        dlc-loc-file))))
+
+(defn localization-files
+  "Returns an array of localization files to load"
+  []
+
+  (filterv some?
+           [;; Grab the localization file for the base game
+            (dirs/get-localization-filepath)
+
+            ;; Grab the dlc's localization file if it exists
+            (dlc-localiation-file)
+
+            ;; Grab the localization file for the configured mod if it exists
+            (mod-localization-file)]))
+
 (defn load-db
   []
 
   (t/debug "Entering load-db")
-  (let [mod-dir (:moddir @globals/settings)
-
-        ;; Try to load the localization table for the selected mod if available
-        mod-localization-table (if (and mod-dir (.exists (dirs/make-localization-filepath mod-dir)))
-                                 (arc-reader/load-localization-table (dirs/make-localization-filepath mod-dir))
-                                 nil)
-
-        ;; Load the game's original localization table
-        [localization-load-time localization-table]
-        (u/timed
-         (arc-reader/load-localization-table (dirs/get-localization-filepath)))
-
-        ;; Combine the mod and game localization table
-        combined-localization-table (merge localization-table mod-localization-table)
+  (let [combined-localization-table
+        (->> (localization-files) ;; grab all localization files we want to load
+             (map arc-reader/load-localization-table) ;; load each file
+             (apply merge))
 
 
-        ;; Try to load the db of the select mod if available
-        mod-db (if (and mod-dir (.exists (dirs/make-mod-db-filepath mod-dir)))
-                 (arz-reader/load-game-db (dirs/make-mod-db-filepath mod-dir) combined-localization-table)
-                 nil)
-
-        ;; Load the game's original database
-        [db-load-time db]
-        (u/timed
-         (arz-reader/load-game-db (dirs/get-db-filepath)
-                                  combined-localization-table))
-
-        ;; Merge the mod and game database
-        db (->> (merge (build-db-index db) (build-db-index mod-db))
+        db (->> (db-files) ;; Grab all db files we want to load
+                (map #(arz-reader/load-game-db % combined-localization-table)) ;; load all the db files
+                (map build-db-index) ;; merge all the loaded db records
+                (apply merge)
                 (vals))]
     db
   ))
