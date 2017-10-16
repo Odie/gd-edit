@@ -1,5 +1,5 @@
 (def project 'gd-edit)
-(def version "0.1.6-SNAPSHOT")
+(def version "0.1.7-SNAPSHOT")
 
 (set-env! :resource-paths #{"resources" "src"}
           :source-paths   #{"test"}
