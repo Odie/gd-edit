@@ -3,7 +3,8 @@
             [gd-edit.utils :as u]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [taoensso.timbre :as t])
+            [taoensso.timbre :as t]
+            [clojure.string :as str])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
@@ -246,22 +247,31 @@
                        (conj accum record))))
                  []))))
 
+
 (defn load-arc-tex-file
-  [filepath]
+  [filepath load-fn]
 
   (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
         header (load-header bb)
-        record-headers (load-record-headers bb header)]
+
+        record-headers (->>  (load-record-headers bb header)
+                             (map (fn [record-header]
+                                    {:recordname (load-record-filename bb header record-header)
+                                     :record-header record-header}))
+                             (filter #(str/ends-with? (:recordname %) ".tex"))
+                             )
+        ]
 
     (->> record-headers
-         (reduce (fn [accum record-header]
-                   (let [record {:recordname (load-record-filename bb header record-header)
-                                 }]
-                     (header (empty? (:recordname record))
-                       accum
-                       (conj accum record))))
-                 []))))
+         (map (fn [record-header]
+                   (let [record-bb (as-> (load-record bb header (:record-header record-header)) $
+                                     (ByteBuffer/wrap $)
+                                     (.order $ java.nio.ByteOrder/LITTLE_ENDIAN))]
+
+                     (assoc (load-fn record-bb)
+                            :recordname (:recordname record-header))))))))
+
 
 (defn read-tex-header
   [bb]

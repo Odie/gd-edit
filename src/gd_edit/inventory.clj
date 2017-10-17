@@ -10,7 +10,9 @@
             [gd-edit.game-dirs :as dirs]
             [gd-edit.utils :as u]
             [clojure.set :as set]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.java.io :as io]
+            ))
 
 (defn pixel-dims->slot-dims
   [dims]
@@ -42,6 +44,34 @@
   (:width (inv-slot-dims inv-idx)))
 
 
+(defn dlc-texture-file
+  "Returns the dlc db file as a java.lang.File object or nil"
+  []
+  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
+    (let [dlc-db-file (io/file dlc-dir "resources" "Items.arc")]
+      (when (.exists dlc-db-file)
+        dlc-db-file))))
+
+(defn- get-texture-files
+  []
+  (filterv some?
+           [(dirs/get-resources-file "Items.arc")
+            (dlc-texture-file)]))
+
+(defn make-dims-lookup-fn
+  "Given a texture file path, return a function that can be used to look up dimensions of
+  textures in the file.
+
+  Returns: (string) -> (texture dimension hashmap)"
+  [filepath]
+
+  (arc/make-load-tex-fn filepath
+                        #(-> (arc/read-tex-header %)
+                             (arc/texture-dimensions)
+                             (pixel-dims->slot-dims))))
+
+(def texture-dim-fns nil)
+
 (defn bind-texture-slot-dims-fn
   "Binds the texture-slot-dims functions when called.
   This is done because:
@@ -53,11 +83,15 @@
   "
   []
 
-  (def texture-slot-dims
-    (arc/make-load-tex-fn (dirs/get-resources-file "Items.arc")
-                          #(-> (arc/read-tex-header %)
-                               (arc/texture-dimensions)
-                               (pixel-dims->slot-dims)))))
+  (def texture-dim-fns
+    (->> (get-texture-files)
+         (map make-dims-lookup-fn))))
+
+(defn texture-slot-dims
+  [texture-name]
+
+  (some #(% texture-name) texture-dim-fns))
+
 
 ;; The texture-slot-dims functions is bound/rebound whenever the :game-dir setting changes.
 (remove-watch globals/settings ::texture-slot-dims)
