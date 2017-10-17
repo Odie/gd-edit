@@ -133,20 +133,20 @@
         echo Preparing to restart gd-edit...
 
         REM remove old backup file
-        del /F #{backup-path}
+        del /F \"#{backup-path}\"
         if %%ERRORLEVEL%% neq 0 goto backup_error
 
         REM rename the original exe as a backup
-        move #{running-exe-path} #{backup-path}
+        move \"#{running-exe-path}\" \"#{backup-path}\"
         if %%ERRORLEVEL%% neq 0 goto backup_error
 
         REM move the new exe to where the original exe was
-        move #{(str new-exe)} #{running-exe-path}
+        move \"#{(str new-exe)}\" \"#{running-exe-path}\"
         if %%ERRORLEVEL%% neq 0 goto replace_error
 
         REM finally, start the new version
         echo Restarting gd-edit...
-        start #{running-exe-path}
+        start \"\" \"#{running-exe-path}\"
         exit 0
 
         backup_error:
@@ -160,7 +160,7 @@
         echo If this doesn't work, please manually rename
         echo #{backup-path} => #{running-exe-path}
         move #{backup-path} #{running-exe-path}
-        start #{running-exe-path}
+        start \"\" \"#{running-exe-path}\"
         pause
         exit 1
       "
