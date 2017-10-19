@@ -34,9 +34,10 @@
 (defn- strip-first-component
   [path]
 
-  (->> (u/filepath->components path)
-       (drop 1)
-       (str/join "/")))
+  (when path
+      (->> (u/filepath->components path)
+           (drop 1)
+           (str/join "/"))))
 
 (defn- stride
   [inv-idx]
@@ -72,6 +73,11 @@
 
 (def texture-dim-fns nil)
 
+(defn texture-slot-dims-data-loaded?
+  []
+
+  (some? texture-dim-fns))
+
 (defn bind-texture-slot-dims-fn
   "Binds the texture-slot-dims functions when called.
   This is done because:
@@ -86,6 +92,11 @@
   (def texture-dim-fns
     (->> (get-texture-files)
          (map make-dims-lookup-fn))))
+
+(defn lazy-load-texture-slot-dims
+  []
+  (if-not (texture-slot-dims-data-loaded?)
+    (bind-texture-slot-dims-fn)))
 
 (defn texture-slot-dims
   [texture-name]
@@ -114,16 +125,17 @@
 (defn- rect->slot-ids
   [{:keys [X Y width height]} stride]
 
-  ;; Given the width and height,
-  ;; generate all possible x & y offsets
-  (for [x-offset (range width)
-        y-offset (range height)]
+  (when (and (number? width) (number? height))
+    ;; Given the width and height,
+    ;; generate all possible x & y offsets
+    (for [x-offset (range width)
+          y-offset (range height)]
 
-    ;; Combine the origin with the offset to get a coordinate for the
-    ;; slot we're examining, then the coordinates into the slot-id
-    (coord->slot-id
-     {:X (+ X x-offset) :Y (+ Y y-offset)}
-     stride)))
+      ;; Combine the origin with the offset to get a coordinate for the
+      ;; slot we're examining, then the coordinates into the slot-id
+      (coord->slot-id
+       {:X (+ X x-offset) :Y (+ Y y-offset)}
+       stride))))
 
 (defn- item->bitmap-name
   [item]
@@ -137,8 +149,7 @@
 (defn items->dims
   [items]
 
-  (if-not (bound? #'texture-slot-dims)
-    (bind-texture-slot-dims-fn))
+  (lazy-load-texture-slot-dims)
 
   (->> items
        (map :basename)
@@ -150,8 +161,7 @@
 (defn item->dims
   [item]
 
-  (if-not (bound? #'texture-slot-dims)
-    (bind-texture-slot-dims-fn))
+  (lazy-load-texture-slot-dims)
 
   (->> item
        (:basename)
