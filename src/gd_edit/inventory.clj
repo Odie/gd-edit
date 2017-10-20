@@ -144,7 +144,8 @@
    (get item "bitmap")
    (get item "relicBitmap")
    (get item "artifactBitmap")
-   (get item "artifactFormulaBitmapName")))
+   (get item "artifactFormulaBitmapName")
+   (get item "emptyBitmap")))
 
 (defn items->dims
   [items]
