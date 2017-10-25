@@ -137,21 +137,24 @@
     (or (record "FileDescription")
         (record "skillDisplayName"))))
 
+(defn- faction-name-from-loc-table
+  [loc-table faction-index]
+
+  (when (>= faction-index 6)
+    (when-let [faction-str (@globals/localization-table (str "tagFactionUser" (- faction-index 6)))]
+      (when-not (str/starts-with? faction-str "User")
+        faction-str))))
+
 (defn faction-name
   [index]
 
   (let [faction-names {1  "Devil's Crossing"
                        2  "Aetherials"
                        3  "Chthonians"
-                       4  "Cronley's Gang"
-                       6  "Rovers"
-                       8  "Homestead"
-                       10 "The Outcast"
-                       11 "Death's Vigil"
-                       12 "Undead"
-                       13 "Black Legion"
-                       14 "Kymon's Chosen"}]
-    (faction-names index)))
+                       4  "Cronley's Gang"}]
+    (or
+     (faction-names index)
+     (faction-name-from-loc-table @globals/localization-table index))))
 
 (defn item-is-materia?
   [item]

@@ -985,23 +985,21 @@
             ;; Grab the localization file for the configured mod if it exists
             (mod-localization-file)]))
 
-(defn load-db
+(defn load-localization-files
   []
+  (->> (localization-files) ;; grab all localization files we want to load
+       (map arc-reader/load-localization-table) ;; load each file
+       (apply merge)))
+
+(defn load-db
+  [localization-table]
 
   (t/debug "Entering load-db")
-  (let [combined-localization-table
-        (->> (localization-files) ;; grab all localization files we want to load
-             (map arc-reader/load-localization-table) ;; load each file
-             (apply merge))
-
-
-        db (->> (db-files) ;; Grab all db files we want to load
-                (map #(arz-reader/load-game-db % combined-localization-table)) ;; load all the db files
-                (map build-db-index) ;; merge all the loaded db records
-                (apply merge)
-                (vals))]
-    db
-  ))
+  (->> (db-files) ;; Grab all db files we want to load
+       (map #(arz-reader/load-game-db % localization-table)) ;; load all the db files
+       (map build-db-index) ;; merge all the loaded db records
+       (apply merge)
+       (vals)))
 
 (defn build-db-index
   [db]
@@ -1013,7 +1011,8 @@
 (defn load-db-in-background
   []
 
-  (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db))))
+  (intern 'gd-edit.globals 'localization-table (future (u/log-exceptions (load-localization-files))))
+  (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db @globals/localization-table))))
   (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
 
 (def command-help-map
