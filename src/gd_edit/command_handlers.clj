@@ -24,7 +24,8 @@
 
             [gd-edit.printer :as printer]
             [clojure.java.shell :refer [sh]]
-            [taoensso.timbre :as t]))
+            [taoensso.timbre :as t]
+            [gd-edit.jline]))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
@@ -1367,10 +1368,12 @@
                                   (= skill-name-to-remove (:skill-name skill)))
                                 (@globals/character :skills)))]
 
-    (merge character
-           {:skills (into (empty (:skills character))
-                          (remove (fn [skill] (= skill skill-to-remove)) (:skills character)))
-            :skill-points (+ (:skill-points character) (:level skill-to-remove))})))
+    (if (nil? skill-to-remove)
+      character
+      (merge character
+             {:skills (into (empty (:skills character))
+                            (remove (fn [skill] (= skill skill-to-remove)) (:skills character)))
+              :skill-points (+ (:skill-points character) (:level skill-to-remove))}))))
 
 
 (defn class-remove-handler
