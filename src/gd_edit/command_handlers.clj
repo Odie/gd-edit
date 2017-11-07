@@ -1350,6 +1350,29 @@
     (u/print-indent 1)
     (println classname)))
 
+
+(defn class-remove-by-name
+  [character class-name]
+
+  (let [class-display-name-map (->> (db-class-ui-records)
+                                    (map (fn [ui-record]
+                                           [(db-class-ui-record->class-name ui-record)
+                                            (:recordname (db-class-ui-record->class-record ui-record))]))
+                                    (into {}))
+
+        skill-name-to-remove (class-display-name-map class-name)
+
+        skill-to-remove (first (filter
+                                (fn [skill]
+                                  (= skill-name-to-remove (:skill-name skill)))
+                                (@globals/character :skills)))]
+
+    (merge character
+           {:skills (into (empty (:skills character))
+                          (remove (fn [skill] (= skill skill-to-remove)) (:skills character)))
+            :skill-points (+ (:skill-points character) (:level skill-to-remove))})))
+
+
 (defn class-remove-handler
   "Remove a class to the currently loaded character by partial name"
   [[input tokens]]
@@ -1359,7 +1382,6 @@
     ;; Get the db record that represents the class mastery
     (let [class-to-remove (first tokens)
 
-
           matched-class (->> (db-class-ui-records)
                              (map db-class-ui-record->class-name)
                              (filter #(u/ci-match % class-to-remove))
@@ -1368,22 +1390,57 @@
       (if (empty? matched-class)
         (println (format "\"%s\" doesn't match any of the known classes" class-to-remove))
 
-        (let [class-display-name-map (->> (db-class-ui-records)
-                                          (map (fn [ui-record]
-                                                 [(db-class-ui-record->class-name ui-record)
-                                                  (:recordname (db-class-ui-record->class-record ui-record))]))
-                                          (into {}))
-
-              skill-name-to-remove (class-display-name-map matched-class)]
-
-          ;; Remove all skills in the character that matches the db record name
-          (swap! globals/character update :skills
-                 (fn [skill-seq] (into (empty skill-seq)
-                                       (remove (fn [skill] (= skill-name-to-remove (:skill-name skill))) skill-seq))))
+        ;; Update the character
+        (let [modified-character (class-remove-by-name @globals/character matched-class)]
 
           ;; Inform the user what happened
           (println "Removing class:" matched-class)
-          (print-character-classes @globals/character @globals/db))))))
+          (print-character-classes modified-character @globals/db)
+
+          (println)
+          (println "Updating the following fields:")
+          (printer/print-map-difference (clojure.data/diff @globals/character modified-character))
+
+          ;; Actually update the loaded character
+          (swap! globals/character (constantly modified-character)))))))
+
+
+(defn class-add
+  [character klass]
+
+  (merge character
+         ;; Adding a mastery requires investing at least 1 skill point in it
+         ;; Otherwise, the game will just ignore the choice
+         {:skills (conj (:skills character)
+                        {:devotion-level 0
+                         :devotion-experience 0
+                         :skill-active false
+                         :autocast-skill-name ""
+                         :skill-transition false
+                         :skill-name (:recordname klass),
+                         :level 1
+                         :sublevel 0
+                         :autocast-controller-name ""
+                         :enabled true})
+
+          ;; Deduct a skill point if possible
+          :skill-points (max (dec (:skill-points character)) 0)}))
+
+(defn prompt-yes-no
+  "Prompts the user to answer Y or N, returns true or false depending on user input."
+  [prompt]
+  (print prompt)
+  (print " ")
+  (print "(Y/N) ")
+  (flush)
+  (let [line (str/lower-case (read-line))]
+    (cond
+      (str/starts-with? line "y") true
+      (str/starts-with? line "n") false
+      :else (do
+              (println)
+              (println "Please enter 'Y' or 'N'.")
+              (recur prompt)))))
 
 (defn class-add-handler
   "Add a class to the currently loaded character by partial name"
@@ -1399,25 +1456,26 @@
       (if (nil? klass)
         (println (format "\"%s\" doesn't match any of the known classes" (first tokens)))
 
-        (do
-          ;; Remove all skills in the character that matches the db record name
-          (swap! globals/character update :skills
-                 (fn [skill-seq] (conj skill-seq
-                                       {:devotion-level 0
-                                        :devotion-experience 0
-                                        :skill-active false
-                                        :autocast-skill-name ""
-                                        :skill-transition false
-                                        :skill-name (:recordname klass),
-                                        :level 1
-                                        :sublevel 0
-                                        :autocast-controller-name ""
-                                        :enabled true}
-                                       )))
+        (let [perform-op (if-not (zero? (:skill-points @globals/character))
+                           true
+                           (do
+                             (println (str/join "\n" ["You need at least 1 skill point to add new mastery."
+                                                      "Adding a new mastery now will automatically add 1 skill point to your character."]))
+                             (prompt-yes-no "Really add class?")))]
+          (when perform-op
+            (let [modified-character (class-add @globals/character klass)]
 
-          ;; Inform the user what happened
-          (println "Adding class:" (klass "skillDisplayName"))
-          (print-character-classes @globals/character @globals/db))))))
+              ;; Inform the user what happened
+              (println "Adding class:" (klass "skillDisplayName"))
+              (print-character-classes modified-character @globals/db)
+
+              (println)
+              (println "Updating the following fields:")
+              (printer/print-map-difference (clojure.data/diff @globals/character modified-character))
+
+              ;; Actually update the loaded character
+              (swap! globals/character (constantly modified-character)))))))))
+
 
 (defn load-settings-file
   "Load settings file into globals/settings"
