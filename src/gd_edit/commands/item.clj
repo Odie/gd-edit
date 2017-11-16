@@ -121,7 +121,8 @@
   (let [item-records (filter (fn [record]
                                (and
                                 (some #(str/starts-with? (:recordname record) %1)
-                                      #{"records/items/"})
+                                      #{"records/items/"
+                                        "records/storyelements/questitems"})
                                 (not (str/starts-with? (:recordname record) "records/items/lootaffixes"))
                                 (dbu/record-has-display-name? record)
                                 ))
