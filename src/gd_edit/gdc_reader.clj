@@ -5,8 +5,7 @@
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
-            ;; [spyscope.core]
-            )
+            [clojure.inspector])
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
@@ -33,7 +32,11 @@
    :player-class-name (s/string :ascii)
    :character-level   :int32
    :hardcore-mode     :bool
-   :header-unknown-byte :byte
+   :expansion-character? (s/conditional
+                          (fn [data]
+                            (cond
+                              (= (:version data) 1) nil
+                              :else :byte)))
    ))
 
 (def Block1
@@ -196,17 +199,17 @@
 
   (assert (=  (count (:equipment block)) 12))
   (doseq [item (:equipment block)]
-    (s/write-struct EquipmentItem bb item (:primitive-specs @context) context))
+    (s/write-struct EquipmentItem bb item context))
 
   (write-bool! bb (get-in block [:weapon-sets 0 :unused]) context)
   (assert (=  (count (get-in block [:weapon-sets 0 :items])) 2))
   (doseq [item (get-in block [:weapon-sets 0 :items])]
-    (s/write-struct EquipmentItem bb item (:primitive-specs @context) context))
+    (s/write-struct EquipmentItem bb item context))
 
   (write-bool! bb (get-in block [:weapon-sets 1 :unused]) context)
   (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
   (doseq [item (get-in block [:weapon-sets 1 :items])]
-    (s/write-struct EquipmentItem bb item (:primitive-specs @context) context)))
+    (s/write-struct EquipmentItem bb item context)))
 
 (def Stash
   (s/ordered-map
@@ -407,7 +410,13 @@
                              :skill-active    :bool)
                             :length 5)
 
-   :hotslots                (s/variable-count HotSlot :length 36)
+   :hotslots                (s/conditional
+                             (fn [data]
+                               (cond
+                                 (= (:version data) 4)
+                                 (s/variable-count HotSlot :length 36)
+                                 :else
+                                 (s/variable-count HotSlot :length 46))))
    :camera-distance        :float
    ))
 
@@ -570,7 +579,7 @@
         next-enc-state (transform-fn transform-buffer @context-atom)]
 
     ;; Update the context with the new state
-    (reset! context-atom (assoc  @context-atom :enc-state next-enc-state))
+    (reset! context-atom (assoc @context-atom :enc-state next-enc-state))
 
     transform-buffer))
 
@@ -824,18 +833,17 @@
 (defn make-enc-context
   [enc-state enc-table & [options-map]]
 
-  (atom (merge options-map
-         {;; Mutable state
-          :enc-state enc-state
-          :enc-table enc-table
+  (atom (merge (or options-map {})
+               {;; Mutable state
+                :enc-state enc-state
+                :enc-table enc-table
 
-          ;; Specs table for the structure lib
-          :primitive-specs {:transform-bytes! transform-bytes!
-                            :byte   [:byte    1 read-byte!  write-byte! ]
-                            :bool   [:byte    1 read-bool!  write-bool! ]
-                            :int32  [:int32   4 read-int!   write-int!  ]
-                            :float  [:float   4 read-float! write-float!]}
-          })))
+                ;; Specs table for the structure lib
+                :rw-fns {:transform-bytes! transform-bytes!
+                         :byte   [:byte    1 read-byte!  write-byte! ]
+                         :bool   [:byte    1 read-bool!  write-bool! ]
+                         :int32  [:int32   4 read-int!   write-int!  ]
+                         :float  [:float   4 read-float! write-float!]}})))
 
 (defn generate-encryption-table
   "Return a sequence of 256 elements, each being an 4 byte quantity, derived from the given seed"
@@ -989,7 +997,7 @@
              (fn? block-spec-or-write-fn)
              (block-spec-or-write-fn bb block context)
              :else
-             (s/write-struct block-spec-or-write-fn bb block (:primitive-specs @context) context))
+             (s/write-struct block-spec-or-write-fn bb block context))
 
          ;; Write out the real length of the block
          block-end-pos (.position bb)
@@ -1112,8 +1120,8 @@
         enc-context (make-enc-context seed enc-table {:direction :write})
 
         _ (.putInt bb (bit-xor seed 1431655765))
-        _ (s/write-struct FilePreamble bb (:preamble fileinfo) (:primitive-specs @enc-context) enc-context)
-        _ (s/write-struct Header bb (get-block updated-block-list :header) (:primitive-specs @enc-context) enc-context)
+        _ (s/write-struct FilePreamble bb (:preamble fileinfo) enc-context)
+        _ (s/write-struct Header bb (get-block updated-block-list :header) enc-context)
         _ (.putInt bb (int ^long (:enc-state @enc-context)))
         _ (write-int! bb (:data-version fileinfo) enc-context)
         _ (write-bytes! bb (fileinfo :mystery-field) enc-context)

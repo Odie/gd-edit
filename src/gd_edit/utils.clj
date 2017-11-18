@@ -9,7 +9,8 @@
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.nio.file.Paths
-           java.io.File))
+           java.io.File
+           [java.security MessageDigest]))
 
 (defn mmap
   [filepath]
@@ -234,3 +235,20 @@
        (filter (fn [kv]
                  (str/starts-with? (key kv) key-prefix)))
        (reduce #(conj %1 (val %2)) [])))
+
+(defn slurp-bytes
+  "Slurp the bytes from a slurpable thing"
+  [x]
+  (with-open [out (java.io.ByteArrayOutputStream.)]
+    (clojure.java.io/copy (clojure.java.io/input-stream x) out)
+    (.toByteArray out)))
+
+(defn md5
+  [bytes]
+  (let [algorithm (MessageDigest/getInstance "MD5")
+        raw (.digest algorithm bytes)]
+    (format "%032x" (BigInteger. 1 raw))))
+
+(defn md5-file
+  [file-path]
+  (md5 (slurp-bytes file-path)))

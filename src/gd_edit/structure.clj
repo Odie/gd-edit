@@ -5,6 +5,7 @@
             [java.nio.channels FileChannel])
   (:gen-class))
 
+(def ^:dynamic *debug* false)
 
 (defn spec-type
   [spec & rest]
@@ -74,62 +75,21 @@
     spec))
 
 
-(defn compile-meta
-  [{:keys [struct/length-prefix] :as spec-meta} prim-specs]
-
-  ;; The only meta field that needs to be updated is the "length-prefix" field
-  ;; If it's not available, we don't need to do anything to compile this
-  (if (nil? length-prefix)
-    (assoc spec-meta :compiled true)
-
-    ;; There is no reason for a length prefix to be a composite type
-    ;; So we won't handle that case
-    (let [primitives-spec (prim-specs length-prefix)]
-      (if primitives-spec
-        ;; Update the length-prefix field to the function to be called
-        (assoc spec-meta
-               :struct/length-prefix (nth primitives-spec 2)
-               :compiled true)
-
-        ;; If we're not looking at a primitive type, we're looking at a composite type...
-        (throw (Throwable. (str "Cannot handle spec:" length-prefix)))))))
+(defn- merge-default-rw-fns-
+  [context]
+  (assert (or (map? context) (nil? context)))
+  (merge {:rw-fns primitives-specs}
+         (or context {})))
 
 
-(declare compile-spec-)
+(defn- merge-default-rw-fns
+  [context]
 
-(defn compile-spec
-  [spec]
-
-  (let [compiled-spec (compile-spec- spec)
-        compiled-meta (compile-meta (meta spec))]
-    (with-meta compiled-spec compiled-meta)))
-
-
-(defn- compile-spec-
-  [spec prim-specs]
-
-  (let [type (spec-type spec)]
-    (cond
-      ;; String specs are dummy items
-      ;; Just return the item itself
-      (= type :string)
-      spec
-
-      ;; Sequence of specs?
-      ;; Compile each one and return it
-      ;; This should handle :variable-count also
-      (sequential? spec)
-      (reduce
-       (fn [accum item]
-         (conj accum (compile-spec item))
-         )
-       (empty spec)
-       spec)
-
-      ;; Otherwise, this should just be a plain primitive
-      :else
-      (nth (prim-specs spec) 2)
-      )))
+  (if (atom? context)
+    (do
+      (swap! context merge-default-rw-fns-)
+      context)
+    (merge-default-rw-fns- context)))
 
 
 (defn read-struct
@@ -145,89 +105,79 @@
   The caller can also optionally supply a primitives spec table. If an atom
   supplied, it is assumed that it is being passed some mutable context.
   It will attempt to look up the :spec key to locate the actual specs."
-  [spec ^ByteBuffer bb & [prim-specs rest]]
+  [spec ^ByteBuffer bb & [context rest]]
 
-  ;; Handle single primitive case
-  ;; Handle sequence specs case
-  ;; Handle complicated case
+  (let [context (merge-default-rw-fns context)]
 
-  ;; Callers can provide a map or an atom to specify how to read primitives.
-  (let [primitive-specs (or  (if (atom? prim-specs)
-                               (:primitive-specs @prim-specs)
-                               prim-specs)
-
-                             ;; Provide a basic default in case the caller
-                             ;; doesn't want any custom behaviors
-                             gd-edit.structure/primitives-specs)
-
-        context (if (atom? prim-specs) prim-specs nil)
-
-        read-fn (:struct/read (meta spec))
-
-        ;; Get a list of specs to read without the fieldnames
-        stripped-spec (strip-orderedmap-fields spec)
-
-        ;; Read in the value using either a supplied read function or
-        ;; by following the spec
-        values (if-not (nil? read-fn)
-                 (read-fn bb context)
-                 (read-spec stripped-spec bb primitive-specs context))]
-
-    (cond
-      ;; If the value was read using a read function, return it as is
-      (not (nil? read-fn))
-      values
-
-      ;; If the user didn't ask a map back, return the data as is
-      (not (ordered-map? spec))
-      values
-
-      :else
-      ;; The user did ask for a map back
-      ;; Construct a map using the fieldnames in the spec as the key and the read value as the value
-      (zipmap (take-nth 2 spec) values))
-      ))
+    ;; Callers can provide a map or an atom to specify how to read primitives.
+    ;; Read in the value using either a supplied read function or
+    ;; by following the spec
+    (if-let [read-fn (:struct/read (meta spec))]
+      (read-fn bb context)
+      (read-spec spec bb {} context))))
 
 
+(defn- get-rw-fns
+  "Given a user supplied context object, try to fetch the :rw-fns field.
+  Optionally, fetch the vector that represents reading/writing a specific type of field.
 
-(defn read-spec-sequential
-  [spec bb prim-specs context]
+  The user may have supplied an atom if they needed to track some mutable data through
+  the serialization process. If that is the case, then fetching the :rw-fns field
+  becomes just ever so slightly more complicated than simply looking up a key."
+  ([context]
+   (get-rw-fns context nil))
 
-  (reduce
-   (fn [accum spec-item]
-     (conj accum (read-spec spec-item bb prim-specs context)))
-   []
-   spec))
+  ([context spec]
+   (cond-> context
+     (atom? context) (deref)
+     true (:rw-fns)
+     (some? spec) (get spec))))
 
 (defmethod read-spec :default
-  [spec bb prim-specs context]
+  [spec bb data context]
 
   (cond
 
     ;; If the spec has been compiled, we will get a function in the place of a
     ;; keyword indicating a primitive.
     ;; Call it with the byte buffer to read it
-    (clojure.test/function? spec)
+    (fn? spec)
     (spec bb context)
+
+    (ordered-map? spec)
+    (loop [spec-pairs (partition 2 spec)
+           data data]
+
+      ;; Grab the next field name and spec
+      (if-let [[field-name field-spec] (first spec-pairs)]
+        (do
+          (when *debug*
+            (println "reading field name:" field-name)
+            (println "field spec:" field-spec))
+          ;; Keep reading and looping until we're done with the spec pairs
+          (recur (rest spec-pairs)
+                 (assoc data field-name (read-spec field-spec bb data context))))
+
+        ;; If we're done with all the spec pairs, return the data that's been read
+        data))
+
 
     ;; If we're looking at some sequence, assume this is a sequence of specs and
     ;; read through it all
-    (sequential? spec)
-    (read-spec-sequential spec bb prim-specs context)
+
+    ;; (sequential? spec)
+    ;; (read-spec-sequential spec bb prim-specs context)
 
     ;; Otherwise, we should be dealing with some kind of primitive...
     ;; Look up the primitive keyword in the primitives map
     :else
-    (let [primitives-spec (prim-specs spec)]
+    (if-let [rw-fns (get-rw-fns context spec)]
 
-      ;; If the primitive is found...
-      (if primitives-spec
+      ;; Execute the read function now
+      ((nth rw-fns 2) bb context)
 
-        ;; Execute the read function now
-        ((nth primitives-spec 2) bb context)
-
-        ;; Otherwise, give up
-        (throw (Throwable. (str "Cannot handle spec:" spec)))))))
+      ;; Otherwise, give up
+      (throw (Throwable. (str "Cannot handle spec:" spec))))))
 
 
 (defn ordered-map
@@ -265,7 +215,7 @@
 
 
 (defmethod read-spec :variable-count
-  [spec bb prim-specs context]
+  [spec bb data context]
 
   (let [;; Destructure fields in the attached meta info
         {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
@@ -273,7 +223,7 @@
         ;; Read out the count of the spec to read
         length (if (not= static-length -1)
                  static-length
-                 (read-spec length-prefix bb prim-specs context))
+                 (read-spec length-prefix bb data context))
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
@@ -321,7 +271,7 @@
 
 
 (defmethod read-spec :string
-  [spec ^ByteBuffer bb prim-specs context]
+  [spec ^ByteBuffer bb data context]
 
   (let [valid-encodings {:ascii "US-ASCII"
                          :utf-8 "UTF-8"
@@ -337,7 +287,7 @@
         ;; Otherwise, read the length
         length (if (not= static-length -1)
                  static-length
-                 (read-spec length-prefix bb prim-specs context))
+                 (read-spec length-prefix bb data context))
 
         ;; Create a temp buffer to hold the bytes before turning it into a java string
         buffer (byte-array (buffer-size-for-string length requested-encoding))
@@ -349,8 +299,8 @@
     ;; If the context asked for bytes to be transformed, do it now
     ;; FIXME!!!  Reading API for byte array is very different here.
     ;;           Would be nice if this is "read-bytes".
-    (if (:transform-bytes! prim-specs)
-      ((:transform-bytes! prim-specs) buffer context))
+    (if-let [transform-fn (get-rw-fns context :transform-bytes!)]
+      (transform-fn buffer context))
 
     (if (= :bytes requested-encoding)
       buffer
@@ -392,7 +342,7 @@
 (defmulti write-spec spec-type)
 
 (defmethod write-spec :variable-count
-  [spec ^ByteBuffer bb data prim-specs context]
+  [spec ^ByteBuffer bb data context]
 
   (let [;; Destructure fields in the attached meta info
         {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
@@ -400,7 +350,7 @@
         ;; Write out the spec if we're not dealing with a sequence with a static/implied length
         _ (if (= static-length -1)
             ;; Write out the length of the sequence first
-            (let [write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+            (let [write-fn (prim-spec-get-write-fn (get-rw-fns context) length-prefix)]
               (write-fn bb (count data) context)))
 
         ;; Unwrap the spec so we can read it
@@ -408,10 +358,10 @@
 
     ;; Write out each item in the sequence
     (doseq [item data]
-      (write-struct unwrapped-spec bb item (:primitive-specs @context) context))))
+      (write-struct unwrapped-spec bb item context))))
 
 (defmethod write-spec :string
-  [spec ^ByteBuffer bb data prim-specs context]
+  [spec ^ByteBuffer bb data context]
 
   (assert (not (nil? data)))
 
@@ -442,12 +392,13 @@
         _ (if (= static-length -1)
             ;; What is the string length we're writing out to file?
             (let [claimed-str-length (count data)
-                  write-fn (prim-spec-get-write-fn prim-specs length-prefix)]
+                  write-fn (prim-spec-get-write-fn (get-rw-fns context) length-prefix)]
               (write-fn bb claimed-str-length context)))
 
         ;; If the context asked for bytes to be transformed, do it now
-        str-bytes (if (:transform-bytes! prim-specs)
-                    ((:transform-bytes! prim-specs) str-bytes context))
+        str-bytes (if-let [transform-fn (get-rw-fns context :transform-bytes!)]
+                    (transform-fn str-bytes context)
+                    str-bytes)
         ]
 
     ;; The string has now been converted to the right encoding and transformed.
@@ -455,22 +406,20 @@
     (.put bb str-bytes)))
 
 (defmethod write-spec :default
-  [spec ^ByteBuffer bb data prim-specs context]
+  [spec ^ByteBuffer bb data context]
 
   ;; Look up how we're supposed to deal with this primitive
-  (let [primitives-spec (prim-specs spec)]
-
-    ;; If the primitive is found...
-    (if primitives-spec
+  ;; If the primitive is found...
+  (if-let [primitives-spec (get-rw-fns context spec)]
 
       ;; Execute the read function now
       ((nth primitives-spec 3) bb data context)
 
       ;; Otherwise, give up
-      (throw (Throwable. (str "Cannot handle spec:" spec))))))
+      (throw (Throwable. (str "Cannot handle spec:" spec)))))
 
 (defn write-struct
-  [spec ^ByteBuffer bb data prim-specs context]
+  [spec ^ByteBuffer bb data context]
   {:pre [(not (nil? data))]}
 
   (cond
@@ -499,11 +448,48 @@
                   val (key data)]
 
               ;; Write out the item according to the spec
-              (write-spec type bb val prim-specs context)
+              (write-spec type bb val context)
 
               ;; Continue to process the next pair
               (recur (drop 2 spec-remaining)))))))
 
     ;; Otherwise, let our multi-method's default handling do it's thing
     :else
-    (write-spec spec bb data prim-specs context)))
+    (write-spec spec bb data context)))
+
+;;------------------------------------------------------------------------------
+;; Conditional rule handling
+;;------------------------------------------------------------------------------
+(defn conditional
+  "Tags a function to be executed during reading/writing.
+  The function will receive a single parameter, which will the be data that has been
+  read so far.
+
+  The idea is to be able to conditionally enable or change the spec attached to a field.
+  For example, this is useful when a file is versioned and certain fields optionally appear
+  or change into something else based on the version of the file being processed."
+  [fn]
+
+  (with-meta fn (merge (meta fn) {:struct/type :conditional})))
+
+
+(defmethod read-spec :conditional
+  [cond-fn bb data context]
+
+  (assert (fn? cond-fn))
+
+  ;; Send the currently read data to the cond-fn to retrieve the spec to be used
+  (when-let [spec (cond-fn data)]
+    ;; Read the data using the retrieved spec if any
+    (read-spec spec bb data context)))
+
+
+(defmethod write-spec :conditional
+  [cond-fn bb data context]
+
+  (assert (fn? cond-fn))
+
+  ;; Send the currently read data to the cond-fn to retrieve the spec to be used
+  (when-let [spec (cond-fn data)]
+    ;; write the data using the retrieved spec if any
+    (write-spec spec bb data context)))
