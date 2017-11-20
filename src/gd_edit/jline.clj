@@ -10,7 +10,9 @@
   (def reader (ConsoleReader.)))
 
 (defn readline
-  [prompt]
+  ([]
+   (readline ""))
+  ([prompt]
 
   ;; For some reason, using calling jline's readline throws an exception
   ;; when invoked from the cider repl
@@ -23,7 +25,7 @@
       (if (nil? reader)
         (initialize))
 
-      (.readLine reader prompt))))
+      (.readLine reader prompt)))))
 
 
 #_(initialize)

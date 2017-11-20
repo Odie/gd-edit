@@ -29,6 +29,44 @@
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
+(defn prompt-yes-no
+  "Prompts the user to answer Y or N, returns true or false depending on user input."
+  ([prompt]
+   (prompt-yes-no prompt nil))
+
+  ([prompt default]
+   (let [prompt (cond->> prompt
+                  (vector? prompt) (str/join "\n"))
+         print-yes-no (fn [default]
+                        (print (cond
+                                 (true? default) "(Y/n) "
+                                 (false? default) "(y/N) "
+                                 (nil? default) "(y/n) ")))]
+
+     ;; Show the prompt
+     (print prompt)
+     (print " ")
+     (print-yes-no default)
+     (flush)
+
+     ;; Read the user's answer
+     (let [line (str/lower-case (gd-edit.jline/readline))]
+       (cond
+         (str/starts-with? line "y") true
+         (str/starts-with? line "n") false
+
+         ;; If the user didn't supply an answer...
+         ;; and the caller has set the default value...
+         ;; Just return the default value
+         (and (empty? line)
+              (some? default)) default
+
+         ;; Otherwise, ask the user to choose from a valid answer.
+         :else (do
+                 (println)
+                 (println "Please enter 'Y' or 'N'.")
+                 (recur prompt default)))))))
+
 
 ;;--------------------------------------------------------------------
 ;; Query and pagination functions
@@ -602,6 +640,23 @@
              (into []))
         sibling-field))
 
+(defn- warn-user-before-set-val
+  "Warns the user if the changing a field might be problematic.
+  Returns false if the user chooses to abort the value change. Otherwise, returns true.
+  "
+  [character field-path new-val]
+
+  (cond
+    (and (= 1 (count field-path))
+         (contains? #{:level-in-bio :max-level :character-level} (first field-path)))
+    (prompt-yes-no ["Changing the level manually is not recommended."
+                    "Please use the 'level' command instead."
+                    (utils/fmt "Try 'level #{new-val}'.")
+                    ""
+                    "Are you sure you want to change the value of this field manually?"]
+                   false)
+    :else true))
+
 (defn set-handler
   [[input tokens]]
 
@@ -650,6 +705,7 @@
                      (= (last val-path) :inventory-items))
                 (item-commands/set-item-handler [input tokens])
 
+
                 (and
                  (dbu/is-item? (get-in @globals/character (butlast val-path)))
                  (= :relic-name (last val-path)))
@@ -679,10 +735,11 @@
                                                                       (string/lower-case)))
 
                 :else
-                ;; Set the new value into the character sheet
-                (reset! globals/character
-                        (update-in @globals/character val-path (fn [oldval] newval)))
-                )
+                (if-not (warn-user-before-set-val @globals/character val-path newval)
+                  (println (red"Command aborted."))
+                  ;; Set the new value into the character sheet
+                  (reset! globals/character
+                          (update-in @globals/character val-path (fn [oldval] newval)))))
               nil
               ))
 
@@ -1177,7 +1234,15 @@
    ["mod" "Displays the mod currently selected"]
    ["mod pick" "Picks an installed mod to activate"]
    ["mod clear" "Unselect the currently selected mod"]
-   ["level" "Set the level of the loaded character to a new value"]
+   ["level" "Set the level of the loaded character to a new value"
+    (string/join "\n"
+                 ["Syntax: level <new level>"
+                  ""
+                  "This command can level the character both up and down and will update the following fields:"
+                  "- character level"
+                  "- attribute points"
+                  "- skill points"
+                  "- experience points"])]
    ["respec" "Respecs the loaded character"
     (string/join "\n"
                  ["Syntax: respec <respec-type>"
@@ -1214,7 +1279,9 @@
                             ["To more detailed help text on a command, run: "
                              " help <command>"
                              ""
-                             "Need more help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n"
+                             "Need more help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/"
+                             "   and"
+                             "https://odie.github.io/gd-edit-docs/commands/"
                              ])))
 
     :else
@@ -1233,7 +1300,10 @@
         (println (nth help-item 2))
 
         :else
-        (println (format "Sorry, '%s' has no detailed help text." command))
+        (do
+          (println (format "%s\t%s" (first help-item) (second help-item)))
+          (println)
+          (println (format "Sorry, '%s' has no detailed help text." command)))
         ))))
 
 
@@ -1429,21 +1499,6 @@
           ;; Deduct a skill point if possible
           :skill-points (max (dec (:skill-points character)) 0)}))
 
-(defn prompt-yes-no
-  "Prompts the user to answer Y or N, returns true or false depending on user input."
-  [prompt]
-  (print prompt)
-  (print " ")
-  (print "(Y/N) ")
-  (flush)
-  (let [line (str/lower-case (read-line))]
-    (cond
-      (str/starts-with? line "y") true
-      (str/starts-with? line "n") false
-      :else (do
-              (println)
-              (println "Please enter 'Y' or 'N'.")
-              (recur prompt)))))
 
 (defn class-add-handler
   "Add a class to the currently loaded character by partial name"
@@ -1907,71 +1962,3 @@
 
         :else
         (println (red "Unknown log level: " log-level-str))))))
-
-#_(help-handler [nil []])
-
-#_(write-handler [nil nil])
-
-#_(choose-character-handler [nil nil])
-#_(show-handler [nil nil])
-#_(show-handler [nil ["shrines/0"]])
-#_(show-handler [nil ["stash-items"]])
-#_(show-handler [nil ["stash/50"]])
-#_(show-handler [nil ["stash-items/50"]])
-#_(show-handler [nil ["stash-items/50/basename"]])
-#_(show-handler [nil ["skillsets"]])
-
-#_(set-handler [nil ["skillpoints" "12"]])
-#_(set-handler [nil ["stashitems/50/basename" "123"]])
-
-#_(let [is-set-item (some #(contains? %1 "itemSetName") r)]
-    is-set-item)
-
-
-#_(def r (construct-item "Skull Fetish" @gd-edit.globals/db))
-#_(show-item r)
-#_(show-handler [nil ["inv/0/items"]])
-#_(set-item-handler  [nil ["inv/0/items/0" "legion warhammer of valor" "64"]])
-#_(set-handler  [nil ["character-name" "Odie2"]])
-
-#_(write-handler  [nil nil])
-#_(run-query "recordname~gearweapons value~legendary levelreq <= 65")
-
-#_(set-handler [nil ["equipment/0" "Mantle of the Weeping Eye" 100]])
-
-
-#_(construct-item "Mantle of the Weeping Eye" @globals/db 100)
-
-#_(load-db)
-
-#_(skills-vec->skills-by-category (:skills @globals/character))
-#_(respec-handler [nil ["all"]])
-
-#_(set-handler  [nil ["character-name" "Odie2"]])
-#_(write-handler  [nil nil])
-
-#_(time (do
-          (gd-edit.command-handlers/load-character-file
-           (-> (dirs/get-save-dir-search-list)
-               (first)
-               (io/file "_Odie/player.gdc")
-               (.getPath)
-               ))
-          nil))
-
-#_(construct-item "Exalted Treads" @globals/db 100)
-
-#_(set-item-handler  [nil ["inv/1/items" "legion warhammer of valor" "64"]])
-
-#_(show-handler [nil ["inv/1/items"]])
-
-
-(comment
-
-  (time
-   (set-handler  [nil ["inv/1/items/0" "stonehide iron maiden's mantle of the flesh hulk"]]))
-
-  (time
-   (set-handler  [nil ["inv/1/items/0" "vampiric legion warhammer of valor"]]))
-
-  )
