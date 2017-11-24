@@ -888,30 +888,30 @@
     (throw (Throwable. "I don't understand this gdc format!"))))
 
 
-(defn- get-block-spec
+(defn get-block-spec
   "Retrieve a block spec by id number"
   [id]
 
-  (let [block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))]
+  (let [block-spec-var (ns-resolve *ns* (symbol (str "Block" id)))]
     (if-not (nil? block-spec-var)
       (var-get block-spec-var)
       nil)))
 
-(defn- get-block-read-fn
+(defn get-block-read-fn
   "Retrieve a read function for block by id number"
   [id]
 
-  (let [block-read-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "read-block" id)))]
+  (let [block-read-fn-var (ns-resolve *ns* (symbol (str "read-block" id)))]
 
     (if-not (nil? block-read-fn-var)
       (var-get block-read-fn-var)
       nil)))
 
-(defn- get-block-write-fn
+(defn get-block-write-fn
   "Retrieve a read function for block by id number"
   [id]
 
-  (let [block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" id)))]
+  (let [block-write-fn-var (ns-resolve *ns* (symbol (str "write-block" id)))]
 
     (if-not (nil? block-write-fn-var)
       (var-get block-write-fn-var)

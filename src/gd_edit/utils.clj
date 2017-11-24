@@ -30,8 +30,14 @@
       (.rewind bb))))
 
 (defn hexify [s]
-  (apply str
-         (map #(format "%02x " (byte %)) s)))
+  (cond
+    (number? s)
+    (format "0x%02x " s)
+
+    (or (string? s)
+        (seq? s))
+    (apply str
+           (map #(format "0x%02x " (byte %)) s))))
 
 (defmacro try-or
   "Try to evaluate to the try-body. If some kind of exception is throw, evaluate to the or-body."
@@ -41,6 +47,17 @@
      ~try-body
      (catch Exception e#
        ~or-body)))
+
+(defn file-magic
+  "Returns a long with lower 32 bits suitable for use as a file magic header."
+  [s]
+
+  (let [bytes (map byte s)]
+    (bit-or
+     (bit-shift-left (nth bytes 3) 24)
+     (bit-shift-left (nth bytes 2) 16)
+     (bit-shift-left (nth bytes 1) 8)
+     (nth bytes 0))))
 
 ;;------------------------------------------------------------------------------
 ;; Logging related functions

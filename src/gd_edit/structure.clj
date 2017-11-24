@@ -16,6 +16,7 @@
 (def primitives-specs
   ;; name => primitives spec
   {:byte   [:byte    1 (fn[^ByteBuffer bb & prim-specs] (.get bb))      ]
+   :bool   [:byte    1 (fn[^ByteBuffer bb & prim-specs] (.get bb))      ]
    :int16  [:int16   2 (fn[^ByteBuffer bb & prim-specs] (.getShort bb)) ]
    :int32  [:int32   4 (fn[^ByteBuffer bb & prim-specs] (.getInt bb))   ]
    :int64  [:int64   8 (fn[^ByteBuffer bb & prim-specs] (.getLong bb))  ]
@@ -92,6 +93,12 @@
     (merge-default-rw-fns- context)))
 
 
+(defn try-get-read-fn
+  [spec]
+  (if (fn? spec)
+    spec
+    (:struct/read (meta spec))))
+
 (defn read-struct
   "Spec can also be a single primitive spec. In that case, we'll just read
   a single item from the bytebuffer.
@@ -105,16 +112,16 @@
   The caller can also optionally supply a primitives spec table. If an atom
   supplied, it is assumed that it is being passed some mutable context.
   It will attempt to look up the :spec key to locate the actual specs."
-  [spec ^ByteBuffer bb & [context rest]]
+  ([spec ^ByteBuffer bb & [context data rest]]
 
-  (let [context (merge-default-rw-fns context)]
+   (let [context (merge-default-rw-fns context)]
 
-    ;; Callers can provide a map or an atom to specify how to read primitives.
-    ;; Read in the value using either a supplied read function or
-    ;; by following the spec
-    (if-let [read-fn (:struct/read (meta spec))]
-      (read-fn bb context)
-      (read-spec spec bb {} context))))
+     ;; Callers can provide a map or an atom to specify how to read primitives.
+     ;; Read in the value using either a supplied read function or
+     ;; by following the spec
+     (if-let [read-fn (try-get-read-fn spec)]
+       (read-fn bb context)
+       (read-spec spec bb (or data {}) context)))))
 
 
 (defn- get-rw-fns
@@ -154,9 +161,23 @@
           (when *debug*
             (println "reading field name:" field-name)
             (println "field spec:" field-spec))
-          ;; Keep reading and looping until we're done with the spec pairs
-          (recur (rest spec-pairs)
-                 (assoc data field-name (read-spec field-spec bb data context))))
+
+          ;; If the spec looks like it's asking to attach some static data
+          ;; to the map...
+          (if (= (namespace field-name) "static")
+            ;; Attach the data
+            (recur (rest spec-pairs)
+                   (assoc data field-name field-spec))
+
+            ;; Otherwise, try to read the spec and attach the result
+            (let [field-val (read-spec field-spec bb data context)]
+              (when *debug*
+                (print field-name "=> ")
+                (clojure.pprint/pprint field-val))
+
+              ;; Keep reading and looping until we're done with the spec pairs
+              (recur (rest spec-pairs)
+                     (assoc data field-name field-val)))))
 
         ;; If we're done with all the spec pairs, return the data that's been read
         data))
@@ -176,8 +197,13 @@
       ;; Execute the read function now
       ((nth rw-fns 2) bb context)
 
-      ;; Otherwise, give up
-      (throw (Throwable. (str "Cannot handle spec:" spec))))))
+      ;; If a read function cannot be found, give up...
+      (do
+        (when *debug*
+          (println "context:" context)
+          (println "spec:" spec)
+          (println "fn:" (get-rw-fns context spec)))
+        (throw (Throwable. (str "Cannot handle spec:" spec)))))))
 
 
 (defn ordered-map
@@ -195,7 +221,7 @@
 
   This says we will read a :uint16 first to determine how many :uint32 to read
   from the stream."
-  [spec & {:keys [length-prefix length]
+  [spec & {:keys [length-prefix length read-length-fn]
            :or {length-prefix :int32
                 length -1
                 }}]
@@ -211,19 +237,27 @@
     (with-meta spec-seq
       {:struct/type :variable-count
        :struct/length length
-       :struct/length-prefix length-prefix})))
+       :struct/length-prefix length-prefix
+       :struct/read-length-fn read-length-fn
+       })))
 
 
 (defmethod read-spec :variable-count
   [spec bb data context]
 
   (let [;; Destructure fields in the attached meta info
-        {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
+        {static-length :struct/length
+         length-prefix :struct/length-prefix
+         length-fn :struct/read-length-fn} (meta spec)
 
         ;; Read out the count of the spec to read
-        length (if (not= static-length -1)
-                 static-length
-                 (read-spec length-prefix bb data context))
+        length (cond
+                 (not= static-length -1) static-length
+                 (fn? length-fn) (length-fn bb data context)
+                 :else (read-spec length-prefix bb data context))
+
+        _ (when *debug*
+            (println "variable-count:" length))
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
