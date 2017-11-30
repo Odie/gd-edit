@@ -20,12 +20,9 @@
             [progress.file :as progress]
             [clojure.string :as str]
             [taoensso.timbre :as t]
-            [taoensso.timbre.appenders.core :as appenders])
-  (:import java.nio.ByteBuffer
-           java.nio.channels.FileChannel
-           java.lang.ProcessBuilder
-           [java.nio.file Files FileSystems Path Paths StandardOpenOption]
-           [java.time Instant ZonedDateTime ZoneId]
+            [taoensso.timbre.appenders.core :as appenders]
+            [clojure.tools.cli :refer [parse-opts]])
+  (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
 
 (defn- strip-quotes
@@ -482,7 +479,10 @@
   (handlers/load-db-in-background)
 
   ;; Setup the first screen in the program
-  (handlers/character-selection-screen!)
+  ;; based on if a character has already been loaded
+  (if (zero? (count @globals/character))
+    (handlers/character-selection-screen!)
+    (handlers/character-manipulation-screen!))
 
   ;; Remove any left over restart scripts from last time we ran "update"
   (su/cleanup-restart-script))
@@ -495,19 +495,43 @@
   (clojure.pprint/pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
   (newline))
 
+
+(defn start-editor
+  []
+
+  (initialize)
+  (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
+
+  (thread (notify-repl-if-latest-version-available))
+
+  (repl))
+
+(def cli-options
+  [["-f" "--file SAVE_FILE_PATH" "Save file to load on start"
+    :parse-fn #(str/trim %)
+    :validate [#(.exists (io/as-file %))
+               "The specified save file doesn't exist."]]
+   ["-h" "--help" "Show this help text"]])
+
 (defn -main
   [& args]
 
   (u/log-exceptions
 
-    (init-jansi)
+   (init-jansi)
 
-    (initialize)
-    (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
+   (let [{:keys [options summary]} (parse-opts args cli-options)]
+     (do
+       ;; Handle all the commandline params
+       (cond
+         (:help options) (do
+                           (println "The valid options are:")
+                           (println summary)
+                           (System/exit 0))
+         (:file options) (gd-edit.command-handlers/load-character-file (:file options)))
 
-    (thread (notify-repl-if-latest-version-available))
-
-    (repl)))
+       ;; Start the editor
+       (start-editor)))))
 
 
 
