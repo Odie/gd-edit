@@ -944,7 +944,7 @@
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block
          _ (if (nil? block-spec-or-read-fn)
-             (throw (Throwable. "Don't know how to read block " id)))
+             (throw (Throwable. (str"Don't know how to read block " id))))
 
          ;; Try to read the block
          ;; If a custom read function was provided, use that
@@ -973,7 +973,6 @@
    {:pre [(not (nil? block))]}
 
    (let [{:keys [meta-block-id]} block
-
          block-spec-or-write-fn (or (get block-spec-overrides meta-block-id)
                                     (get-block-write-fn meta-block-id)
                                     (get-block-spec meta-block-id))
@@ -1082,6 +1081,38 @@
 
   (first (filter #(= (:meta-block-id %1) block-id) block-list)))
 
+(defn update-block-list
+  "Update the `block-list` with potentially new values from the `merged-map`.
+
+  The idea here is that the `merged-map` was generated as a merged view of all
+  the items in the `block-list`, sans various pieces of meta data. The
+  `merged-map` can then be used as the primary piece of data to be viewed and
+  updated/altered.
+
+
+  This was originally created for dealing with the character file. The
+  'character sheet' was created using the block-list by merging all blocks into
+  a giant dictionary. To re-create the block list from a character sheet then,
+  we need to update the top level kv pair of every block to the current value in
+  the character sheet.
+
+  When it's time to actually write the file, however, the block-list needs to
+  have all of their fields updated before being written back to a file. This
+  function performs that reverse mapping."
+  [block-list merged-map]
+
+  (map (fn [block]
+         ;; Map over every kv in the blocks
+         (->> block
+              (map (fn [[key value :as kv-pair]]
+                     ;; Look up the updated value in the character sheet
+                     (if (contains? merged-map key)
+                       [key (merged-map key)]
+                       kv-pair)))
+              ;; Put the pairs back into a map
+              (into {})))
+       block-list))
+
 (defn write-character-file
   [character savepath]
 
@@ -1099,19 +1130,7 @@
         ;; To re-create the block list from a character sheet then, we need to
         ;; update the top level kv pair of every block to the current value in
         ;; the character sheet.
-        updated-block-list (map (fn [block]
-                                  ;; Map over every kv in the blocks
-                                  (->> block
-                                       (map (fn [[key value :as kv-pair]]
-                                              ;; Look up the updated value in the character sheet
-                                              (if (contains? character key)
-                                                [key (character key)]
-                                                kv-pair)
-                                              )
-                                            )
-                                       ;; Put the pairs back into a map
-                                       (into {})))
-                                block-list)
+        updated-block-list (update-block-list block-list character)
 
         fileinfo (:meta-fileinfo character)
 

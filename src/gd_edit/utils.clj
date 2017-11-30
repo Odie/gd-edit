@@ -269,3 +269,55 @@
 (defn md5-file
   [file-path]
   (md5 (slurp-bytes file-path)))
+
+
+;;------------------------------------------------------------------------------
+;; Tree node collection utility
+;;------------------------------------------------------------------------------
+(defn node-children
+  [node]
+
+  (cond
+    (map? node) (seq node)
+    (or (vector? node)
+        (seq? node)) (map-indexed vector node)
+    :else nil))
+
+
+(defn- collect-walk-
+  "Returns a list of [path item] pairs where the item is accepted by the predicate"
+  [node         ;; current node being processed
+   predicate    ;; answers if we want to collect this node or not
+   path]        ;; indicates the the path of this node from root
+
+  ;; Collect this node if predicate says to
+  (let [results (when (predicate node)
+                  [[path node]])]
+
+    ;; Collect any child items that matches the predicate
+    ;; If there are children to visit...
+    (if-let [child-pairs (node-children node)]
+
+      ;; Visit each, collect the results into a list, merge it into `results`
+      (into (or results [])
+            (mapcat (fn [[key child]]
+                      (collect-walk- child predicate (conj path key)))
+                    child-pairs))
+
+      ;; If there are no children to visit, just return the results, which may or maynot
+      ;; contain the current node
+      results)))
+
+
+(defn collect-walk
+  "Walk the given tree and collect items that matches the predicate
+
+  The tree can be a mix of map, vectors, or a sequence. We send every reachable
+  node to the predicate. For each matched node, we collect the path where the item
+  can be found as well as the value itself.
+
+  This allows the caller to find all nodes that matches a condition as well as
+  perform updates into each of the locations later on."
+  [predicate tree]
+
+  (collect-walk- tree predicate []))

@@ -11,51 +11,6 @@
             [java.io FileOutputStream]))
 
 ;;------------------------------------------------------------------------------
-;; Quest Tree Walking utility
-;;------------------------------------------------------------------------------
-(defn node-children
-  [node]
-
-  (cond
-    (map? node) (seq node)
-    (or (vector? node)
-        (seq? node)) (map-indexed vector node)
-    :else nil))
-
-
-(defn- collect-walk-
-  "Returns a list of [path item] pairs where the item is accepted by the predicate"
-  [node         ;; current node being processed
-   predicate    ;; answers if we want to collect this node or not
-   path]        ;; indicates the the path of this node from root
-
-  ;; Collect this node if predicate says to
-  (let [results (when (predicate node)
-                  [[path node]])]
-
-    ;; Collect any child items that matches the predicate
-    ;; If there are children to visit...
-    (if-let [child-pairs (node-children node)]
-
-      ;; Visit each, collect the results into a list, merge it into `results`
-      (into (or results [])
-            (mapcat (fn [[key child]]
-                      (collect-walk- child predicate (conj path key)))
-                    child-pairs))
-
-      ;; If there are no children to visit, just return the results, which may or maynot
-      ;; contain the current node
-      results)))
-
-
-(defn collect-walk
-  "Walk the given tree and collect items that matches the predicate"
-  [predicate tree]
-
-  (collect-walk- tree predicate []))
-
-
-;;------------------------------------------------------------------------------
 ;; Quest File format defs
 ;;------------------------------------------------------------------------------
 (def FilePreamble
@@ -647,12 +602,12 @@
 
 (defn- collect-string-bind-targets
   [quest-file]
-  (collect-walk #(contains? #{:quest
-                              :quest-event
-                              :quest-objective
-                              :quest-task}
-                            (:static/type %))
-                (:quest quest-file)))
+  (u/collect-walk #(contains? #{:quest
+                                :quest-event
+                                :quest-objective
+                                :quest-task}
+                              (:static/type %))
+                  (:quest quest-file)))
 
 (defn- get-string-table
   [quest-file locale-name]

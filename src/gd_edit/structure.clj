@@ -221,10 +221,9 @@
 
   This says we will read a :uint16 first to determine how many :uint32 to read
   from the stream."
-  [spec & {:keys [length-prefix length read-length-fn]
+  [spec & {:keys [length-prefix length read-length-fn skip-write-length]
            :or {length-prefix :int32
-                length -1
-                }}]
+                length -1}}]
 
   ;; We're about to attach some meta info to the spec
   ;; First, wrap the spec in another collection...
@@ -239,7 +238,7 @@
        :struct/length length
        :struct/length-prefix length-prefix
        :struct/read-length-fn read-length-fn
-       })))
+       :struct/skip-write-length skip-write-length})))
 
 
 (defmethod read-spec :variable-count
@@ -379,16 +378,23 @@
   [spec ^ByteBuffer bb data context]
 
   (let [;; Destructure fields in the attached meta info
-        {static-length :struct/length length-prefix :struct/length-prefix} (meta spec)
+        {static-length :struct/length
+         length-prefix :struct/length-prefix
+         skip-write-length :struct/skip-write-length} (meta spec)
 
         ;; Write out the spec if we're not dealing with a sequence with a static/implied length
-        _ (if (= static-length -1)
+        _ (if (and (= static-length -1)
+                   (not skip-write-length))
+
             ;; Write out the length of the sequence first
             (let [write-fn (prim-spec-get-write-fn (get-rw-fns context) length-prefix)]
               (write-fn bb (count data) context)))
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)]
+
+    (when *debug*
+      (println "[write-spec :variable-count] spec" spec))
 
     ;; Write out each item in the sequence
     (doseq [item data]
@@ -456,12 +462,15 @@
   [spec ^ByteBuffer bb data context]
   {:pre [(not (nil? data))]}
 
+  (when *debug*
+    (println "[write-struct] spec:" spec)
+    (println "[write-struct] (meta spec):" (meta spec)))
+
   (cond
     ;; Did the spec attach a write function?
     ;; If so, call it now
-    (not (nil? (:struct/write (meta spec))))
-    (do
-      ((:struct/write (meta spec)) bb data context))
+    (some? (:struct/write (meta spec)))
+    ((:struct/write (meta spec)) bb data context)
 
     ;; If the spec looks like it is describing fields of a map...
     (ordered-map? spec)
@@ -482,7 +491,8 @@
                   val (key data)]
 
               ;; Write out the item according to the spec
-              (write-spec type bb val context)
+              (when-not (= (namespace key) "static")
+                (write-spec type bb val context))
 
               ;; Continue to process the next pair
               (recur (drop 2 spec-remaining)))))))

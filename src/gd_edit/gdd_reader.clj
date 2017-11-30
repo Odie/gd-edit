@@ -61,9 +61,18 @@
     (merge data tasks-rest)))
 
 
+(defn write-task-block
+  [bb data context]
+
+  (gdc/write-int! bb (:id1 data) context)
+  (s/write-struct UID bb (:id2 data) context)
+  (gdc/write-block bb (assoc data :meta-block-id 0) context {0 TaskInnerBlock}))
+
+
 (def Task
   (gdc/merge-meta
    (s/ordered-map
+    :static/type :task
     :id1 :int32
     :id2 UID
 
@@ -73,15 +82,17 @@
     ;;                               :read-length-fn objectives-count
     ;;                               :skip-write-length true)
     )
-   {:struct/read read-task-block}))
+   {:struct/read read-task-block
+    :struct/write write-task-block}))
 
 
 (def TaskListBlock
   (s/ordered-map
+   :static/type :task-list-block
    :tasks (s/variable-count Task)))
 
 
-(defn read-quest-block
+(defn read-quest-single
   [bb context]
 
   (let [data {:id1 (gdc/read-int! bb context)
@@ -90,15 +101,23 @@
 
     (assoc data :tasks (:tasks tasks))))
 
+(defn write-quest-single
+  [bb data context]
+
+  (gdc/write-int! bb (:id1 data) context)
+  (s/write-struct UID bb (:id2 data) context)
+  (gdc/write-block bb (assoc data :meta-block-id 0) context {0 TaskListBlock}))
 
 (def Quest
   (gdc/merge-meta
    (s/ordered-map
+    :static/type :quest
     :id1 :int32
     :id2 UID
     :tasks (s/variable-count Task))
 
-   {:struct/read read-quest-block}))
+   {:struct/read read-quest-single
+    :struct/write write-quest-single}))
 
 
 ;; Quests block
@@ -185,6 +204,7 @@
 
      (assoc block-data :meta-block-id id))))
 
+(def ^{:private true} seed-mask 0x55555555)
 
 (defn load-quest-file
   [filepath]
@@ -192,7 +212,7 @@
   (let [bb ^ByteBuffer (utils/file-contents filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
-        seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) 0x55555555)
+        seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) seed-mask)
         enc-table (gdc/generate-encryption-table seed)
         enc-context (gdc/make-enc-context seed enc-table)
 
@@ -201,7 +221,7 @@
 
         id (s/read-struct UID bb enc-context)
 
-        ;; ;; Keep reading more blocks until we've reached the end of the file
+        ;; Keep reading more blocks until we've reached the end of the file
         block-list (->> (loop [block-list (transient [])]
                           (if (= (.remaining bb) 0)
                             (persistent! block-list)
@@ -211,36 +231,65 @@
                         ;; Append the header block when we're done reading
                         (into []))
 
-        ;; ;; Try to merge all the block lists into one giant character sheet
-        ;; character (assoc (apply merge (map block-strip-meta-info-fields block-list))
-        ;;                  :meta-block-list block-list
-        ;;                  :meta-fileinfo fileinfo
-        ;;                  :meta-character-loaded-from filepath)
-        ]
-    block-list
-    ))
+        fileinfo {:seed seed
+                  :preamble preamble
+                  :id id}]
+    ;; Try to merge all the block lists into one giant map
+    (assoc (apply merge (map gdc/block-strip-meta-info-fields block-list))
+           :meta-block-list block-list
+           :meta-fileinfo fileinfo
+           :meta-loaded-from filepath)))
 
 (defn write-quest-file
   [quest-states savepath]
 
-  )
+  (let [bb (ByteBuffer/allocate (* 512 1024))
+        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
+        ;; Grab the original block list
+        ;; This was kept when we loaded the save file in the order
+        ;; the blocks were read
+        block-list (:meta-block-list quest-states)
 
-;; File format
+        ;; Create a new block list when the updated contents
+        ;; The character sheet was created using the block-list by merging
+        ;; all blocks into a giant dictionary.
+        ;; To re-create the block list from a character sheet then, we need to
+        ;; update the top level kv pair of every block to the current value in
+        ;; the character sheet.
+        updated-block-list (gdc/update-block-list block-list quest-states)
 
-;; FilePreamble
-;; id - id of the current character (16 bytes)
-;; tokens block - list of strings
-;; quests block - list of quests
+        fileinfo (:meta-fileinfo quest-states)
+
+        seed (:seed fileinfo)
+        enc-table (gdc/generate-encryption-table seed)
+        enc-context (gdc/make-enc-context seed enc-table {:direction :write})]
+
+    (.putInt bb (bit-xor seed seed-mask))
+    (s/write-struct FilePreamble bb (:preamble fileinfo) enc-context)
+    (s/write-struct UID bb (:id fileinfo) enc-context)
+
+    (doseq [block (->> updated-block-list
+                       (filter #(not= (:meta-block-id %1) :header)))]
+      (gdc/write-block bb block enc-context))
+
+    (.flip bb)
+
+    (clojure.java.io/make-parents savepath)
+    (gdc/write-to-file bb savepath)))
+
 
 (comment
 
-  (with-bindings {#'gd-edit.structure/*debug* true}
-    (load-quest-file "/Users/Odie/dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")
-    )
+  (let [src (u/expand-home"~/Dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")
+        dst "/tmp/gd/quest.gdd"
 
-  (def t
-    (time
-     (load-quest-file "/Users/Odie/dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")))
+        quest-states (load-quest-file src)]
+
+    (write-quest-file quest-states dst)
+
+    (if (= (u/md5-file src) (u/md5-file dst))
+      "Success!"
+      "Nope, try again!"))
 
  )
