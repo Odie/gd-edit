@@ -287,10 +287,15 @@
   (let [records (idx name)]
 
     ;; Locate the highest level item that does not exceed the level-cap
-    (->> records
-         (filter #(>= level-cap (or (%1 "levelRequirement") (%1 "itemLevel") 0)))
-         (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
-         (first))))
+    (cond->> records
+      (some? level-cap)
+      (filter #(>= level-cap (or (%1 "levelRequirement") (%1 "itemLevel") 0)))
+
+      :then
+      (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
+
+      :then
+      (first))))
 
 (defn item-materia-fill-completion-level
   [item]
@@ -352,23 +357,24 @@
         ;; For example, there are 16 different suffixes all named "of Potency". Which one do we choose?
         ;; We choose highest level one that is less or equal to the level cap
         results (->> (select-keys analysis [:base :prefix :suffix])
-                     (map (fn [[key record]]
-                            [key
 
-                             (if (nil? record)
-                               nil
-                               (name-idx-highest-level-by-name
-                                (cond
-                                  (= key :base)
-                                  item-name-idx
-                                  (= key :prefix)
-                                  prefix-name-idx
-                                  (= key :suffix)
-                                  suffix-name-idx)
-                                (item-or-affix-get-name record)
-                                level-cap))])
-                          )
-                     (into {}))]
+                  (map (fn [[key record]]
+                         [key
+
+                          (if (nil? record)
+                            nil
+                            (name-idx-highest-level-by-name
+                             (cond
+                               (= key :base)
+                               item-name-idx
+                               (= key :prefix)
+                               prefix-name-idx
+                               (= key :suffix)
+                               suffix-name-idx)
+                             (item-or-affix-get-name record)
+                             level-cap))]))
+
+                  (into {}))]
 
     ;; An item must have a basename, which should refer to a item record
     ;; If we could not find one that satisfies the target-name, then return nothing.
@@ -488,9 +494,8 @@
         result (sw/walk @gd-edit.globals/character path-keys)
         {:keys [status found-item actual-path]} result
 
-        level-cap (if-not (nil? level-cap-str)
-                    (Integer/parseInt level-cap-str)
-                    (:character-level @globals/character))]
+        level-cap (when (some? level-cap-str)
+                    (Integer/parseInt level-cap-str))]
 
     (cond
       (= status :not-found)
@@ -530,37 +535,39 @@
 
   (loottable-records-with-mentions (all-loottable-records @globals/db) "records/items/faction/weapons/blunt1h/f002a_blunt.dbr")
 
-  (set-item-handler  [nil ["inv/1/items" "Oleron's Wrath" "100"]])
+  (set-item-handler  [nil ["inv/1/items" "Oleron's Wrath"]])
+  (set-item-handler  [nil ["inv/1/items" "mythical stormheart"]])
 
-  (set-item-handler  [nil ["inv/1/items" "stonehide dreeg-sect legguards of the boar" "100"]])
+  (set-item-handler  [nil ["inv/1/items" "stonehide dreeg-sect legguards of the boar"]])
 
 
   ;; Item with quality tag
-  (assert (= (select-keys (construct-item "mythical stormheart" @globals/db @globals/db-index 100) [:basename])
+  (assert (= (select-keys (construct-item "mythical stormheart" @globals/db @globals/db-index nil) [:basename])
              {:basename "records/items/upgraded/gearweapons/swords1h/d010_sword.dbr"}))
 
   ;; Relic generation
-  (assert (= (select-keys (construct-item "Oleron's Wrath" @globals/db @globals/db-index 100) [:basename])
+  (assert (= (select-keys (construct-item "Oleron's Wrath" @globals/db @globals/db-index nil) [:basename])
              {:basename "records/items/gearrelic/d019_relic.dbr"}))
 
   ;; Item with suffix
-  (assert (= (select-keys (construct-item "legion warhammer of valor" @globals/db @globals/db-index 100) [:basename :suffix-name])
+  (assert (= (select-keys (construct-item "legion warhammer of valor" @globals/db @globals/db-index nil) [:basename :suffix-name])
              {:basename "records/items/faction/weapons/blunt1h/f002b_blunt.dbr"
               :suffix-name "records/items/lootaffixes/suffix/b_sh002_g.dbr"}))
 
   ;; Item with prefix and suffix
-  (assert (= (select-keys (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 100) [:basename :prefix-name :suffix-name])
+  (assert (= (select-keys (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index nil) [:basename :prefix-name :suffix-name])
+
              {:basename "records/items/gearlegs/b001e_legs.dbr"
               :prefix-name "records/items/lootaffixes/prefix/b_ar028_ar_f.dbr"
               :suffix-name "records/items/lootaffixes/suffix/a006b_ch_att_physpi_10.dbr"}))
 
   (time
-   (construct-item "mythical stormheart" @globals/db @globals/db-index 100))
+   (construct-item "mythical stormheart" @globals/db @globals/db-index nil))
 
   (time
-   (construct-item "legion warhammer of valor" @globals/db @globals/db-index 100))
+   (construct-item "legion warhammer of valor" @globals/db @globals/db-index nil))
 
   (time
-   (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 100))
+   (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 50))
 
   )
