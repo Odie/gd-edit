@@ -241,7 +241,7 @@
     (->> record-headers
          (reduce (fn [accum record-header]
                    (let [record {:recordname (load-record-filename bb header record-header)
-                                 "contents" (String. (load-record bb header record-header))}]
+                                 :contents (load-record bb header record-header)}]
                      (if (empty? (:recordname record))
                        accum
                        (conj accum record))))
@@ -352,3 +352,10 @@
 
 #_(def t (make-load-tex-fn "/Users/Odie/Dropbox/Public/GrimDawn2/resources/Items.arc" (comp texture-dimensions read-tex-header)))
 #_(t "gearweapons/hammers1h/bitmaps/f002_blunt.tex")
+
+(comment
+
+  (require gd-edit.qst-reader)
+  (unpack-arc-file "/Volumes/Untitled/Program Files (x86)/Steam/steamapps/common/Grim Dawn/resources/scripts.arc" "/tmp/scripts/")
+
+  )

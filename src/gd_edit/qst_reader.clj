@@ -6,7 +6,9 @@
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
             [gd-edit.gdc-reader :as gdc]
-            [clojure.inspector])
+            [clojure.inspector]
+            [com.rpl.specter :as specter]
+            [clojure.string :as str])
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
@@ -686,3 +688,129 @@
   [filepath]
 
   (load-quest (utils/file-contents filepath)))
+
+(defn quest-name
+  "Get the overall name of the quest"
+  [quest]
+
+  (:text quest))
+
+(defn locate-quest-tokens
+  [quests]
+
+  (u/collect-walk #(and (= :give-token
+                           (:static/type %)))
+                  quests))
+
+(defn locate-quest-uids
+  [quests]
+  (u/collect-walk #(and (map? %)
+                        (contains? % :uid))
+                  quests))
+
+(defn find-quest-for-token
+  [quests token]
+
+  (u/collect-walk #(and (contains? #{:give-token}
+
+                           (:static/type %)))
+                  quests))
+
+(defn get-quest-by-uid
+  [quest-uid-index uid]
+
+  (->> (quest-uid-index uid)
+              (first)
+              (second)))
+
+(defn quest-item-attach-name
+  [quest-item-uid-index quest-item]
+
+  (assoc quest-item
+         :name
+         (->> (or (:id1 quest-item) (:uid quest-item))
+              (get-quest-by-uid quest-item-uid-index)
+              (:text))))
+
+(comment
+
+  (def quest-progress
+    gd-edit.gdd-reader/quest-progress)
+
+  (:tokens quest-progress)
+  (->> quest-progress
+       (:quests)
+       (drop 1)
+       (first))
+
+  (def t
+    (gd-edit.arc-reader/load-arc-file "/Volumes/Untitled/Program Files (x86)/Steam/steamapps/common/Grim Dawn/resources/Quests.arc")
+    )
+
+  (first t)
+
+
+  ;; Load all records in a arc file
+  (def quests
+    (->> t
+         (map (fn [{:keys [recordname contents]}] (merge {:recordname recordname}
+                                                        (->> contents
+                                                             (ByteBuffer/wrap)
+                                                             (load-quest)
+                                                             (:quest))
+                                                        )))))
+
+  (def z
+    (u/collect-walk #(= :give-token (:static/type %)) s))
+
+
+  (->> s
+       (map quest-name))
+
+  (find-quest-for-token quests "SALT_NECKLACE")
+
+  (->> quests
+       (filter #(clojure.string/includes? (:recordname %) "sq_slithneck")))
+
+
+  ;; Index of tokens given as a part of some quest
+  ;; This doesn't include all tokens which may be given as part of an interaction with NPCs
+  ;; Those are found in lua script files
+  (group-by #(:token (second %))
+            (locate-quest-tokens quests))
+
+
+  (->> quest-progress
+       (:quests)
+       (first))
+
+  (first quests)
+
+
+  ;; Quest group uid index
+  (def quest-item-uid-index
+    (->> (locate-quest-uids quests)
+         (group-by #(:uid (second %)))))
+
+
+  (specter/select [:quests specter/ALL :tasks specter/ALL] quest-progress)
+
+  ;; Annotate the quest progress with readable names
+  (->> (:quests quest-progress)
+
+       ;; Attach names to all tasks
+       (specter/transform [specter/ALL :tasks specter/ALL]
+                          #(quest-item-attach-name quest-item-uid-index %))
+
+       ;; Attach names to all quests
+       (map #(quest-item-attach-name quest-item-uid-index %)))
+
+
+  (quest-item-attach-name
+   quest-item-uid-index
+   (->> (:quests quest-progress)
+        (last)
+        (:tasks)
+        (first)))
+
+  )

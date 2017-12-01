@@ -292,4 +292,9 @@
       "Success!"
       "Nope, try again!"))
 
+  (def quest-progress
+    (load-quest-file (u/expand-home"~/Dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")))
+
+  (:tokens t)
+
  )
