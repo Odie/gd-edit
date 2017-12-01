@@ -5,12 +5,24 @@
             [jansi-clj.core :refer :all]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
-            [taoensso.timbre :as t])
+            [taoensso.timbre :as t]
+            [clojure.walk :refer [postwalk-replace]])
   (:import java.nio.ByteBuffer
            java.nio.channels.FileChannel
            java.nio.file.Paths
            java.io.File
            [java.security MessageDigest]))
+
+(defmacro plet [bindings & body]
+  (let [bents (partition 2 (destructure bindings))
+        smap (into {} (map (fn [[b _]]
+                             [b `(deref ~b)])
+                           bents))
+        bindings (vec (mapcat (fn [[b v]]
+                                [b `(future ~(postwalk-replace smap v))])
+                              bents))]
+    `(let ~bindings
+       ~@(postwalk-replace smap body))))
 
 (defn mmap
   [filepath]

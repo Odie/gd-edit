@@ -7,7 +7,9 @@
              [structure-walk :as sw]
              [utils :as u]]
             [clojure.string :as str]
+            [clojure.core.reducers :as r]
             [jansi-clj.core :refer :all]
+            [criterium.core :refer [bench quick-bench with-progress-reporting]]
             ))
 
 ;;------------------------------------------------------------------------------
@@ -136,18 +138,18 @@
     item-name-idx
     ))
 
+
 (defn name-idx-best-matches
   [name-idx target-name]
 
   (->> name-idx
 
-       ;; Score and sort the item name index
-       ;; First, we rank by the name's overall similiarity
-       ;; This should help to filter out items that are not at all similar
-       (map (fn [[item-name item-record]]
-              [(u/string-similarity (str/lower-case item-name) (str/lower-case target-name)) item-name item-record]))
-       (sort-by first >)
-       ))
+            ;; Score and sort the item name index
+            ;; First, we rank by the name's overall similiarity
+            ;; This should help to filter out items that are not at all similar
+            (pmap (fn [[item-name item-record]]
+                    [(u/string-similarity (str/lower-case item-name) (str/lower-case target-name)) item-name item-record]))
+            (sort-by first >)))
 
 (defn idx-best-match
   "Take the index and an array of 'tokenized' item name, try to find the best match.
@@ -253,30 +255,30 @@
    :stack-count 1})
 
 (defn analyze-item-name
-  [item-name-idx prefix-name-idx suffix-name-idx target-name]
+  [item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} target-name]
 
-  (let [tokens (clojure.string/split target-name #" ")
-        tokens-cursor tokens
+  (u/plet [tokens (clojure.string/split target-name #" ")
+           tokens-cursor tokens
 
-        ;; Try to match against the whole name directly
-        whole-item-match {:base (get-in (idx-best-match item-name-idx tokens-cursor) [3 0])}
+           ;; Try to match against the whole name directly
+           whole-item-match {:base (get-in (idx-best-match item-name-idx tokens-cursor) [3 0])}
 
-        ;; Try to break down the item into multiple part components
-        multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
+           ;; Try to break down the item into multiple part components
+           multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
 
-        ;; Of the two results, figure out which one matches the input name more closely
-        ;; Return that item
-        match (->> [whole-item-match multi-part-match]
-                   (sort-by #(u/string-similarity
-                              (str/lower-case target-name)
-                              (str/lower-case (or
-                                               (dbu/item-name (item-def->item %1) @globals/db)
-                                               "")))
-                            >)
-                   (first))
-        ]
+           ;; Of the two results, figure out which one matches the input name more closely
+           ;; Return that item
+           match (->> [whole-item-match multi-part-match]
+                      (sort-by #(u/string-similarity
+                                 (str/lower-case target-name)
+                                 (str/lower-case (or
+                                                  (dbu/item-name (item-def->item %1) @globals/db)
+                                                  "")))
+                               >)
+                      (first))
+           ]
 
-     match))
+          match))
 
 (defn name-idx-highest-level-by-name
   [idx name level-cap]
@@ -297,24 +299,53 @@
     (assoc item :relic-completion-level 4)
     item))
 
-(defn build-affix-idx
-  [coll type]
+(defn path-component-count
+  [path]
 
-  (let [recordname-prefix (if (= type :prefix)
-                        "records/items/lootaffixes/prefix/"
-                        "records/items/lootaffixes/suffix/")
+  (-> path
+      (str/split #"/")
+      (count)))
 
-        affix-records (->> coll
-                           (filter #(str/starts-with? (:recordname %1) recordname-prefix))
-                           (filter #(-> (:recordname %1)
-                                        (str/split #"/")
-                                        (count)
-                                        (= 5))))]
 
-    (group-by #(%1 "lootRandomizerName") affix-records)))
+(defn group-by-loot-name
+  [affix-records]
+  (group-by #(%1 "lootRandomizerName") affix-records))
+
+
+(defn- group-affixes-by-loot-name
+  [affixes]
+
+  (-> affixes
+      (update :prefix group-by-loot-name)
+      (update :suffix group-by-loot-name)))
+
+
+(defn reshape-records-as-affixes
+  "Given some records, return a {:prefix [...] :suffix [...]} map, where
+  all prefix records are stored under :prefix
+    and
+  all suffix records are stored under :suffix"
+  [records]
+  (->> records
+       (reduce (fn [result item]
+                 (cond
+                   (and (str/starts-with? (:recordname item) "records/items/lootaffixes/prefix/")
+                        (= 5 (path-component-count (:recordname item))))
+                   (update result :prefix conj item)
+
+                   (and (str/starts-with? (:recordname item) "records/items/lootaffixes/suffix/")
+                        (= 5 (path-component-count (:recordname item))))
+                   (update result :suffix conj item)
+
+                   :else
+                   result
+                   ))
+               {:prefix []
+                :suffix []})))
+
 
 (defn- analysis->item
-  [analysis db item-name-idx prefix-name-idx suffix-name-idx level-cap]
+  [analysis db item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} level-cap]
 
   (let [;; Now that we know what the item is composed of, try to bring up the strength/level of each part
         ;; as the level cap allows
@@ -378,11 +409,11 @@
 
         ;; Try to decompose the complete item name into its prefix, base, and suffix, using
         ;; all known affixes
-        prefix-all (build-affix-idx db :prefix)
-        suffix-all (build-affix-idx db :suffix)
+        affixes-all (->> db
+                         (reshape-records-as-affixes)
+                         (group-affixes-by-loot-name))
         analysis-all (analyze-item-name item-name-idx
-                                        prefix-all
-                                        suffix-all
+                                        affixes-all
                                         target-name)
 
         ;; Now that we have a good idea of the basename of the item,
@@ -393,26 +424,20 @@
                                            affix-set)])
                                  (baseitem-valid-affix-paths @globals/db @globals/db-index (:recordname (:base analysis-all)))))
 
-        prefix-narrow (build-affix-idx (legal-affixes :prefix) :prefix)
-        suffix-narrow (build-affix-idx (legal-affixes :suffix) :suffix)
-        analysis-narrow (analyze-item-name item-name-idx
-                                           prefix-narrow
-                                           suffix-narrow
-                                           target-name)
+        affixes-legal (group-affixes-by-loot-name legal-affixes)
+        analysis-legal (analyze-item-name item-name-idx
+                                          affixes-legal
+                                          target-name)
 
-        analysis-final (analysis-better-match analysis-narrow analysis-all)
-        [prefix-final suffix-final] (if (= analysis-final analysis-narrow)
-                                      [prefix-narrow suffix-narrow]
-                                      [prefix-all suffix-all])
-        ]
+        analysis-final (analysis-better-match analysis-legal analysis-all)
+        affixes-final (if (= analysis-final analysis-legal)
+                        affixes-legal
+                        affixes-all)]
 
 
     (analysis->item analysis-final db item-name-idx
-                    prefix-final
-                    suffix-final
-                    level-cap)
-    )
-  )
+                    affixes-final
+                    level-cap)))
 
 (defn- path-is-item?
   [character path]
@@ -495,9 +520,6 @@
             (println "Sorry, there is no room to fit the item.")
             (printer/show-item item)))))))
 
-#_(set-item-handler  [nil ["inv/1/items/0" "legion warhammer of valor" "64"]])
-#_(set-item-handler  [nil ["equipment/3" "stonehide Dreeg-Sect Legguards of the boar" "75"]])
-#_(gd-edit.command-handlers/show-handler [nil ["equipment/3"]])
 
 (comment
 
@@ -509,5 +531,36 @@
   (loottable-records-with-mentions (all-loottable-records @globals/db) "records/items/faction/weapons/blunt1h/f002a_blunt.dbr")
 
   (set-item-handler  [nil ["inv/1/items" "Oleron's Wrath" "100"]])
+
+  (set-item-handler  [nil ["inv/1/items" "stonehide dreeg-sect legguards of the boar" "100"]])
+
+
+  ;; Item with quality tag
+  (assert (= (select-keys (construct-item "mythical stormheart" @globals/db @globals/db-index 100) [:basename])
+             {:basename "records/items/upgraded/gearweapons/swords1h/d010_sword.dbr"}))
+
+  ;; Relic generation
+  (assert (= (select-keys (construct-item "Oleron's Wrath" @globals/db @globals/db-index 100) [:basename])
+             {:basename "records/items/gearrelic/d019_relic.dbr"}))
+
+  ;; Item with suffix
+  (assert (= (select-keys (construct-item "legion warhammer of valor" @globals/db @globals/db-index 100) [:basename :suffix-name])
+             {:basename "records/items/faction/weapons/blunt1h/f002b_blunt.dbr"
+              :suffix-name "records/items/lootaffixes/suffix/b_sh002_g.dbr"}))
+
+  ;; Item with prefix and suffix
+  (assert (= (select-keys (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 100) [:basename :prefix-name :suffix-name])
+             {:basename "records/items/gearlegs/b001e_legs.dbr"
+              :prefix-name "records/items/lootaffixes/prefix/b_ar028_ar_f.dbr"
+              :suffix-name "records/items/lootaffixes/suffix/a006b_ch_att_physpi_10.dbr"}))
+
+  (time
+   (construct-item "mythical stormheart" @globals/db @globals/db-index 100))
+
+  (time
+   (construct-item "legion warhammer of valor" @globals/db @globals/db-index 100))
+
+  (time
+   (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 100))
 
   )

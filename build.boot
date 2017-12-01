@@ -27,7 +27,8 @@
                             [clj-http "2.3.0"]
                             [com.taoensso/timbre "4.8.0"]
                             [com.billpiel/sayid "0.0.15"]
-                            [org.clojure/tools.cli "0.3.5"]])
+                            [org.clojure/tools.cli "0.3.5"]
+                            [criterium "0.4.4" :scope "test"]])
 
 
 
