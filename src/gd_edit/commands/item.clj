@@ -289,7 +289,7 @@
     ;; Locate the highest level item that does not exceed the level-cap
     (cond->> records
       (some? level-cap)
-      (filter #(>= level-cap (or (%1 "levelRequirement") (%1 "itemLevel") 0)))
+      (filter #(>= level-cap (or (%1 "levelRequirement") 0)))
 
       :then
       (sort-by #(or (%1 "levelRequirement") (%1 "itemLevel") 0) >)
