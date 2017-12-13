@@ -124,7 +124,8 @@
                                (and
                                 (some #(str/starts-with? (:recordname record) %1)
                                       #{"records/items/"
-                                        "records/storyelements/questitems"})
+                                        "records/storyelements/questitems"
+                                        "records/storyelements/signs"})
                                 (not (str/starts-with? (:recordname record) "records/items/lootaffixes"))
                                 (dbu/record-has-display-name? record)
                                 ))
@@ -569,5 +570,23 @@
 
   (time
    (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 50))
+
+  (time
+   (construct-item "stanching chain belt of caged souls" @globals/db @globals/db-index 12))
+
+  (time
+   (construct-item "Lokarr's Gaze" @globals/db @globals/db-index nil))
+
+  (def item-name-idx
+    (build-item-name-idx @globals/db))
+
+  (def
+    affixes-all (->> @globals/db
+                     (reshape-records-as-affixes)
+                     (group-affixes-by-loot-name)))
+
+  (analyze-item-name item-name-idx affixes-all "stanching chain belt of caged souls")
+
+  (analyze-item-name item-name-idx affixes-all "wraithbound infantry waistguard of vitality")
 
   )
