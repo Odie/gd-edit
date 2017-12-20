@@ -133,9 +133,15 @@
   [skill]
 
   (let [record (-> (:skill-name skill)
-                   (record-by-name))]
-    (or (record "FileDescription")
-        (record "skillDisplayName"))))
+                   (record-by-name))
+        record-display-name (fn [record]
+                              (or (record "skillDisplayName")
+                                  (record "FileDescription")))]
+    (if-let [display-name (record-display-name record)]
+      display-name
+
+      (when (get record "buffSkillName")
+        (record-display-name (record-by-name (get record "buffSkillName")))))))
 
 (defn- faction-name-from-loc-table
   [loc-table faction-index]
