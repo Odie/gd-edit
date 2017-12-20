@@ -144,7 +144,19 @@
 
    ["find" "Find some character data by name"
     (str/join "\n"
-              ["Syntax: find <a-name>"])]
+              ["Syntax: find <a-name>"
+               ""
+               "This command will locate item, skill, or faction data somewhere in your character"
+               "data by name. After locating the exact location, it is then easy to modify the entry"
+               "using the set command."
+               ""
+               "Example:"
+               "> find tonic"
+               "|"
+               "| Tonic of Mending: inventory-sacks/0/inventory-items/0"
+               ""
+               "> set inventory-sacks/0/inventory-items/0/stack-count 99"
+               ])]
 
    ["load"  "Load from a save file"]
    ["write" "Writes out the character that is currently loaded"
@@ -226,16 +238,16 @@
                                   0 command-names)]
       ;; Print the name of the command followed by the short help text
       (doseq [help-item command-help-map]
-        (println (format (format "%%-%ds     %%s" max-name-length) (first help-item) (second help-item)))
-        )
+        (println (format (format "%%-%ds     %%s" max-name-length) (first help-item) (second help-item))))
       (newline)
       (println (str/join "\n"
                          ["To more detailed help text on a command, run: "
                           " help <command>"
                           ""
-                          "Need more help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/"
-                          "   and"
-                          "https://odie.github.io/gd-edit-docs/commands/"
+                          "Need more help? Check the docs!"
+                          "\thttps://odie.github.io/gd-edit-docs/faq/"
+                          "\t   and"
+                          "\thttps://odie.github.io/gd-edit-docs/commands/"
                           ])))
 
     :else
