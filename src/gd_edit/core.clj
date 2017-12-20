@@ -13,6 +13,7 @@
              [utils :as utils]
              [self-update :as su]]
             [gd-edit.commands.item]
+            [gd-edit.commands.help]
             [gd-edit.commands.diag]
             [jansi-clj.core :refer :all]
             [gd-edit.utils :as u]
@@ -75,7 +76,7 @@
    ["respec"] (fn [input] (handlers/respec-handler input))
    ["log"] (fn [input] (handlers/log-handler input))
    ["update"] (fn [input] (handlers/update-handler input))
-   ["help"] (fn [input] (handlers/help-handler input))
+   ["help"] (fn [input] (gd-edit.commands.help/help-handler input))
    ["diag"] (fn [input] (gd-edit.commands.diag/diag-handler input))
    })
 
