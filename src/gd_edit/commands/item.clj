@@ -477,13 +477,21 @@
                                            item)]
       (do
         (swap! character update-in val-path conj (merge item coord))
-        true)
+        val-path)
 
       ;; TODO Implement better error handling pattern!
       false)
 
     :else
     (throw (Throwable. "Unhandled case"))))
+
+(defn displayable-path
+  [path]
+  (->> path
+       (map #(cond
+               (keyword? %) (name %)
+               :else %))
+       (str/join "/")))
 
 ;;------------------------------------------------------------------------------
 ;; Command handlers
@@ -522,9 +530,12 @@
 
           ;; Otherwise, put the item into the character sheet
           :else
-          (if-not (place-item-in-inventory! globals/character actual-path item)
-            (println "Sorry, there is no room to fit the item.")
-            (printer/show-item item)))))))
+          (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
+            (do
+              (println "Item placed in" (yellow (printer/displayable-path placed-path)))
+              (println)
+              (printer/show-item item))
+            (println "Sorry, there is no room to fit the item.")))))))
 
 
 (comment
