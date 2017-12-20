@@ -3,6 +3,10 @@
 
 
 (def command-help-map
+  "
+  Command help map is a list of 'help-items', where each is a tuple of
+  [command-name brief-help-text detail-help-text]
+  "
   [["exit"  "Exits the program"]
    ["q"     "Query the database"
     (str/join "\n"
@@ -138,6 +142,10 @@
                " "
                ])]
 
+   ["find" "Find some character data by name"
+    (str/join "\n"
+              ["Syntax: find <a-name>"])]
+
    ["load"  "Load from a save file"]
    ["write" "Writes out the character that is currently loaded"
     (str/join "\n"
@@ -185,6 +193,23 @@
    ["update" "Update to the latest version of gd-edit"]
    ])
 
+(defn detail-help-text
+  [help-item]
+
+  (nth help-item 2))
+
+(defn brief-help-text
+  [help-item]
+
+  (nth help-item 1))
+
+(defn get-help-item
+  [command-name]
+
+  (->> command-help-map
+       (filter #(= command-name (first %1)))
+       (first)))
+
 (defn help-handler
   [[input tokens]]
 
@@ -218,9 +243,7 @@
     ;; try to find the help text.
     ;; Display the help text (or lack of one) as appropriate
     (let [command (str/join " " tokens)
-          help-item (->> command-help-map
-                         (filter #(= command (first %1)))
-                         (first))]
+          help-item (get-help-item command)]
       (cond
         (nil? help-item)
         (println (format "Unknown command '%s'" command))

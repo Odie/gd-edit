@@ -80,8 +80,7 @@
          best))
 
      (first haystack)
-     haystack
-     ))
+     haystack))
 
 (defn- string-best-matches
   "Transform candidates into their best matches defined by the fieldnames"

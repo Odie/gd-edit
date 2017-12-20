@@ -273,7 +273,7 @@
                       (sort-by #(u/string-similarity
                                  (str/lower-case target-name)
                                  (str/lower-case (or
-                                                  (dbu/item-name (item-def->item %1) @globals/db)
+                                                  (dbu/item-name (item-def->item %1) @globals/db-and-index)
                                                   "")))
                                >)
                       (first))
@@ -477,7 +477,7 @@
                                            item)]
       (do
         (swap! character update-in val-path conj (merge item coord))
-        val-path)
+        (conj val-path (dec (count (get-in @character val-path)))))
 
       ;; TODO Implement better error handling pattern!
       false)
@@ -485,13 +485,6 @@
     :else
     (throw (Throwable. "Unhandled case"))))
 
-(defn displayable-path
-  [path]
-  (->> path
-       (map #(cond
-               (keyword? %) (name %)
-               :else %))
-       (str/join "/")))
 
 ;;------------------------------------------------------------------------------
 ;; Command handlers
@@ -522,7 +515,7 @@
           (nil? item)
           (println "Sorry, the item could not be constructed")
 
-          (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item @globals/db))) 0.8))
+          (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item @globals/db-and-index))) 0.8))
           (do
             (printer/show-item item)
             (println "Sorry, the item generated doesn't look like the item you asked for.")

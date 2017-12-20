@@ -13,6 +13,7 @@
              [utils :as utils]
              [self-update :as su]]
             [gd-edit.commands.item]
+            [gd-edit.commands.find]
             [gd-edit.commands.help]
             [gd-edit.commands.diag]
             [jansi-clj.core :refer :all]
@@ -59,6 +60,7 @@
    ["db" "show"] (fn [input] (handlers/db-show-handler input))
    ["show"]  (fn [input] (handlers/show-handler input))
    ["set"]   (fn [input] (handlers/set-handler input))
+   ["find"]   (fn [input] (gd-edit.commands.find/find-handler input))
    ["load"]  (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
    ["class"] (fn [input] (handlers/class-handler input))
@@ -539,7 +541,8 @@
 ;;===============================================================================
 (comment
 
-  (initialize)
+  (time
+   (gd-edit.core/initialize))
 
   (time (do
             (gd-edit.command-handlers/load-character-file

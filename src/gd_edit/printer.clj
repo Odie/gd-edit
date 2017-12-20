@@ -2,9 +2,10 @@
   "Deals with printing output of structured data"
   (:require [gd-edit
              [db-utils :as dbu]
-             [utils :as u]]
-            [jansi-clj.core :refer :all]
-            [gd-edit.db-utils :as dbu]))
+             [utils :as u]
+             [globals :as globals]]
+            [clojure.string :as str]
+            [jansi-clj.core :refer :all]))
 
 
 (declare show-item)
@@ -102,7 +103,7 @@
                          (let [annotation
                                (cond
                                  (dbu/is-item? item)
-                                 (dbu/item-name item @gd-edit.globals/db)
+                                 (dbu/item-name item @globals/db-and-index)
 
                                  (dbu/is-skill? item)
                                  (dbu/skill-name item)
@@ -250,11 +251,22 @@
       (print-map item))
 
     :else
-    (let [related-records (dbu/related-db-records item @gd-edit.globals/db)
-          name (dbu/item-name item @gd-edit.globals/db)]
+    (let [related-records (dbu/related-db-records item @globals/db-and-index)
+          name (dbu/item-name item @globals/db-and-index)]
       (when (not (nil? name))
         (println (yellow name))
         (newline))
       (print-map item :skip-item-count true)
       (newline)
       (print-result-records related-records))))
+
+
+(defn displayable-path
+  "Given a path into a data structure (such as paths returned by collect-walk*), and turn it
+  into a string suitable for display."
+  [path]
+  (->> path
+       (map #(cond
+               (keyword? %) (name %)
+               :else %))
+       (str/join "/")))

@@ -10,6 +10,7 @@
 (def db (atom {}))
 (def db-index (atom {}))
 (def localization-table (atom {}))
+(def db-and-index (atom {}))
 
 (def query-state
   (atom {:query-string nil

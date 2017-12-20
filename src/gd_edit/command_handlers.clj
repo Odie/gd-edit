@@ -1071,8 +1071,9 @@
 
   (intern 'gd-edit.globals 'localization-table (future (u/log-exceptions (load-localization-files))))
   (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db @globals/localization-table))))
-  (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
-
+  (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db)))
+  (intern 'gd-edit.globals 'db-and-index (future {:db @globals/db
+                                                  :index @globals/db-index})))
 
 
 (defn- character-classes-with-index

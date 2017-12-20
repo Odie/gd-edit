@@ -99,16 +99,16 @@
 ;; String comparison
 ;;------------------------------------------------------------------------------
 (defn case-insensitive=
-  "Check if str2 can be found in str1"
-  [str1 str2]
+  "Check if str2 can be found in `a-str`"
+  [a-str substring]
 
-  (= (str/lower-case (str str1)) (str/lower-case (str str2))))
+  (= (str/lower-case (str a-str)) (str/lower-case (str substring))))
 
 (defn case-insensitive-match
-  "Check if str2 can be found in str1"
-  [str1 str2]
+  "Check if `substring` can be found in `a-str`"
+  [a-str substring]
 
-  (.contains (str/lower-case (str str1)) (str/lower-case (str str2))))
+  (str/includes? (str/lower-case (str a-str)) (str/lower-case (str substring))))
 
 (def ci-match case-insensitive-match)
 
@@ -264,3 +264,119 @@
 (defn md5-file
   [file-path]
   (md5 (slurp-bytes file-path)))
+
+
+;;------------------------------------------------------------------------------
+;; Tree node collection utility
+;;------------------------------------------------------------------------------
+(defn node-children
+  [node]
+
+  (cond
+    (map? node) (seq node)
+    (or (vector? node)
+        (seq? node)) (map-indexed vector node)
+    :else nil))
+
+
+(defn- collect-walk-entire-tree-
+  "
+  Returns a list of [path item] pairs where the item is accepted by the predicate.
+
+  This function will walk the entire tree and examine every single node regardless of
+  whether a parent node has been collected.
+  "
+  [node         ;; current node being processed
+   predicate    ;; answers if we want to collect this node or not
+   path]        ;; indicates the the path of this node from root
+
+  ;; Collect this node if predicate says to
+  (let [results (when (predicate node)
+                  [[path node]])]
+
+    ;; Collect any child items that matches the predicate
+    ;; If there are children to visit...
+    (if-let [child-pairs (node-children node)]
+
+      ;; Visit each, collect the results into a list, merge it into `results`
+      (into (or results [])
+            (mapcat (fn [[key child]]
+                      (collect-walk-entire-tree- child predicate (conj path key)))
+                    child-pairs))
+
+      ;; If there are no children to visit, just return the results, which may or may-not
+      ;; contain the current node
+      results)))
+
+
+(defn collect-walk-entire-tree
+  "
+  Walk the given tree and collect items that matches the predicate.
+
+  This function will walk the entire tree and examine every single node regardless of
+  whether a parent node has been collected.
+  "
+  [predicate tree]
+
+  (collect-walk-entire-tree tree predicate []))
+
+(defn- collect-walk-first-in-branch-
+  "
+  Returns a list of [path item] pairs where the item is accepted by the predicate.
+
+  This is similar to `collect-walk-entire-tree`. However, this function stops exploring
+  further down a branch when it finds a node it wants to collect.
+  "
+  [node         ;; current node being processed
+   predicate    ;; answers if we want to collect this node or not
+   path]        ;; indicates the the path of this node from root
+
+  ;; Should this node be collected?
+  (if (predicate node)
+    ;; If so, just return the current node and do not explore further down this branch.
+    [[path node]]
+
+    ;; Otherwise...
+    ;; Collect any child items that matches the predicate
+    ;; If there are children to visit...
+    (when-let [child-pairs (node-children node)]
+
+      ;; Visit each, collect the results into a list, merge it into `results`
+      (into []
+            (mapcat (fn [[key child]]
+                      (collect-walk-first-in-branch- child predicate (conj path key)))
+                    child-pairs)))))
+
+(defn collect-walk-first-in-branch
+  "
+  Walk the given tree and collect items that matches the predicate
+
+  This function will not explore nodes where the parent has been collected.
+  "
+  [predicate tree]
+
+  (collect-walk-first-in-branch- tree predicate []))
+
+(defn collect-walk
+  "Walk the given tree and collect items that matches the predicate
+
+  The tree can be a mix of map, vectors, or a sequence. We send every reachable
+  node to the predicate. For each matched node, we collect the path where the item
+  can be found as well as the value itself.
+
+  This allows the caller to find all nodes that matches a condition as well as
+  perform updates into each of the locations later on."
+  ([predicate tree]
+   (collect-walk predicate :entire-tree :entire-tree))
+
+  ([predicate walk-type tree]
+
+   (cond
+     (= walk-type :entire-tree)
+     (collect-walk-entire-tree- tree predicate [])
+
+     (= walk-type :first-in-branch)
+     (collect-walk-first-in-branch- tree predicate [])
+
+     :else
+     (throw (Throwable. (str "Unknown collect-walk type: " walk-type))))))
