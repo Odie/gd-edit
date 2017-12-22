@@ -472,8 +472,8 @@
 
   (print-build-info)
   (println)
-  (log-build-info)
-  (log-environment)
+  (future (log-build-info))
+  (future (log-environment))
 
   ;; Run sanity checks and print any error messages
   (startup-sanity-checks)
