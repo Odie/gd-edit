@@ -373,8 +373,6 @@
   (not= key :recordname))
 
 
-
-
 (defn- classname
   [obj]
 
@@ -389,9 +387,8 @@
     "float"
 
     (string?)
-    "string"
-    )
-  )
+    "string"))
+
 
 (defn print-cannot-traverse-walk-result
   [result]
@@ -400,6 +397,7 @@
     (println (format "Cannot traverse into %s at the path \"%s\""
                      (classname actual-path-item)
                      (clojure.string/join "/" (:longest-path result))))))
+
 
 (defn show-handler
   [[input tokens]]
@@ -417,69 +415,39 @@
 
     :else
     (do
-      ;; Split a path into components.
-      ;; We're going to use these as keys to navigate into the character sheet
-      (let [path-keys (string/split (first tokens) #"/")
-            base-obj (if-not (> (count path-keys) 1)
-                        @globals/character
+      (let [;; Split the given path into components
+            path-keys (string/split (first tokens) #"/")
 
-                        ;; If the user supplied a long path, we should try to walk the
-                        ;; data structure first and arrive at a base object
-                        (let [result (sw/walk @globals/character (butlast path-keys))
-                              {:keys [status found-item]} result]
+            ;; Try to walk the path fuzzily
+            result (sw/walk @globals/character path-keys)
+            {:keys [status found-item]} result]
 
-                          (cond
-                            (= status :not-found)
-                            (println "No matches found")
+          (cond
+            (= status :not-found)
+            (println "No matches found")
 
-                            (= status :too-many-matches)
-                            (sw/print-ambiguous-walk-result result)
+            (= status :too-many-matches)
+            (if ;; If we were able to match the entire path, but arrived at multiple entries
+                (= (count (:longest-path result)) (count path-keys))
 
-                            (= status :cannot-traverse)
-                            (print-cannot-traverse-walk-result result)
+                ;; Show all matched entries
+                (printer/print-map (into {} (:ambiguous-matches result)))
 
-                            :else
-                            (:found-item result)))
-              )]
+                ;; If we stopped before matching the entire path, that means
+                ;; we had trouble stepping into one of the given items
+                (sw/print-ambiguous-walk-result result))
 
-        ;; Now that we've found a base object to navigate into...
-        (when-not (nil? base-obj)
-          ;; Walk into it one more level...
-          (let [result (sw/walk base-obj [(last path-keys)])
-                {:keys [status]} result
+            (= status :cannot-traverse)
+            (print-cannot-traverse-walk-result result)
 
-                matched-obj (cond
-                              (= status :not-found)
-                              (println "No matches found")
-
-                              (= status :too-many-matches)
-                              (into {} (:ambiguous-matches result))
-
-                              (= status :cannot-traverse)
-                              (let [result (sw/walk @globals/character path-keys)]
-                                (print-cannot-traverse-walk-result result))
-
-                              ;; If we found a result and it looks like a primitive...
-                              ;; We want to print the path to that primitive then the value
-                              (and (= status :found) (dbu/is-primitive? (:found-item result)))
-                              (let [result (sw/walk @globals/character path-keys)]
-                                (println (->> (:actual-path result)
-                                              (map u/keyword->str)
-                                              (string/join "/")))
-                                (:found-item result))
-
-                              (= status :found)
-                              (:found-item result)
-
-                              :else
-                              (throw (Throwable. "Unhandled case")))
-                ]
-
-            ;; We've successfully navigated to an object
-            ;; This might be a piece of data in the character sheet or a list of partially matched result
-            ;; for some structure represented as a map
-            (if-not (nil? matched-obj)
-              (printer/print-object matched-obj))))))))
+            :else
+            (do
+              ;; Print the path to the entry being shown
+              ;; This helps the user verify what they're looking at is what is asked for.
+              (println (->> (:actual-path result)
+                            (map u/keyword->str)
+                            (string/join "/")))
+              (printer/print-object found-item (:actual-path result))))))))
 
 
 (defn- parseBoolean

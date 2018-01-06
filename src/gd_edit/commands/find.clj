@@ -16,23 +16,6 @@
   (println (->> (help/get-help-item "find")
                 (help/detail-help-text))))
 
-(defn- get-name
-  [obj path]
-
-  (cond
-    (dbu/is-item? obj)
-    (dbu/item-name obj @globals/db-and-index)
-
-    (dbu/is-skill? obj)
-    (dbu/skill-name obj)
-
-    (dbu/is-faction? obj)
-    (dbu/faction-name (last path))
-
-    :else
-    nil))
-
-
 (defn- find-handler-
   [a-name]
 
@@ -45,7 +28,7 @@
                         (map (fn [[path data]]
                                {:path path
                                 :data data
-                                :name (get-name data path)})))
+                                :name (dbu/get-name data path)})))
 
         ;; Filter against the name we're looking for
         partial-matches (filter #(utils/ci-match % a-name) candidates)]

@@ -83,8 +83,7 @@
     ;; Try to iterate a level deeper using the next key
     (loop [cursor m
            ks ks-all
-           actual-path []
-           ]
+           actual-path []]
 
       ;; Which key are we trying to navigate to?
       (let [k (first ks)]
@@ -134,6 +133,7 @@
 
   (doseq [ambiguous-item (->> (:ambiguous-matches result)
                               (keys)
-                              (map u/keyword->str))]
+                              (map u/keyword->str)
+                              (sort))]
     (u/print-indent 1)
     (println ambiguous-item)))

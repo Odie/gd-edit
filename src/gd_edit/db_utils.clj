@@ -121,7 +121,8 @@
   [coll]
 
   (and (associative? coll)
-       (contains? coll :skill-name)))
+       (contains? coll :skill-name)
+       (not (contains? coll :item-equip-location))))
 
 (defn is-faction?
   [coll]
@@ -176,6 +177,22 @@
     (is-item? obj) :item
     (is-skill? obj) :skill
     (is-faction? obj) :faction
+
+    :else
+    nil))
+
+(defn get-name
+  [obj path]
+
+  (cond
+    (is-item? obj)
+    (item-name obj @globals/db-and-index)
+
+    (is-skill? obj)
+    (skill-name obj)
+
+    (is-faction? obj)
+    (faction-name (last path))
 
     :else
     nil))
