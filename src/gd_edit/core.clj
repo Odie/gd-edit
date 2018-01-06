@@ -153,39 +153,40 @@
   (u/log-exp input)
   (u/log-exp tokens)
 
-  ;; Try to find the "longest" command match
-  ;; Basically, we're trying to find the most specific match.
-  ;; This means we can put command handlers like "q" and "q show"
-  ;; directly in the command map and figure out which one should be
-  ;; called
-  (let [menu-cmd (find-menu-command (first tokens) (last @globals/menu-stack))
-        menu-handler (if-not (nil? menu-cmd)
-                       (nth menu-cmd 2)
-                       nil)
+  (when-not (empty? (str/trim input))
+    ;; Try to find the "longest" command match
+    ;; Basically, we're trying to find the most specific match.
+    ;; This means we can put command handlers like "q" and "q show"
+    ;; directly in the command map and figure out which one should be
+    ;; called
+    (let [menu-cmd (find-menu-command (first tokens) (last @globals/menu-stack))
+          menu-handler (if-not (nil? menu-cmd)
+                         (nth menu-cmd 2)
+                         nil)
 
-        command (find-command tokens command-map)
-        _ (newline)
-        command-handler (command-map command)]
+          command (find-command tokens command-map)
+          _ (newline)
+          command-handler (command-map command)]
 
-    (cond
-      ;; if the entered command matches a menu item, run the handler function
-      (not (nil? menu-handler))
-      (menu-handler)
+      (cond
+        ;; if the entered command matches a menu item, run the handler function
+        (not (nil? menu-handler))
+        (menu-handler)
 
-      ;; Otherwise, if the tokens can match something in the global command map,
-      ;; run that.
-      ;;
-      ;; Remove the tokens that represent the command itself
-      ;; They shouldn't be passed to the command handlers
-      (not (nil? command-handler))
-      (let [param-tokens (drop (count command) tokens)
-            command-input-string (string/trim (subs input (->> command
-                                                               (string/join " ")
-                                                               (count))))]
-        (command-handler [command-input-string param-tokens]))
+        ;; Otherwise, if the tokens can match something in the global command map,
+        ;; run that.
+        ;;
+        ;; Remove the tokens that represent the command itself
+        ;; They shouldn't be passed to the command handlers
+        (not (nil? command-handler))
+        (let [param-tokens (drop (count command) tokens)
+              command-input-string (string/trim (subs input (->> command
+                                                                 (string/join " ")
+                                                                 (count))))]
+          (command-handler [command-input-string param-tokens]))
 
-      :else
-      (println "Don't know how to handle this command"))))
+        :else
+        (println "Don't know how to handle this command")))))
 
 (defn- repl-print-notification
   [chan]
