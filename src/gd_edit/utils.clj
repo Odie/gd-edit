@@ -149,13 +149,19 @@
 
   (last (str/split path #"[/\\]")))
 
-(defn path-exists
+(defn path-exists?
   [path]
 
   (if (and (not (nil? path))
            (.exists (io/file path)))
     true
     false))
+
+(defn path-exists-or-nil
+  [file-path]
+
+  (when (.exists file-path)
+    file-path))
 
 ;;------------------------------------------------------------------------------
 ;; Core lib extensions

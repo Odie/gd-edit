@@ -5,6 +5,8 @@
 
   (:import [com.sun.jna.platform.win32 WinReg Advapi32Util]))
 
+(declare looks-like-game-dir)
+
 (defn get-steam-path
   "Get steam installation path"
   []
@@ -107,57 +109,10 @@
        (filter #(.isDirectory %1))
        (filter #(.exists (io/file %1 "player.gdc")))))
 
-(defn make-db-filepath
-  [game-dir]
 
-  (io/file game-dir "database" "database.arz"))
-
-(defn- make-templates-filepath
-  [game-dir]
-
-  (io/file game-dir "database" "templates.arc"))
-
-(defn make-localization-filepath
-  [game-dir]
-
-  (io/file game-dir "resources" "Text_EN.arc"))
-
-(defn make-mod-db-filepath
-  [mod-dir]
-  (let [mod-name (u/last-path-component mod-dir)]
-    (io/file mod-dir "database" (str mod-name ".arz"))))
-
-(defn get-db-filepath
-  "Checks through all game dirs and retrieves the first db file"
-  []
-
-  (make-db-filepath (get-game-dir)))
-
-(defn get-templates-filepath
-  "Checks through all game dirs and retrieves the first templates file"
-  []
-
-  (make-templates-filepath (get-game-dir)))
-
-(defn get-localization-filepath
-  "Checks through all game dirs and retrieves the first English localization file"
-  []
-
-  (make-localization-filepath (get-game-dir)))
-
-(defn get-resources-file
-  [filename]
-
-  (io/file (get-game-dir) "resources" filename))
-
-(defn looks-like-game-dir
-  [path]
-
-  (if (and (u/path-exists (make-db-filepath path))
-           (u/path-exists (make-localization-filepath path)))
-    true
-    false))
-
+;;------------------------------------------------------------------------------
+;; Path construction & File fetching utils
+;;------------------------------------------------------------------------------
 (defn get-game-dir
   ([]
    (get-game-dir (get-game-dir-search-list)))
@@ -166,3 +121,48 @@
    (->> game-dirs
         (filter looks-like-game-dir)
         (first))))
+
+(defn get-gdx1-dir
+  []
+  "Returns the directory for Ashes of Malmouth dlc."
+  (io/file (get-game-dir) "gdx1"))
+
+(defn get-mod-dir
+  "Returns the configured mod's directory"
+  []
+  (:moddir @globals/settings))
+
+(defn get-file-override-dirs
+  "Returns a list of directories to look for game asset files in"
+  []
+  [(get-game-dir)
+   (get-gdx1-dir)
+   (get-mod-dir)])
+
+(defn get-file-and-overrides
+  "Given the relative path of a game asset file, return a vector of all matched files.
+
+  For example, each mod is likely to have a database file and a localization file.
+  When we're processing a the database file, then, it's not enough to just process
+  the base game's database file, but all active mods also.
+
+  This function builds such a list for callers to process."
+  [relative-path]
+
+  (->> (get-file-override-dirs)
+       (map #(io/file % relative-path))
+       (filter u/path-exists?)
+       (into [])))
+
+(def database-file "database/database.arz")
+(def templates-file "database/templates.arc")
+(def localization-file "resources/Text_EN.arc")
+(def texture-file "resources/Items.arc")
+
+(defn looks-like-game-dir
+  [path]
+
+  (if (and (u/path-exists? (io/file path database-file))
+           (u/path-exists? (io/file path localization-file)))
+    true
+    false))

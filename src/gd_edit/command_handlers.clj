@@ -950,70 +950,9 @@
               )))))))
 
 
-
-(defn mod-db-file
-  "Returns the configured mod's db file as a java.lang.File object or nil"
-  []
-  (let [mod-dir (:moddir @globals/settings)]
-    (when (and mod-dir (.exists (dirs/make-db-filepath mod-dir)))
-      (dirs/make-db-filepath mod-dir))))
-
-(defn dlc-db-file
-  "Returns the dlc db file as a java.lang.File object or nil"
-  []
-  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
-    (let [dlc-db-file (io/file dlc-dir "database" "GDX1.arz")]
-      (when (.exists dlc-db-file)
-        dlc-db-file))))
-
-(defn db-files
-  "Returns an array of database files to load"
-  []
-
-  (filterv some?
-           [;; Grab the localization file for the base game
-            (dirs/get-db-filepath)
-
-            ;; Grab the dlc's localization file if it exists
-            (dlc-db-file)
-
-            ;; Grab the localization file for the configured mod if it exists
-            (mod-db-file)]))
-
-
-(defn mod-localization-file
-  "Returns the configured mod's localization file as a java.lang.File object or nil"
-  []
-  (let [mod-dir (:moddir @globals/settings)]
-    (when (and mod-dir (.exists (dirs/make-localization-filepath mod-dir)))
-      (dirs/make-localization-filepath mod-dir))))
-
-(defn dlc-localiation-file
-  "Returns the dlc localization file as a java.lang.File object or nil"
-  []
-
-  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
-    (let [dlc-loc-file (dirs/make-localization-filepath dlc-dir)]
-      (when (.exists dlc-loc-file)
-        dlc-loc-file))))
-
-(defn localization-files
-  "Returns an array of localization files to load"
-  []
-
-  (filterv some?
-           [;; Grab the localization file for the base game
-            (dirs/get-localization-filepath)
-
-            ;; Grab the dlc's localization file if it exists
-            (dlc-localiation-file)
-
-            ;; Grab the localization file for the configured mod if it exists
-            (mod-localization-file)]))
-
 (defn load-localization-files
   []
-  (->> (localization-files) ;; grab all localization files we want to load
+  (->> (dirs/get-file-and-overrides dirs/localization-file) ;; grab all localization files we want to load
        (map arc-reader/load-localization-table) ;; load each file
        (apply merge)))
 
@@ -1021,7 +960,7 @@
   [localization-table]
 
   (t/debug "Entering load-db")
-  (->> (db-files) ;; Grab all db files we want to load
+  (->> (dirs/get-file-and-overrides dirs/database-file) ;; Grab all db files we want to load
        (map #(arz-reader/load-game-db % localization-table)) ;; load all the db files
        (map build-db-index) ;; merge all the loaded db records
        (apply merge)
@@ -1034,14 +973,18 @@
        (map (fn [record] [(:recordname record) record]))
        (into {})))
 
+(defn build-db-and-index
+  []
+  {:db @globals/db
+   :index @globals/db-index})
+
 (defn load-db-in-background
   []
 
   (intern 'gd-edit.globals 'localization-table (future (u/log-exceptions (load-localization-files))))
   (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db @globals/localization-table))))
   (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db)))
-  (intern 'gd-edit.globals 'db-and-index (future {:db @globals/db
-                                                  :index @globals/db-index})))
+  (intern 'gd-edit.globals 'db-and-index (future (build-db-and-index))))
 
 
 (defn- character-classes-with-index

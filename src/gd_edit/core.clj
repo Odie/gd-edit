@@ -39,6 +39,7 @@
    (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
         (map strip-quotes))])
 
+
 (defn- repl-read
   []
 
@@ -280,7 +281,7 @@
         (let [actual-dirs (reduce (fn [result item]
                                     (conj result (.getParent (io/file item))))
                                   #{}
-                                  [(-> (dirs/get-db-filepath)
+                                  [(-> (io/file (dirs/get-game-dir) dirs/database-file)
                                        (.getParent))])]
           (println "game directory:")
           (doseq [loc actual-dirs]

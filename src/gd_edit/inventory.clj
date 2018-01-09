@@ -45,20 +45,6 @@
   (:width (inv-slot-dims inv-idx)))
 
 
-(defn dlc-texture-file
-  "Returns the dlc db file as a java.lang.File object or nil"
-  []
-  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
-    (let [dlc-db-file (io/file dlc-dir "resources" "Items.arc")]
-      (when (.exists dlc-db-file)
-        dlc-db-file))))
-
-(defn- get-texture-files
-  []
-  (filterv some?
-           [(dirs/get-resources-file "Items.arc")
-            (dlc-texture-file)]))
-
 (defn make-dims-lookup-fn
   "Given a texture file path, return a function that can be used to look up dimensions of
   textures in the file.
@@ -90,7 +76,7 @@
   []
 
   (def texture-dim-fns
-    (->> (get-texture-files)
+    (->> (dirs/get-file-and-overrides dirs/texture-file)
          (map make-dims-lookup-fn))))
 
 (defn lazy-load-texture-slot-dims

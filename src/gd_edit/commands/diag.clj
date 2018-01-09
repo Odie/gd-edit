@@ -15,7 +15,6 @@
 (defn- verify-jvm-version
   []
 
-
   (let [jvm-version (System/getProperty "java.runtime.version")
         result (str/starts-with? jvm-version "1.8")
         test-info (str "JVM version: " jvm-version)]
@@ -75,18 +74,16 @@
                [[verify-game-dir-present]
                 (yellow "Please use the 'gamedir' command to help the editor find your game installation directory")]
 
-               [[verify-file-exists (dirs/get-db-filepath)]
+               [[verify-file-exists (io/file (dirs/get-game-dir) dirs/database-file)]
                 (yellow "Cannot find file: database/database.arz. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]
 
-               [[verify-file-exists (dirs/get-localization-filepath)]
+               [[verify-file-exists (io/file (dirs/get-game-dir) dirs/localization-file)]
                 (yellow "Cannot find file: Text_EN.arc. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]
 
-               [[verify-file-exists (dirs/get-resources-file "Items.arc")]
-                 (yellow "Cannot find file: Items.arc. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]
-               ]
+               [[verify-file-exists (io/file (dirs/get-game-dir) dirs/texture-file)]
+                 (yellow "Cannot find file: Items.arc. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]]
 
-        all-tests-passed (every? verify-test tests)
-        ]
+        all-tests-passed (every? verify-test tests)]
 
     (newline)
     (if all-tests-passed
