@@ -12,17 +12,6 @@
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
-(def ^:private current-ns 'gd-edit.qst-reader)
-
-(def ^:private get-block-spec
-  (partial gdc/get-block-spec-by-ns current-ns))
-
-(def ^:private get-block-read-fn
-  (partial gdc/get-block-read-fn-by-ns current-ns))
-
-(def ^:private get-block-write-fn
-  (partial gdc/get-block-write-fn-by-ns current-ns))
-
 ;;------------------------------------------------------------------------------
 ;; Quest File format defs
 ;;------------------------------------------------------------------------------
@@ -560,51 +549,6 @@
   ;; Verify we have the correct enc-state at this point
   (let [checksum (Integer/toUnsignedLong (.getInt bb))]
     (assert (= checksum (:enc-state @context)))))
-
-(defn read-block
-  ([^ByteBuffer bb context]
-   (read-block bb context nil))
-
-  ([^ByteBuffer bb context block-spec-overrides]
-
-   (let [{:keys [id length expected-end-position] :as block-header} (read-block-start bb context)
-         ;; _ (println "Reading block:" id)
-         ;; _ (println "length:" length)
-
-         ;; Push data about the current block into a stack
-         _ (swap! context update-in [:block-stack] conj block-header)
-
-         ;; Figure out how we can read the block
-         block-spec-or-read-fn (or (get block-spec-overrides id)
-                                   (get-block-read-fn id)
-                                   (get-block-spec id))
-
-         ;; If neither a block spec or a custom read function can be found...
-         ;; We don't know how to read this block
-         _ (if (nil? block-spec-or-read-fn)
-             (throw (Throwable. (str"Don't know how to read block " id))))
-
-         ;; Try to read the block
-         ;; If a custom read function was provided, use that
-         ;; Otherwise, try to read using a block spec
-         block-data (cond
-                      (fn? block-spec-or-read-fn)
-                      (block-spec-or-read-fn bb context)
-                      :else
-                      (s/read-struct block-spec-or-read-fn bb context {}))
-
-         ;; Verify that this is a block version we understand
-         _ (if-let [known-versions (:known-versions (meta block-spec-or-read-fn))]
-             (assert (contains? known-versions (:version block-data))))
-         ]
-
-     ;; Verify we have the correct enc-state at this point
-     (read-and-verify-block-end bb context id expected-end-position)
-
-     ;; Pop from the block stack
-     (swap! context update-in [:block-stack] pop)
-
-     (assoc block-data :meta-block-id id))))
 
 (defn- validate-preamble
   [preamble]
