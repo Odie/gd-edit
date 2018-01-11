@@ -2,9 +2,10 @@
   "Deals with printing output of structured data"
   (:require [gd-edit
              [db-utils :as dbu]
-             [utils :as u]]
-            [jansi-clj.core :refer :all]
-            [gd-edit.db-utils :as dbu]))
+             [utils :as u]
+             [globals :as globals]]
+            [clojure.string :as str]
+            [jansi-clj.core :refer :all]))
 
 
 (declare show-item)
@@ -70,123 +71,77 @@
       (newline)
       (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
+
 (defn print-sequence
-  [obj]
+  [obj path]
 
-  (u/doseq-indexed i [item obj]
-                   ;; Print the index of the object
-                   (print (format
-                           (format "%%%dd: " (-> (count obj)
-                                                 (Math/log10)
-                                                 (Math/ceil)
-                                                 (max 1)
-                                                 (int)))
-                           i))
+  (if (empty? obj)
+    (do
+      (u/print-indent 1)
+      (println (yellow "Empty")))
+    (u/doseq-indexed i [item obj]
+                     ;; Print the index of the object
+                     (print (format
+                             (format "%%%dd: " (-> (count obj)
+                                                   (Math/log10)
+                                                   (Math/ceil)
+                                                   (max 1)
+                                                   (int)))
+                             i))
 
-                   ;; Print some representation of the object
-                   ;; We don't call print-object here
-                   ;; because we do not want to recursively print the data tree.
-                   (let [item-type (type item)]
-                     (cond
-                       (dbu/is-primitive? item)
-                       (print-primitive item)
+                     ;; Print some representation of the object
+                     (let [item-type (type item)]
+                       (cond
+                         (dbu/is-primitive? item)
+                         (print-primitive item)
 
-                       (sequential? item)
-                       (println (format "collection of %d items" (count item)))
+                         (sequential? item)
+                         (println (format "collection of %d items" (count item)))
 
-                       (associative? item)
-                       (do
+                         (associative? item)
+                         (do
+                           ;; If a display name can be fetched...
+                           (when-let [display-name (dbu/get-name item (conj path i))]
+                             ;; Print annotation on the same line as the index
+                             (println (yellow display-name)))
 
-                         ;; If we've encountered something that requires annotation,
-                         ;; print the annotation now.
-                         (let [annotation
-                               (cond
-                                 (dbu/is-item? item)
-                                 (dbu/item-name item @gd-edit.globals/db)
+                           ;; Close the index + display-name line
+                           (newline)
 
-                                 (dbu/is-skill? item)
-                                 (dbu/skill-name item)
+                           (print-map item :skip-item-count true)
+                           (if-not (= i (dec (count obj)))
+                             (newline)))
 
-                                 (dbu/is-faction? item)
-                                 (dbu/faction-name i)
+                         :else
+                         (println item))))))
 
-                                 :else
-                                 nil)]
-                               (if-not (nil? annotation)
-                                 (do
-                                   ;; Print annotation on the same line as the index
-                                   (println (yellow annotation))
-                                   (newline))
 
-                                 ;; No annotation needs to be printed,
-                                 ;; close the line that prints the index
-                                 (newline))
-                               )
+(defn- print-object-name
+  [s]
 
-                         (print-map item :skip-item-count true)
-                         (if-not (= i (dec (count obj)))
-                           (newline))
-                         )
-
-                       :else
-                       (println item)))))
+  (when-not (empty? s)
+    (println (yellow s))
+    (println)))
 
 (defn print-object
   "Given some kind of thing in the character sheet, try to print it."
-  [obj]
+  [obj path]
 
-  (let [t (type obj)]
-    (cond
-      (dbu/is-primitive? obj)
-      (print-primitive obj 1)
+  (cond
+    (dbu/get-type obj)
+    (do
+      (print-object-name (dbu/get-name obj path))
+      (print-map obj))
 
-      (sequential? obj)
-      (print-sequence obj)
+    (dbu/is-primitive? obj)
+    (print-primitive obj 1)
 
-      ;; If we're looking at an item, print all of its details and related records
-      (dbu/is-item? obj)
-      (show-item obj)
+    (sequential? obj)
+    (print-sequence obj path)
 
-      (associative? obj)
-      (print-map obj)
+    :else
+    (print-map obj)))
 
-      :else
-      (throw (Throwable. "Unhandled case"))
-      )))
-
-(defn print-details
-  [data]
-
-  (assert (associative? data))
-  (assert (= (count data) 1))
-
-  (let [[key value] (first data)]
-    (println (format "%s:" (u/keyword->str key)))
-
-    (cond
-      (or (number? value) (string? value))
-      (do
-        (print "        ")
-        (println value))
-
-      (sequential? value)
-      (do
-        (u/doseq-indexed i [item value]
-                         (println i ":")
-                         (cond
-                           (sequential? item)
-                           (println
-                            (format "collection of %d items" (count item)))
-
-                           (associative? item)
-                           (do
-                             (print-map item :skip-item-count true)
-                             (if-not (= item (last value))
-                               (newline)))
-
-                           :else
-                           (throw (Throwable. "Don't know how to print details for a sequence of this type yet!")))
-                         )))))
 
 (defn print-result-records
   [results]
@@ -202,6 +157,7 @@
       (println (format "\t%s: %s" key (yellow value))))
 
     (newline)))
+
 
 (defn print-map-difference
   [[only-in-a only-in-b _]]
@@ -235,6 +191,7 @@
       (newline)
       (println (format (format "%%%dd" (+ max-key-length 2)) (count only-in-b)) "fields changed"))))
 
+
 (defn show-item
   "Print all related records for an item"
   [item]
@@ -250,11 +207,22 @@
       (print-map item))
 
     :else
-    (let [related-records (dbu/related-db-records item @gd-edit.globals/db)
-          name (dbu/item-name item @gd-edit.globals/db)]
+    (let [related-records (dbu/related-db-records item @globals/db-and-index)
+          name (dbu/item-name item @globals/db-and-index)]
       (when (not (nil? name))
         (println (yellow name))
         (newline))
       (print-map item :skip-item-count true)
       (newline)
       (print-result-records related-records))))
+
+
+(defn displayable-path
+  "Given a path into a data structure (such as paths returned by collect-walk*), and turn it
+  into a string suitable for display."
+  [path]
+  (->> path
+       (map #(cond
+               (keyword? %) (name %)
+               :else %))
+       (str/join "/")))

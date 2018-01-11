@@ -373,8 +373,6 @@
   (not= key :recordname))
 
 
-
-
 (defn- classname
   [obj]
 
@@ -389,9 +387,8 @@
     "float"
 
     (string?)
-    "string"
-    )
-  )
+    "string"))
+
 
 (defn print-cannot-traverse-walk-result
   [result]
@@ -400,6 +397,7 @@
     (println (format "Cannot traverse into %s at the path \"%s\""
                      (classname actual-path-item)
                      (clojure.string/join "/" (:longest-path result))))))
+
 
 (defn show-handler
   [[input tokens]]
@@ -417,69 +415,39 @@
 
     :else
     (do
-      ;; Split a path into components.
-      ;; We're going to use these as keys to navigate into the character sheet
-      (let [path-keys (string/split (first tokens) #"/")
-            base-obj (if-not (> (count path-keys) 1)
-                        @globals/character
+      (let [;; Split the given path into components
+            path-keys (string/split (first tokens) #"/")
 
-                        ;; If the user supplied a long path, we should try to walk the
-                        ;; data structure first and arrive at a base object
-                        (let [result (sw/walk @globals/character (butlast path-keys))
-                              {:keys [status found-item]} result]
+            ;; Try to walk the path fuzzily
+            result (sw/walk @globals/character path-keys)
+            {:keys [status found-item]} result]
 
-                          (cond
-                            (= status :not-found)
-                            (println "No matches found")
+          (cond
+            (= status :not-found)
+            (println "No matches found")
 
-                            (= status :too-many-matches)
-                            (sw/print-ambiguous-walk-result result)
+            (= status :too-many-matches)
+            (if ;; If we were able to match the entire path, but arrived at multiple entries
+                (= (count (:longest-path result)) (count path-keys))
 
-                            (= status :cannot-traverse)
-                            (print-cannot-traverse-walk-result result)
+                ;; Show all matched entries
+                (printer/print-map (into {} (:ambiguous-matches result)))
 
-                            :else
-                            (:found-item result)))
-              )]
+                ;; If we stopped before matching the entire path, that means
+                ;; we had trouble stepping into one of the given items
+                (sw/print-ambiguous-walk-result result))
 
-        ;; Now that we've found a base object to navigate into...
-        (when-not (nil? base-obj)
-          ;; Walk into it one more level...
-          (let [result (sw/walk base-obj [(last path-keys)])
-                {:keys [status]} result
+            (= status :cannot-traverse)
+            (print-cannot-traverse-walk-result result)
 
-                matched-obj (cond
-                              (= status :not-found)
-                              (println "No matches found")
-
-                              (= status :too-many-matches)
-                              (into {} (:ambiguous-matches result))
-
-                              (= status :cannot-traverse)
-                              (let [result (sw/walk @globals/character path-keys)]
-                                (print-cannot-traverse-walk-result result))
-
-                              ;; If we found a result and it looks like a primitive...
-                              ;; We want to print the path to that primitive then the value
-                              (and (= status :found) (dbu/is-primitive? (:found-item result)))
-                              (let [result (sw/walk @globals/character path-keys)]
-                                (println (->> (:actual-path result)
-                                              (map u/keyword->str)
-                                              (string/join "/")))
-                                (:found-item result))
-
-                              (= status :found)
-                              (:found-item result)
-
-                              :else
-                              (throw (Throwable. "Unhandled case")))
-                ]
-
-            ;; We've successfully navigated to an object
-            ;; This might be a piece of data in the character sheet or a list of partially matched result
-            ;; for some structure represented as a map
-            (if-not (nil? matched-obj)
-              (printer/print-object matched-obj))))))))
+            :else
+            (do
+              ;; Print the path to the entry being shown
+              ;; This helps the user verify what they're looking at is what is asked for.
+              (println (->> (:actual-path result)
+                            (map u/keyword->str)
+                            (string/join "/")))
+              (printer/print-object found-item (:actual-path result))))))))
 
 
 (defn- parseBoolean
@@ -986,70 +954,9 @@
               )))))))
 
 
-
-(defn mod-db-file
-  "Returns the configured mod's db file as a java.lang.File object or nil"
-  []
-  (let [mod-dir (:moddir @globals/settings)]
-    (when (and mod-dir (.exists (dirs/make-db-filepath mod-dir)))
-      (dirs/make-db-filepath mod-dir))))
-
-(defn dlc-db-file
-  "Returns the dlc db file as a java.lang.File object or nil"
-  []
-  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
-    (let [dlc-db-file (io/file dlc-dir "database" "GDX1.arz")]
-      (when (.exists dlc-db-file)
-        dlc-db-file))))
-
-(defn db-files
-  "Returns an array of database files to load"
-  []
-
-  (filterv some?
-           [;; Grab the localization file for the base game
-            (dirs/get-db-filepath)
-
-            ;; Grab the dlc's localization file if it exists
-            (dlc-db-file)
-
-            ;; Grab the localization file for the configured mod if it exists
-            (mod-db-file)]))
-
-
-(defn mod-localization-file
-  "Returns the configured mod's localization file as a java.lang.File object or nil"
-  []
-  (let [mod-dir (:moddir @globals/settings)]
-    (when (and mod-dir (.exists (dirs/make-localization-filepath mod-dir)))
-      (dirs/make-localization-filepath mod-dir))))
-
-(defn dlc-localiation-file
-  "Returns the dlc localization file as a java.lang.File object or nil"
-  []
-
-  (when-let [dlc-dir (io/file (dirs/get-game-dir) "gdx1")]
-    (let [dlc-loc-file (dirs/make-localization-filepath dlc-dir)]
-      (when (.exists dlc-loc-file)
-        dlc-loc-file))))
-
-(defn localization-files
-  "Returns an array of localization files to load"
-  []
-
-  (filterv some?
-           [;; Grab the localization file for the base game
-            (dirs/get-localization-filepath)
-
-            ;; Grab the dlc's localization file if it exists
-            (dlc-localiation-file)
-
-            ;; Grab the localization file for the configured mod if it exists
-            (mod-localization-file)]))
-
 (defn load-localization-files
   []
-  (->> (localization-files) ;; grab all localization files we want to load
+  (->> (dirs/get-file-and-overrides dirs/localization-file) ;; grab all localization files we want to load
        (map arc-reader/load-localization-table) ;; load each file
        (apply merge)))
 
@@ -1057,7 +964,7 @@
   [localization-table]
 
   (t/debug "Entering load-db")
-  (->> (db-files) ;; Grab all db files we want to load
+  (->> (dirs/get-file-and-overrides dirs/database-file) ;; Grab all db files we want to load
        (map #(arz-reader/load-game-db % localization-table)) ;; load all the db files
        (map build-db-index) ;; merge all the loaded db records
        (apply merge)
@@ -1070,245 +977,18 @@
        (map (fn [record] [(:recordname record) record]))
        (into {})))
 
+(defn build-db-and-index
+  []
+  {:db @globals/db
+   :index @globals/db-index})
+
 (defn load-db-in-background
   []
 
   (intern 'gd-edit.globals 'localization-table (future (u/log-exceptions (load-localization-files))))
   (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db @globals/localization-table))))
-  (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db))))
-
-(def command-help-map
-  [["exit"  "Exits the program"]
-   ["q"     "Query the database"
-    (string/join "\n"
-                 ["Query the database using a series of conditions in the form of"
-                  "  <partial fieldname> <operator> <value>"
-                  ""
-                  "<partial fieldname> can also be one of the following special keywords:"
-                  " 'recordname' matches against the name/path of the db record"
-                  " 'key' matches some key/fieldname in the record"
-                  " 'value' matches some value entry in the record"
-                  ""
-                  "valid operators are: ~ *= = != < > <= >="
-                  " ~ and *= are used for partial string matches"
-                  ""
-                  "Example 1:"
-                  " q recordname~weapons"
-                  ""
-                  " This says to return a list of records that has the word 'weapons' as part of"
-                  " the recordname. Since weapon records seem to mostly live under"
-                  " 'records/items/gearweapons', this will effectively return all weapons in the"
-                  " game."
-                  ""
-                  "Example 2:"
-                  " q recordname~weapons value~legendary"
-                  ""
-                  " In addition to matching against all weapons, as we saw in example 1, the added"
-                  " 'value~legendary' condition will narrow the list down to only records where"
-                  " some field contains the string 'legendary'."
-                  ""
-                  "Example 3:"
-                  " q recordname~weapons value~legendary levelreq < 50"
-                  ""
-                  " The new clause 'levelreq < 50' means that we're looking for records"
-                  " with a fieldname that partially matches 'levelreq' and where the value"
-                  " of that field is '< 50'"
-                  ""
-                  "Example 4:"
-                  " q recordname~weapons/blunt1h order offensivePhysicalMax"
-                  ""
-                  " Normally, the returned results are ordered by their recordname. However, you"
-                  " can ask the editor to order the results by any field you'd like ."
-                  ])]
-
-   ["qshow" "Show the next page in the query result"]
-   ["qn"    "Alias for qshow"]
-
-   ["db"    "Explore the database interactively"
-    (string/join "\n"
-                 ["Syntax: db <partially matched path>"
-                  ""
-                  "The query command helps locate exact db records if you know what you're"
-                  "looking for. But if you don't know what's in the db to begin with, it will"
-                  "be difficult to come up with a useful query."
-                  ""
-                  "This command lets you explore the db interactively instead of querying"
-                  "against it."
-                  ""
-                  "Try the following commands:"
-                  " db"
-                  " db record/items"
-                  " db r/item/weapons/melee/d011_blunt2h.dbr"
-                  ""
-                  "If supplied with a path that indicates a 'directory', the results will show you"
-                  "all items residing in that directory. If the supplied path indicates a db record"
-                  "it will show you the contents of that record."
-                  ""
-                  "Lastly, each 'component' in the path can be partially matched, so you don't have"
-                  "to enter the exact path all the time. It works as long as you supply enough of"
-                  "the component to uniquely identify a directory or record."
-                  ])]
-
-   ["show"  "Explore the save file data"
-    (string/join "\n"
-                 ["Syntax: show <partially matched path>"
-                  ""
-                  "This command is used to examine variables in the loaded character save file."
-                  ""
-                  "Example 1:"
-                  " show"
-                  ""
-                  " This shows a top level overview of all fields in the save file."
-                  ""
-                  "Example 2:"
-                  " show level"
-                  ""
-                  " This filters for fields that contains the world 'level'"
-                  ""
-                  "Example 3:"
-                  " show equipment"
-                  ""
-                  " If the filter narrows down matches to a single item, the contents of that"
-                  " item is displayed. In this case, the editor will show you all the contents"
-                  " of items you currently have equipped."
-                  ""
-                  "Example 4:"
-                  " show equipment/0"
-                  ""
-                  " The 'equipment' field is a collection of 12 items. This command says to show"
-                  " only the first item. When display an item, the editor will show the full name"
-                  " of the item as well as any related db records."
-                  ])]
-
-   ["set"   "Set fields in the save file"
-    (string/join "\n"
-                 ["Syntax: set <partially matched path to field> <new value>"
-                  ""
-                  "This command is used to alter field values in the loaded character save file."
-                  "Any fields that can be found using the 'show' command can be altered this way."
-                  ""
-                  "Example 1:"
-                  " set character-level 64"
-                  ""
-                  " This sets the character level to 64."
-                  ""
-                  "Example 2:"
-                  " set stash-items/0/stack-count 100"
-                  ""
-                  " Set the first item in your stash to a stack of 100."
-                  ""
-                  "Example 3:"
-                  " set weaponsets/0/items/0 \"legion warhammer of valor\""
-                  ""
-                  " Usually, the set command just puts the specified new value into the field"
-                  " specified by the partial path. So it's possible to change an item's basename,"
-                  " prefix, suffix, or any other field directly."
-                  ""
-                  " However, in the case of dealing with an item, it's actually very painful to"
-                  " query for the record to use as a basename, then repeat for the prefix and the"
-                  " suffix. So in the case where the partial path points at an item, it's possible"
-                  " to just supply the name of the item you want. The editor will try its best to"
-                  " figure the right combination of basename, prefix, and suffix. It also takes"
-                  " into consideration of the character that has currently been loaded."
-                  " "
-                  ])]
-
-   ["load"  "Load from a save file"]
-   ["write" "Writes out the character that is currently loaded"
-    (string/join "\n"
-                 ["Syntax: write"
-                  ""
-                  "Writes out the currently loaded character."
-                  ""
-                  "Syntax: write <new-character-name>"
-                  ""
-                  "Makes a copy of the currently loaded character."])]
-   ["class" "Displays the classes/masteries of the loaded character"]
-   ["class list" "Display classes/masteries known ot the editor"]
-   ["class add" "Add a class/mastery by name"]
-   ["class remove" "Remove a class/mastery by name"]
-   ["savedir" "Sets the save game directory to a path"
-    (string/join "\n"
-                 ["Syntax: savedir <full path to save game directory>"])]
-   ["savedir clear" "Removes the previous set game directory"]
-   ["gamedir" "Sets the game installation directory to a path"
-    (string/join "\n"
-                 ["Syntax: gamedir <full path to save game installation directory>"])]
-   ["gamedir clear" "Removes the previously set game installation directory"]
-   ["mod" "Displays the mod currently selected"]
-   ["mod pick" "Picks an installed mod to activate"]
-   ["mod clear" "Unselect the currently selected mod"]
-   ["level" "Set the level of the loaded character to a new value"
-    (string/join "\n"
-                 ["Syntax: level <new level>"
-                  ""
-                  "This command can level the character both up and down and will update the following fields:"
-                  "- character level"
-                  "- attribute points"
-                  "- skill points"
-                  "- experience points"])]
-   ["respec" "Respecs the loaded character"
-    (string/join "\n"
-                 ["Syntax: respec <respec-type>"
-                  ""
-                  "Valid respec types:"
-                  " attributes - refund all attribute points spent"
-                  " skills - remove all masteries & skills and refund skill points spent"
-                  " devotions - remove all devotions and refund devotion points spent"
-                  " all - combination of all of the above"
-                  ])]
-   ["update" "Update to the latest version of gd-edit"]
-   ])
-
-(defn help-handler
-  [[input tokens]]
-
-  (cond
-    ;; If there are no other parameters,
-    ;; show the list of commands and a short help text.
-    (= 0 (count tokens))
-    (let [command-names (map #(first %1) command-help-map)
-          max-name-length (reduce (fn [max-length item]
-                                    (if (> (count item) max-length)
-                                      (count item)
-                                      max-length)
-                                    )
-                                  0 command-names)]
-      ;; Print the name of the command followed by the short help text
-      (doseq [help-item command-help-map]
-        (println (format (format "%%-%ds     %%s" max-name-length) (first help-item) (second help-item)))
-        )
-      (newline)
-      (println (string/join "\n"
-                            ["To more detailed help text on a command, run: "
-                             " help <command>"
-                             ""
-                             "Need more help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/"
-                             "   and"
-                             "https://odie.github.io/gd-edit-docs/commands/"
-                             ])))
-
-    :else
-    ;; If the user is looking for help text on a specific command,
-    ;; try to find the help text.
-    ;; Display the help text (or lack of one) as appropriate
-    (let [command (string/join " " tokens)
-          help-item (->> command-help-map
-                         (filter #(= command (first %1)))
-                         (first))]
-      (cond
-        (nil? help-item)
-        (println (format "Unknown command '%s'" command))
-
-        (> (count help-item) 2)
-        (println (nth help-item 2))
-
-        :else
-        (do
-          (println (format "%s\t%s" (first help-item) (second help-item)))
-          (println)
-          (println (format "Sorry, '%s' has no detailed help text." command)))
-        ))))
+  (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db)))
+  (intern 'gd-edit.globals 'db-and-index (future (build-db-and-index))))
 
 
 (defn- character-classes-with-index

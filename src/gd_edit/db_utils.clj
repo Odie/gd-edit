@@ -9,7 +9,7 @@
   (@globals/db-index recordname))
 
 (defn related-db-records
-  [record db]
+  [record db-and-index]
 
   (let [;; Collect all values in the record that look like a db record
         related-recordnames (->> record
@@ -21,7 +21,7 @@
                                          #{}))
 
         ;; Retrieve all related records by name
-        related-records (filter #(contains? related-recordnames (:recordname %1)) db)]
+        related-records (map #((:index db-and-index) %1) related-recordnames)]
 
     related-records))
 
@@ -58,12 +58,12 @@
     true))
 
 (defn item-name
-  [item db]
+  [item db-and-index]
 
   (if-not (is-valid-item? item)
     nil
 
-    (let [related-records (related-db-records item db)
+    (let [related-records (related-db-records item db-and-index)
           base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
                           (first))
 
@@ -121,7 +121,8 @@
   [coll]
 
   (and (associative? coll)
-       (contains? coll :skill-name)))
+       (contains? coll :skill-name)
+       (not (contains? coll :item-equip-location))))
 
 (defn is-faction?
   [coll]
@@ -133,9 +134,15 @@
   [skill]
 
   (let [record (-> (:skill-name skill)
-                   (record-by-name))]
-    (or (record "FileDescription")
-        (record "skillDisplayName"))))
+                   (record-by-name))
+        record-display-name (fn [record]
+                              (or (record "skillDisplayName")
+                                  (record "FileDescription")))]
+    (if-let [display-name (record-display-name record)]
+      display-name
+
+      (when (get record "buffSkillName")
+        (record-display-name (record-by-name (get record "buffSkillName")))))))
 
 (defn- faction-name-from-loc-table
   [loc-table faction-index]
@@ -161,3 +168,31 @@
 
   (and (str/starts-with? (:basename item) "records/items/materia/")
        (= ((record-by-name (:basename item)) "Class") "ItemRelic")))
+
+(defn get-type
+  "Given a map in the character sheet, what type of thing does it look like?"
+  [obj]
+
+  (cond
+    (is-item? obj) :item
+    (is-skill? obj) :skill
+    (is-faction? obj) :faction
+
+    :else
+    nil))
+
+(defn get-name
+  [obj path]
+
+  (cond
+    (is-item? obj)
+    (item-name obj @globals/db-and-index)
+
+    (is-skill? obj)
+    (skill-name obj)
+
+    (is-faction? obj)
+    (faction-name (last path))
+
+    :else
+    nil))

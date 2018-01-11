@@ -13,6 +13,8 @@
              [utils :as utils]
              [self-update :as su]]
             [gd-edit.commands.item]
+            [gd-edit.commands.find]
+            [gd-edit.commands.help]
             [gd-edit.commands.diag]
             [jansi-clj.core :refer :all]
             [gd-edit.utils :as u]
@@ -20,12 +22,9 @@
             [progress.file :as progress]
             [clojure.string :as str]
             [taoensso.timbre :as t]
-            [taoensso.timbre.appenders.core :as appenders])
-  (:import java.nio.ByteBuffer
-           java.nio.channels.FileChannel
-           java.lang.ProcessBuilder
-           [java.nio.file Files FileSystems Path Paths StandardOpenOption]
-           [java.time Instant ZonedDateTime ZoneId]
+            [taoensso.timbre.appenders.core :as appenders]
+            [clojure.tools.cli :refer [parse-opts]])
+  (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
 
 (defn- strip-quotes
@@ -39,6 +38,7 @@
   [input
    (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
         (map strip-quotes))])
+
 
 (defn- repl-read
   []
@@ -60,27 +60,28 @@
    ["db"]    (fn [input] (handlers/db-show-handler input))
    ["db" "show"] (fn [input] (handlers/db-show-handler input))
    ["show"]  (fn [input] (handlers/show-handler input))
+   ["ls"]    (fn [input] (handlers/show-handler input))
    ["set"]   (fn [input] (handlers/set-handler input))
+   ["find"]  (fn [input] (gd-edit.commands.find/find-handler input))
    ["load"]  (fn [input] (handlers/choose-character-handler input))
    ["write"] (fn [input] (handlers/write-handler input))
    ["class"] (fn [input] (handlers/class-handler input))
    ["class" "list"] (fn [input] (handlers/class-list-handler input))
-   ["class" "add"] (fn [input] (handlers/class-add-handler input))
-   ["class" "remove"] (fn [input] (handlers/class-remove-handler input))
+   ["class" "add"]  (fn [input] (handlers/class-add-handler input))
+   ["class" "remove"]  (fn [input] (handlers/class-remove-handler input))
    ["gamedir"] (fn [input] (handlers/gamedir-handler input))
    ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
    ["savedir"] (fn [input] (handlers/savedir-handler input))
    ["savedir" "clear"] (fn [input] (handlers/savedir-clear-handler input))
-   ["mod"] (fn [input] (handlers/mod-handler input))
-   ["mod" "pick"] (fn [input] (handlers/mod-pick-handler input))
+   ["mod"]     (fn [input] (handlers/mod-handler input))
+   ["mod" "pick"]  (fn [input] (handlers/mod-pick-handler input))
    ["mod" "clear"] (fn [input] (handlers/mod-clear-handler input))
-   ["level"] (fn [input] (handlers/level-handler input))
-   ["respec"] (fn [input] (handlers/respec-handler input))
-   ["log"] (fn [input] (handlers/log-handler input))
-   ["update"] (fn [input] (handlers/update-handler input))
-   ["help"] (fn [input] (handlers/help-handler input))
-   ["diag"] (fn [input] (gd-edit.commands.diag/diag-handler input))
-   })
+   ["level"]   (fn [input] (handlers/level-handler input))
+   ["respec"]  (fn [input] (handlers/respec-handler input))
+   ["log"]     (fn [input] (handlers/log-handler input))
+   ["update"]  (fn [input] (handlers/update-handler input))
+   ["help"]    (fn [input] (gd-edit.commands.help/help-handler input))
+   ["diag"]    (fn [input] (gd-edit.commands.diag/diag-handler input))})
 
 (defn- find-command
   "Try to find the \"longest\" command match"
@@ -153,39 +154,40 @@
   (u/log-exp input)
   (u/log-exp tokens)
 
-  ;; Try to find the "longest" command match
-  ;; Basically, we're trying to find the most specific match.
-  ;; This means we can put command handlers like "q" and "q show"
-  ;; directly in the command map and figure out which one should be
-  ;; called
-  (let [menu-cmd (find-menu-command (first tokens) (last @globals/menu-stack))
-        menu-handler (if-not (nil? menu-cmd)
-                       (nth menu-cmd 2)
-                       nil)
+  (when-not (empty? (str/trim input))
+    ;; Try to find the "longest" command match
+    ;; Basically, we're trying to find the most specific match.
+    ;; This means we can put command handlers like "q" and "q show"
+    ;; directly in the command map and figure out which one should be
+    ;; called
+    (let [menu-cmd (find-menu-command (first tokens) (last @globals/menu-stack))
+          menu-handler (if-not (nil? menu-cmd)
+                         (nth menu-cmd 2)
+                         nil)
 
-        command (find-command tokens command-map)
-        _ (newline)
-        command-handler (command-map command)]
+          command (find-command tokens command-map)
+          _ (newline)
+          command-handler (command-map command)]
 
-    (cond
-      ;; if the entered command matches a menu item, run the handler function
-      (not (nil? menu-handler))
-      (menu-handler)
+      (cond
+        ;; if the entered command matches a menu item, run the handler function
+        (not (nil? menu-handler))
+        (menu-handler)
 
-      ;; Otherwise, if the tokens can match something in the global command map,
-      ;; run that.
-      ;;
-      ;; Remove the tokens that represent the command itself
-      ;; They shouldn't be passed to the command handlers
-      (not (nil? command-handler))
-      (let [param-tokens (drop (count command) tokens)
-            command-input-string (string/trim (subs input (->> command
-                                                               (string/join " ")
-                                                               (count))))]
-        (command-handler [command-input-string param-tokens]))
+        ;; Otherwise, if the tokens can match something in the global command map,
+        ;; run that.
+        ;;
+        ;; Remove the tokens that represent the command itself
+        ;; They shouldn't be passed to the command handlers
+        (not (nil? command-handler))
+        (let [param-tokens (drop (count command) tokens)
+              command-input-string (string/trim (subs input (->> command
+                                                                 (string/join " ")
+                                                                 (count))))]
+          (command-handler [command-input-string param-tokens]))
 
-      :else
-      (println "Don't know how to handle this command"))))
+        :else
+        (println "Don't know how to handle this command")))))
 
 (defn- repl-print-notification
   [chan]
@@ -279,7 +281,7 @@
         (let [actual-dirs (reduce (fn [result item]
                                     (conj result (.getParent (io/file item))))
                                   #{}
-                                  [(-> (dirs/get-db-filepath)
+                                  [(-> (io/file (dirs/get-game-dir) dirs/database-file)
                                        (.getParent))])]
           (println "game directory:")
           (doseq [loc actual-dirs]
@@ -472,8 +474,8 @@
 
   (print-build-info)
   (println)
-  (log-build-info)
-  (log-environment)
+  (future (log-build-info))
+  (future (log-environment))
 
   ;; Run sanity checks and print any error messages
   (startup-sanity-checks)
@@ -482,7 +484,10 @@
   (handlers/load-db-in-background)
 
   ;; Setup the first screen in the program
-  (handlers/character-selection-screen!)
+  ;; based on if a character has already been loaded
+  (if (zero? (count @globals/character))
+    (handlers/character-selection-screen!)
+    (handlers/character-manipulation-screen!))
 
   ;; Remove any left over restart scripts from last time we ran "update"
   (su/cleanup-restart-script))
@@ -495,26 +500,51 @@
   (clojure.pprint/pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
   (newline))
 
+
+(defn start-editor
+  []
+
+  (initialize)
+  (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
+
+  (thread (notify-repl-if-latest-version-available))
+
+  (repl))
+
+(def cli-options
+  [["-f" "--file SAVE_FILE_PATH" "Save file to load on start"
+    :parse-fn #(str/trim %)
+    :validate [#(.exists (io/as-file %))
+               "The specified save file doesn't exist."]]
+   ["-h" "--help" "Show this help text"]])
+
 (defn -main
   [& args]
 
   (u/log-exceptions
 
-    (init-jansi)
+   (init-jansi)
 
-    (initialize)
-    (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
+   (let [{:keys [options summary]} (parse-opts args cli-options)]
+     (do
+       ;; Handle all the commandline params
+       (cond
+         (:help options) (do
+                           (println "The valid options are:")
+                           (println summary)
+                           (System/exit 0))
+         (:file options) (gd-edit.command-handlers/load-character-file (:file options)))
 
-    (thread (notify-repl-if-latest-version-available))
-
-    (repl)))
+       ;; Start the editor
+       (start-editor)))))
 
 
 
 ;;===============================================================================
 (comment
 
-  (initialize)
+  (time
+   (gd-edit.core/initialize))
 
   (time (do
             (gd-edit.command-handlers/load-character-file

@@ -559,12 +559,12 @@
 
 (defn- collect-string-bind-targets
   [quest-file]
-  (u/collect-walk #(contains? #{:quest
-                                :quest-event
-                                :quest-objective
-                                :quest-task}
-                              (:static/type %))
-                  (:quest quest-file)))
+  (u/collect-walk-entire-tree #(contains? #{:quest
+                                            :quest-event
+                                            :quest-objective
+                                            :quest-task}
+                                          (:static/type %))
+                              (:quest quest-file)))
 
 (defn- get-string-table
   [quest-file locale-name]
@@ -653,23 +653,23 @@
 (defn locate-quest-tokens
   [quests]
 
-  (u/collect-walk #(and (= :give-token
-                           (:static/type %)))
-                  quests))
+  (u/collect-walk-entire-tree #(and (= :give-token
+                                       (:static/type %)))
+                              quests))
 
 (defn locate-quest-uids
   [quests]
-  (u/collect-walk #(and (map? %)
-                        (contains? % :uid))
-                  quests))
+  (u/collect-walk-entire-tree #(and (map? %)
+                                    (contains? % :uid))
+                              quests))
 
 (defn find-quest-for-token
   [quests token]
 
-  (u/collect-walk #(and (contains? #{:give-token}
+  (u/collect-walk-entire-tree #(and (contains? #{:give-token}
 
-                           (:static/type %)))
-                  quests))
+                                               (:static/type %)))
+                              quests))
 
 (defn get-quest-by-uid
   [quest-uid-index uid]
@@ -716,7 +716,7 @@
                                                         )))))
 
   (def z
-    (u/collect-walk #(= :give-token (:static/type %)) s))
+    (u/collect-walk-entire-tree #(= :give-token (:static/type %)) s))
 
 
   (->> s
