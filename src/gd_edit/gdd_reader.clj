@@ -127,17 +127,9 @@
    :version :int32
    :quests (s/variable-count Quest)))
 
-
-(def ^:private current-ns 'gd-edit.gdd-reader)
-
-(def ^:private get-block-spec
-  (partial gdc/get-block-spec-by-ns current-ns))
-
-(def ^:private get-block-read-fn
-  (partial gdc/get-block-read-fn-by-ns current-ns))
-
-(def ^:private get-block-write-fn
-  (partial gdc/get-block-write-fn-by-ns current-ns))
+(def block-specs
+  {10 Block10
+   11 Block11})
 
 (defn- validate-preamble
   [preamble]
@@ -184,26 +176,20 @@
          _ (swap! context update-in [:block-stack] conj block-header)
 
          ;; Figure out how we can read the block
-         block-spec-or-read-fn (or (get block-spec-overrides id)
-                                   (get-block-read-fn id)
-                                   (get-block-spec id))
+         block-spec (get block-spec-overrides id)
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block
-         _ (if (nil? block-spec-or-read-fn)
+         _ (if (nil? block-spec)
              (throw (Throwable. (str"Don't know how to read block " id))))
 
          ;; Try to read the block
          ;; If a custom read function was provided, use that
          ;; Otherwise, try to read using a block spec
-         block-data (cond
-                      (fn? block-spec-or-read-fn)
-                      (block-spec-or-read-fn bb context)
-                      :else
-                      (s/read-struct block-spec-or-read-fn bb context {}))
+         block-data (s/read-struct block-spec bb context {})
 
          ;; Verify that this is a block version we understand
-         _ (if-let [known-versions (:known-versions (meta block-spec-or-read-fn))]
+         _ (if-let [known-versions (:known-versions (meta block-spec))]
              (assert (contains? known-versions (:version block-data))))
          ]
 
@@ -237,7 +223,7 @@
                           (if (= (.remaining bb) 0)
                             (persistent! block-list)
 
-                            (recur (conj! block-list (read-block bb enc-context)))))
+                            (recur (conj! block-list (read-block bb enc-context block-specs)))))
 
                         ;; Append the header block when we're done reading
                         (into []))
@@ -282,7 +268,7 @@
 
     (doseq [block (->> updated-block-list
                        (filter #(not= (:meta-block-id %1) :header)))]
-      (gdc/write-block bb block enc-context))
+      (gdc/write-block bb block enc-context block-specs))
 
     (.flip bb)
 
@@ -302,11 +288,5 @@
     (if (= (u/md5-file src) (u/md5-file dst))
       "Success!"
       "Nope, try again!"))
-
-  (def quest-progress
-    (load-quest-file (u/expand-home"~/Dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")))
-
-  (def t
-    (load-quest-file (u/expand-home "~/Dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")))
 
  )

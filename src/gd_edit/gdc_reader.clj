@@ -1000,7 +1000,7 @@
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to write this block
          _ (if (nil? block-spec)
-             (throw (Throwable. "Don't know how to write block " meta-block-id)))
+             (throw (Throwable. (str "Don't know how to write block: " meta-block-id))))
 
          ;; Write the id of the block
          _ (write-int! bb meta-block-id context)
