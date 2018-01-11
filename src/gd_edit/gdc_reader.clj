@@ -887,7 +887,7 @@
 (defn validate-preamble
   [preamble]
 
-  (if (or (not= (:magic preamble) 0x58434447)
+  (if (or (not= (:magic preamble) (u/file-magic "GDCX"))
           ;; (not= (:version preamble) 2)
           ;; (not= (:minor-version preamble) 4)
           )

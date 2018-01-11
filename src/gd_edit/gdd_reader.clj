@@ -134,7 +134,7 @@
 (defn- validate-preamble
   [preamble]
 
-  (if (or (not= (:magic preamble) 0x58545351)
+  (if (or (not= (:magic preamble) (u/file-magic "QSTX"))
           (not= (:version preamble) 0))
     (throw (Throwable. "I don't understand this gdd format!"))))
 
