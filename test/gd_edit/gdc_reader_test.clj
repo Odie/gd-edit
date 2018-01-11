@@ -11,6 +11,7 @@
 ;;------------------------------------------------------------------------------
 ;; Try loading some test save files
 ;;------------------------------------------------------------------------------
+
 (doseq [save-file (->> (io/resource "save-files")
                        (io/file)
                        (file-seq)
@@ -18,6 +19,7 @@
 
   ;;----------------------------------------------------------------------------
   ;; Basic sanity checks
+  ;;
   ;; This gives some degree of confidence that reading is working
   ;;----------------------------------------------------------------------------
   (let [character (load-character-file save-file)]
@@ -27,23 +29,20 @@
           => true)
 
     (fact "Loaded character should have a name"
-     (string? (:character-name character))
-     => true))
+          (string? (:character-name character))
+          => true)
 
+    ;;--------------------------------------------------------------------------
+    ;; Verify reading & writing produces the same content
+    ;;
+    ;; This should indicate both the reading and writing code is working
+    ;; correctly.
+    ;;--------------------------------------------------------------------------
+    (let [src save-file
+          dst (java.io.File/createTempFile "character" ".gdc")]
 
-  ;;----------------------------------------------------------------------------
-  ;; Verify reading & writing produces the same content
-  ;;
-  ;; This should indicate both the reading and writing code is working
-  ;; correctly.
-  ;;----------------------------------------------------------------------------
-  (let [src save-file
-        dst (java.io.File/createTempFile "character" ".gdc")
+      (write-character-file character dst)
 
-        character (load-character-file src)]
-
-    (write-character-file character dst)
-
-    (fact "Loading and writing file should produce identical content"
+      (fact "Loading and writing file should produce identical content"
             (= (u/md5-file src) (u/md5-file dst))
-            => true)))
+            => true))))

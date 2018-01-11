@@ -115,8 +115,6 @@
    :unused :bool
    :inventory-items (s/variable-count InventoryItem)))
 
-(def Block0 InventorySack)
-
 
 (defn read-block3
   [^ByteBuffer bb context]
@@ -128,7 +126,7 @@
         selected-sack (read-int! bb context)
 
         inventory-sacks (reduce (fn  [accum _]
-                                  (conj accum (read-block bb context)))
+                                  (conj accum (read-block bb context {0 InventorySack})))
                          []
                          (range sack-count))
 
@@ -161,8 +159,7 @@
      :weapon-sets       [{:unused alternate1
                           :items alternate1-set}
                          {:unused alternate2
-                          :items alternate2-set}]
-     }))
+                          :items alternate2-set}]}))
 
 (defn write-block3
   [^ByteBuffer bb block context]
@@ -175,7 +172,7 @@
 
   (assert (= (:sack-count block) (count (:inventory-sacks block))))
   (doseq [sack (:inventory-sacks block)]
-    (write-block bb sack context))
+    (write-block bb sack context {0 InventorySack}))
 
   (write-bool! bb (:use-alt-weaponset block) context)
 
@@ -196,21 +193,22 @@
 
 ;; For reference only
 (def Block3
-  (s/ordered-map
-   :version           :int32
-   :has-data          :bool
-   :sack-count        :int32
-   :focused-sack      :int32
-   :selected-sack     :int32
-   :inventory-sacks   :ignore
-   :use-alt-weaponset :bool
-   :equipment         :ignore
-   :weapon-sets       (s/ordered-map
-                       :unused :bool
-                       :items (s/variable-count EquipmentItem
-                                                :length 2))
-   {:struct/read read-block3
-    :struct/write write-block3}))
+  (with-meta
+    (s/ordered-map
+     :version           :int32
+     :has-data          :bool
+     :sack-count        :int32
+     :focused-sack      :int32
+     :selected-sack     :int32
+     :inventory-sacks   :ignore
+     :use-alt-weaponset :bool
+     :equipment         :ignore
+     :weapon-sets       (s/ordered-map
+                         :unused :bool
+                         :items (s/variable-count EquipmentItem
+                                                  :length 2)))
+    {:struct/read read-block3
+     :struct/write write-block3}))
 
 
 (def Stash
@@ -244,8 +242,10 @@
     (write-block bb stash context {0 Stash})))
 
 (def Block4
-  {:struct/read read-block4
-   :struct/write write-block4})
+  (with-meta
+    (s/ordered-map)
+    {:struct/read read-block4
+     :struct/write write-block4}))
 
 (def UID
   (s/string :bytes :length 16))
@@ -899,6 +899,7 @@
   [ns id]
 
   (when-let [block-spec-var (ns-resolve ns (symbol (str "Block" id)))]
+    (println "block-spec fetched, id:" id)
     (var-get block-spec-var)))
 
 (defn get-block-read-fn-by-ns
@@ -908,7 +909,9 @@
   (let [block-read-fn-var (ns-resolve ns (symbol (str "read-block" id)))]
 
     (if-not (nil? block-read-fn-var)
-      (var-get block-read-fn-var)
+      (do
+        (println "read-fn fetched, id:" id)
+        (var-get block-read-fn-var))
       nil)))
 
 (defn get-block-write-fn-by-ns
@@ -921,16 +924,26 @@
       (var-get block-write-fn-var)
       nil)))
 
-(def ^:private current-ns 'gd-edit.gdc-reader)
+(defn get-block-spec
+  [block-specs id]
+  ;; This function doesn't do a lot. It's just a place to insert some debugging
+  ;; info when needed.
+  (get block-specs id))
 
-(def ^:private get-block-spec
-  (partial get-block-spec-by-ns current-ns))
+(def block-specs
+  "A map containing block id => block structure def.
 
-(def ^:private get-block-read-fn
-  (partial get-block-read-fn-by-ns current-ns))
+  Note that we're depending some magic/convention here.
+  We're expecting there is a var in this namespace named 'BlockX' where
+  X is an integer id of the block.
 
-(def ^:private get-block-write-fn
-  (partial get-block-write-fn-by-ns current-ns))
+  This allows us to repeat less of ourselves. We're also less likely to
+  make a typo in the mapping and end up debugging things for a hour."
+
+  (into {}
+        (for [id [1 2 3 4 5 6 7 8 10 12 13 14 15 16 17]]
+          (when-let [block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))]
+            [id (var-get block-spec-var)]))))
 
 (defn read-block-header
   [^ByteBuffer bb context]
@@ -942,7 +955,7 @@
   ([^ByteBuffer bb context]
    (read-block bb context nil))
 
-  ([^ByteBuffer bb context block-spec-overrides]
+  ([^ByteBuffer bb context block-specs]
 
    (let [;; Read the block id
          id (read-int! bb context)
@@ -952,23 +965,17 @@
          expected-end-position (+ (.position bb) length)
 
          ;; Figure out how we can read the block
-         block-spec-or-read-fn (or (get block-spec-overrides id)
-                                   (get-block-read-fn id)
-                                   (get-block-spec id))
+         block-spec-or-read-fn (get-block-spec block-specs id)
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block
-         _ (if (nil? block-spec-or-read-fn)
+         _ (when (nil? block-spec-or-read-fn)
              (throw (Throwable. (str"Don't know how to read block " id))))
 
          ;; Try to read the block
          ;; If a custom read function was provided, use that
          ;; Otherwise, try to read using a block spec
-         block-data (cond
-                      (fn? block-spec-or-read-fn)
-                      (block-spec-or-read-fn bb context)
-                      :else
-                      (s/read-struct block-spec-or-read-fn bb context))
+         block-data (s/read-struct block-spec-or-read-fn bb context)
 
          ;; Verify we've reached the expected position
          _ (assert (= expected-end-position (.position bb)))
@@ -984,17 +991,15 @@
   ([^ByteBuffer bb block context]
    (write-block bb block context nil))
 
-  ([^ByteBuffer bb block context block-spec-overrides]
+  ([^ByteBuffer bb block context block-specs]
    {:pre [(not (nil? block))]}
 
    (let [{:keys [meta-block-id]} block
-         block-spec-or-write-fn (or (get block-spec-overrides meta-block-id)
-                                    (get-block-write-fn meta-block-id)
-                                    (get-block-spec meta-block-id))
+         block-spec (get-block-spec block-specs meta-block-id)
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to write this block
-         _ (if (nil? block-spec-or-write-fn)
+         _ (if (nil? block-spec)
              (throw (Throwable. "Don't know how to write block " meta-block-id)))
 
          ;; Write the id of the block
@@ -1007,11 +1012,7 @@
          _ (.putInt bb 0)
 
          ;; Write the block using either a custom write function or the block spec
-         _ (cond
-             (fn? block-spec-or-write-fn)
-             (block-spec-or-write-fn bb block context)
-             :else
-             (s/write-struct block-spec-or-write-fn bb block context))
+         _ (s/write-struct block-spec bb block context)
 
          ;; Write out the real length of the block
          block-end-pos (.position bb)
@@ -1067,7 +1068,7 @@
                           (if (= (.remaining bb) 0)
                             (persistent! block-list)
 
-                            (recur (conj! block-list (read-block bb enc-context)))))
+                            (recur (conj! block-list (read-block bb enc-context block-specs)))))
 
                         ;; Append the header block when we're done reading
                         (into [header]))
@@ -1164,7 +1165,7 @@
 
     (doseq [block (->> updated-block-list
                        (filter #(not= (:meta-block-id %1) :header)))]
-      (write-block bb block enc-context))
+      (write-block bb block enc-context block-specs))
 
     (.flip bb)
 
