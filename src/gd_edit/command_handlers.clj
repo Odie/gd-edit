@@ -796,7 +796,11 @@
 
   (reset! globals/character
           (gdc/load-character-file savepath))
-  (reset! globals/last-loaded-character @globals/character))
+  (reset! globals/last-loaded-character @globals/character)
+
+
+
+  )
 
 (defn- write-character-file-after-backup
   [character]

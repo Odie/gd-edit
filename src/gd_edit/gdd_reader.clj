@@ -128,6 +128,17 @@
    :quests (s/variable-count Quest)))
 
 
+(def ^:private current-ns 'gd-edit.gdd-reader)
+
+(def ^:private get-block-spec
+  (partial gdc/get-block-spec-by-ns current-ns))
+
+(def ^:private get-block-read-fn
+  (partial gdc/get-block-read-fn-by-ns current-ns))
+
+(def ^:private get-block-write-fn
+  (partial gdc/get-block-write-fn-by-ns current-ns))
+
 (defn- validate-preamble
   [preamble]
 
@@ -174,8 +185,8 @@
 
          ;; Figure out how we can read the block
          block-spec-or-read-fn (or (get block-spec-overrides id)
-                                   (gdc/get-block-read-fn id)
-                                   (gdc/get-block-spec id))
+                                   (get-block-read-fn id)
+                                   (get-block-spec id))
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block
@@ -295,6 +306,7 @@
   (def quest-progress
     (load-quest-file (u/expand-home"~/Dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")))
 
-  (:tokens t)
+  (def t
+    (load-quest-file (u/expand-home "~/Dropbox/Public/GrimDawn/main2/_Odie/levels_world001.map/Normal/quests.gdd")))
 
  )

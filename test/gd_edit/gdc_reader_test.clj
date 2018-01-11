@@ -4,6 +4,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [boot.core]
+
+            [gd-edit.utils :as u]
             ))
 
 ;;------------------------------------------------------------------------------
@@ -14,18 +16,34 @@
                        (file-seq)
                        (filter #(str/ends-with? % ".gdc")))]
 
-  (let [filename (-> save-file
-                     (.toPath)
-                     (.getFileName))
+  ;;----------------------------------------------------------------------------
+  ;; Basic sanity checks
+  ;; This gives some degree of confidence that reading is working
+  ;;----------------------------------------------------------------------------
+  (let [character (load-character-file save-file)]
 
-        character (load-character-file save-file)
-        ]
-
-    (fact (format "Loading valid gdc file should return a map: \"%s\"" filename)
+    (fact (format "Loading valid gdc file should return a map: \"%s\"" save-file)
           (map? character)
           => true)
 
     (fact "Loaded character should have a name"
      (string? (:character-name character))
-     => true
-     )))
+     => true))
+
+
+  ;;----------------------------------------------------------------------------
+  ;; Verify reading & writing produces the same content
+  ;;
+  ;; This should indicate both the reading and writing code is working
+  ;; correctly.
+  ;;----------------------------------------------------------------------------
+  (let [src save-file
+        dst (java.io.File/createTempFile "character" ".gdc")
+
+        character (load-character-file src)]
+
+    (write-character-file character dst)
+
+    (fact "Loading and writing file should produce identical content"
+            (= (u/md5-file src) (u/md5-file dst))
+            => true)))

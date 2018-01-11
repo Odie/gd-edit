@@ -12,6 +12,17 @@
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
+(def ^:private current-ns 'gd-edit.qst-reader)
+
+(def ^:private get-block-spec
+  (partial gdc/get-block-spec-by-ns current-ns))
+
+(def ^:private get-block-read-fn
+  (partial gdc/get-block-read-fn-by-ns current-ns))
+
+(def ^:private get-block-write-fn
+  (partial gdc/get-block-write-fn-by-ns current-ns))
+
 ;;------------------------------------------------------------------------------
 ;; Quest File format defs
 ;;------------------------------------------------------------------------------
@@ -565,8 +576,8 @@
 
          ;; Figure out how we can read the block
          block-spec-or-read-fn (or (get block-spec-overrides id)
-                                   (gdc/get-block-read-fn id)
-                                   (gdc/get-block-spec id))
+                                   (get-block-read-fn id)
+                                   (get-block-spec id))
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block

@@ -36,8 +36,7 @@
                           (fn [data]
                             (cond
                               (= (:version data) 1) nil
-                              :else :byte)))
-   ))
+                              :else :byte)))))
 
 (def Block1
   (s/ordered-map
@@ -118,23 +117,6 @@
 
 (def Block0 InventorySack)
 
-;; For reference only
-(def Block3
-  (s/ordered-map
-   :version           :int32
-   :has-data          :bool
-   :sack-count        :int32
-   :focused-sack      :int32
-   :selected-sack     :int32
-   :inventory-sacks   :ignore
-   :use-alt-weaponset :bool
-   :equipment         :ignore
-   :weapon-sets       (s/ordered-map
-                       :unused :bool
-                       :items (s/variable-count EquipmentItem
-                                                :length 2))
-   ))
-
 
 (defn read-block3
   [^ByteBuffer bb context]
@@ -211,6 +193,26 @@
   (doseq [item (get-in block [:weapon-sets 1 :items])]
     (s/write-struct EquipmentItem bb item context)))
 
+
+;; For reference only
+(def Block3
+  (s/ordered-map
+   :version           :int32
+   :has-data          :bool
+   :sack-count        :int32
+   :focused-sack      :int32
+   :selected-sack     :int32
+   :inventory-sacks   :ignore
+   :use-alt-weaponset :bool
+   :equipment         :ignore
+   :weapon-sets       (s/ordered-map
+                       :unused :bool
+                       :items (s/variable-count EquipmentItem
+                                                :length 2))
+   {:struct/read read-block3
+    :struct/write write-block3}))
+
+
 (def Stash
   (s/ordered-map
    :width  :int32
@@ -240,6 +242,10 @@
 
   (doseq [stash (:stashes block)]
     (write-block bb stash context {0 Stash})))
+
+(def Block4
+  {:struct/read read-block4
+   :struct/write write-block4})
 
 (def UID
   (s/string :bytes :length 16))
@@ -888,34 +894,43 @@
     (throw (Throwable. "I don't understand this gdc format!"))))
 
 
-(defn get-block-spec
+(defn get-block-spec-by-ns
   "Retrieve a block spec by id number"
-  [id]
+  [ns id]
 
-  (let [block-spec-var (ns-resolve *ns* (symbol (str "Block" id)))]
-    (if-not (nil? block-spec-var)
-      (var-get block-spec-var)
-      nil)))
+  (when-let [block-spec-var (ns-resolve ns (symbol (str "Block" id)))]
+    (var-get block-spec-var)))
 
-(defn get-block-read-fn
+(defn get-block-read-fn-by-ns
   "Retrieve a read function for block by id number"
-  [id]
+  [ns id]
 
-  (let [block-read-fn-var (ns-resolve *ns* (symbol (str "read-block" id)))]
+  (let [block-read-fn-var (ns-resolve ns (symbol (str "read-block" id)))]
 
     (if-not (nil? block-read-fn-var)
       (var-get block-read-fn-var)
       nil)))
 
-(defn get-block-write-fn
+(defn get-block-write-fn-by-ns
   "Retrieve a read function for block by id number"
-  [id]
+  [ns id]
 
-  (let [block-write-fn-var (ns-resolve *ns* (symbol (str "write-block" id)))]
+  (let [block-write-fn-var (ns-resolve ns (symbol (str "write-block" id)))]
 
     (if-not (nil? block-write-fn-var)
       (var-get block-write-fn-var)
       nil)))
+
+(def ^:private current-ns 'gd-edit.gdc-reader)
+
+(def ^:private get-block-spec
+  (partial get-block-spec-by-ns current-ns))
+
+(def ^:private get-block-read-fn
+  (partial get-block-read-fn-by-ns current-ns))
+
+(def ^:private get-block-write-fn
+  (partial get-block-write-fn-by-ns current-ns))
 
 (defn read-block-header
   [^ByteBuffer bb context]
