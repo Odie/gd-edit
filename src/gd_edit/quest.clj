@@ -128,9 +128,14 @@
   (let [quest-progress (load-quest-files savepath)
         quest-defs (load-quest-defs)]
 
-    (specter/transform [specter/MAP-VALS]
-                       #(annotate-quest-progress % quest-defs)
-                       quest-progress)))
+    (->> quest-progress
+         ;; Annotate progress with names
+         (specter/transform [specter/MAP-VALS]
+                            #(annotate-quest-progress % quest-defs))
+
+         ;; Change difficulty names to lower case, just for presentation consistency
+         (specter/transform [specter/MAP-KEYS]
+                            str/lower-case))))
 
 (comment
  (def t
