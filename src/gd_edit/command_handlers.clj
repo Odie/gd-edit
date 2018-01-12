@@ -8,13 +8,15 @@
              [db-query :as query]
              [game-dirs :as dirs]
              [gdc-reader :as gdc]
+             [gdd-reader :as gdd]
              [globals :as globals]
              [utils :as u]
              [self-update :as su]
              [equation-eval :as eq]
              [stack :as stack]
              [structure-walk :as sw]
-             [db-utils :as dbu]]
+             [db-utils :as dbu]
+             [quest :as quest]]
             [gd-edit.commands.item :as item-commands]
             [jansi-clj.core :refer :all]
 
@@ -759,12 +761,17 @@
       [(.renameTo f (io/file backup-path)) backup-path]
       [:nothing-to-backup backup-path])))
 
+
 (defn load-character-file
   [savepath]
 
   (reset! globals/character
           (gdc/load-character-file savepath))
-  (reset! globals/last-loaded-character @globals/character))
+  (reset! globals/last-loaded-character @globals/character)
+
+  (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
+            (swap! globals/character assoc :quest quest-progress))))
+
 
 (defn- write-character-file-after-backup
   [character]

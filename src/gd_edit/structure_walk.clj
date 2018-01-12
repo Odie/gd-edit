@@ -26,7 +26,7 @@
   (cond
     ;; If we're looking at a sequential collection, try to interpret key as an index
     (sequential? coll)
-    (get coll (coerce-to-int key))
+    (nth coll (coerce-to-int key))
 
     (associative? coll)
     (get coll key)

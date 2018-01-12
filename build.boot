@@ -22,7 +22,7 @@
                             [org.clojure/data.json "0.2.6" :scope "test"]
                             [digest "1.4.5" :scope "test"]
                             [me.raynes/fs "1.4.6"]
-                            [midje "1.9.0-alpha6" :scope "test"]
+                            [midje "1.9.1" :scope "test"]
                             [zilti/boot-midje "0.2.2-SNAPSHOT" :scope "test"]
                             [clj-http "2.3.0"]
                             [com.taoensso/timbre "4.8.0"]
@@ -42,8 +42,7 @@
          '[boot.util :as u]
          '[digest]
          '[me.raynes.fs :as fs]
-         '[zilti.boot-midje :refer [midje]]
-         )
+         '[zilti.boot-midje :refer [midje]])
 
 (import com.dropbox.core.DbxRequestConfig
         com.dropbox.core.v2.DbxClientV2
@@ -69,8 +68,7 @@
       :main      'gd_edit.core
       :version   "0.1.0"
       :desc      "GrimDawn save game editor"
-      :copyright "2016"}
- )
+      :copyright "2016"})
 
 ;;------------------------------------------------------------------------------
 ;;
@@ -137,10 +135,7 @@
 (defn add-test-resources!
   []
 
-  (set-env! :resource-paths (fn [oldval]
-                              (if (contains? oldval "test-resources")
-                                oldval
-                                (conj oldval "test-resources")))))
+  (set-env! :resource-paths #(conj % "test-resources")))
 
 (deftask test
   []

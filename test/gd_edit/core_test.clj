@@ -26,5 +26,4 @@
 
   (fact "commands must start with a base command then go on with subcommands"
    (#'gd-edit.core/find-command ["command3" "sub-command"] command-map)
-   => ["command3" "sub-command"])
-  )
+   => ["command3" "sub-command"]))

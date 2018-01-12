@@ -36,8 +36,7 @@
                           (fn [data]
                             (cond
                               (= (:version data) 1) nil
-                              :else :byte)))
-   ))
+                              :else :byte)))))
 
 (def Block1
   (s/ordered-map
@@ -116,25 +115,6 @@
    :unused :bool
    :inventory-items (s/variable-count InventoryItem)))
 
-(def Block0 InventorySack)
-
-;; For reference only
-(def Block3
-  (s/ordered-map
-   :version           :int32
-   :has-data          :bool
-   :sack-count        :int32
-   :focused-sack      :int32
-   :selected-sack     :int32
-   :inventory-sacks   :ignore
-   :use-alt-weaponset :bool
-   :equipment         :ignore
-   :weapon-sets       (s/ordered-map
-                       :unused :bool
-                       :items (s/variable-count EquipmentItem
-                                                :length 2))
-   ))
-
 
 (defn read-block3
   [^ByteBuffer bb context]
@@ -146,7 +126,7 @@
         selected-sack (read-int! bb context)
 
         inventory-sacks (reduce (fn  [accum _]
-                                  (conj accum (read-block bb context)))
+                                  (conj accum (read-block bb context {0 InventorySack})))
                          []
                          (range sack-count))
 
@@ -179,8 +159,7 @@
      :weapon-sets       [{:unused alternate1
                           :items alternate1-set}
                          {:unused alternate2
-                          :items alternate2-set}]
-     }))
+                          :items alternate2-set}]}))
 
 (defn write-block3
   [^ByteBuffer bb block context]
@@ -193,7 +172,7 @@
 
   (assert (= (:sack-count block) (count (:inventory-sacks block))))
   (doseq [sack (:inventory-sacks block)]
-    (write-block bb sack context))
+    (write-block bb sack context {0 InventorySack}))
 
   (write-bool! bb (:use-alt-weaponset block) context)
 
@@ -210,6 +189,27 @@
   (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
   (doseq [item (get-in block [:weapon-sets 1 :items])]
     (s/write-struct EquipmentItem bb item context)))
+
+
+;; For reference only
+(def Block3
+  (with-meta
+    (s/ordered-map
+     :version           :int32
+     :has-data          :bool
+     :sack-count        :int32
+     :focused-sack      :int32
+     :selected-sack     :int32
+     :inventory-sacks   :ignore
+     :use-alt-weaponset :bool
+     :equipment         :ignore
+     :weapon-sets       (s/ordered-map
+                         :unused :bool
+                         :items (s/variable-count EquipmentItem
+                                                  :length 2)))
+    {:struct/read read-block3
+     :struct/write write-block3}))
+
 
 (def Stash
   (s/ordered-map
@@ -240,6 +240,12 @@
 
   (doseq [stash (:stashes block)]
     (write-block bb stash context {0 Stash})))
+
+(def Block4
+  (with-meta
+    (s/ordered-map)
+    {:struct/read read-block4
+     :struct/write write-block4}))
 
 (def UID
   (s/string :bytes :length 16))
@@ -881,41 +887,63 @@
 (defn validate-preamble
   [preamble]
 
-  (if (or (not= (:magic preamble) 0x58434447)
+  (if (or (not= (:magic preamble) (u/file-magic "GDCX"))
           ;; (not= (:version preamble) 2)
           ;; (not= (:minor-version preamble) 4)
           )
     (throw (Throwable. "I don't understand this gdc format!"))))
 
 
-(defn- get-block-spec
+(defn get-block-spec-by-ns
   "Retrieve a block spec by id number"
-  [id]
+  [ns id]
 
-  (let [block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))]
-    (if-not (nil? block-spec-var)
-      (var-get block-spec-var)
-      nil)))
+  (when-let [block-spec-var (ns-resolve ns (symbol (str "Block" id)))]
+    (println "block-spec fetched, id:" id)
+    (var-get block-spec-var)))
 
-(defn- get-block-read-fn
+(defn get-block-read-fn-by-ns
   "Retrieve a read function for block by id number"
-  [id]
+  [ns id]
 
-  (let [block-read-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "read-block" id)))]
+  (let [block-read-fn-var (ns-resolve ns (symbol (str "read-block" id)))]
 
     (if-not (nil? block-read-fn-var)
-      (var-get block-read-fn-var)
+      (do
+        (println "read-fn fetched, id:" id)
+        (var-get block-read-fn-var))
       nil)))
 
-(defn- get-block-write-fn
+(defn get-block-write-fn-by-ns
   "Retrieve a read function for block by id number"
-  [id]
+  [ns id]
 
-  (let [block-write-fn-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "write-block" id)))]
+  (let [block-write-fn-var (ns-resolve ns (symbol (str "write-block" id)))]
 
     (if-not (nil? block-write-fn-var)
       (var-get block-write-fn-var)
       nil)))
+
+(defn get-block-spec
+  [block-specs id]
+  ;; This function doesn't do a lot. It's just a place to insert some debugging
+  ;; info when needed.
+  (get block-specs id))
+
+(def block-specs
+  "A map containing block id => block structure def.
+
+  Note that we're depending some magic/convention here.
+  We're expecting there is a var in this namespace named 'BlockX' where
+  X is an integer id of the block.
+
+  This allows us to repeat less of ourselves. We're also less likely to
+  make a typo in the mapping and end up debugging things for a hour."
+
+  (into {}
+        (for [id [1 2 3 4 5 6 7 8 10 12 13 14 15 16 17]]
+          (when-let [block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))]
+            [id (var-get block-spec-var)]))))
 
 (defn read-block-header
   [^ByteBuffer bb context]
@@ -927,7 +955,7 @@
   ([^ByteBuffer bb context]
    (read-block bb context nil))
 
-  ([^ByteBuffer bb context block-spec-overrides]
+  ([^ByteBuffer bb context block-specs]
 
    (let [;; Read the block id
          id (read-int! bb context)
@@ -937,23 +965,17 @@
          expected-end-position (+ (.position bb) length)
 
          ;; Figure out how we can read the block
-         block-spec-or-read-fn (or (get block-spec-overrides id)
-                                   (get-block-read-fn id)
-                                   (get-block-spec id))
+         block-spec-or-read-fn (get-block-spec block-specs id)
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block
-         _ (if (nil? block-spec-or-read-fn)
-             (throw (Throwable. "Don't know how to read block " id)))
+         _ (when (nil? block-spec-or-read-fn)
+             (throw (Throwable. (str"Don't know how to read block " id))))
 
          ;; Try to read the block
          ;; If a custom read function was provided, use that
          ;; Otherwise, try to read using a block spec
-         block-data (cond
-                      (fn? block-spec-or-read-fn)
-                      (block-spec-or-read-fn bb context)
-                      :else
-                      (s/read-struct block-spec-or-read-fn bb context))
+         block-data (s/read-struct block-spec-or-read-fn bb context)
 
          ;; Verify we've reached the expected position
          _ (assert (= expected-end-position (.position bb)))
@@ -969,19 +991,16 @@
   ([^ByteBuffer bb block context]
    (write-block bb block context nil))
 
-  ([^ByteBuffer bb block context block-spec-overrides]
+  ([^ByteBuffer bb block context block-specs]
    {:pre [(not (nil? block))]}
 
    (let [{:keys [meta-block-id]} block
-
-         block-spec-or-write-fn (or (get block-spec-overrides meta-block-id)
-                                    (get-block-write-fn meta-block-id)
-                                    (get-block-spec meta-block-id))
+         block-spec (get-block-spec block-specs meta-block-id)
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to write this block
-         _ (if (nil? block-spec-or-write-fn)
-             (throw (Throwable. "Don't know how to write block " meta-block-id)))
+         _ (if (nil? block-spec)
+             (throw (Throwable. (str "Don't know how to write block: " meta-block-id))))
 
          ;; Write the id of the block
          _ (write-int! bb meta-block-id context)
@@ -993,11 +1012,7 @@
          _ (.putInt bb 0)
 
          ;; Write the block using either a custom write function or the block spec
-         _ (cond
-             (fn? block-spec-or-write-fn)
-             (block-spec-or-write-fn bb block context)
-             :else
-             (s/write-struct block-spec-or-write-fn bb block context))
+         _ (s/write-struct block-spec bb block context)
 
          ;; Write out the real length of the block
          block-end-pos (.position bb)
@@ -1053,7 +1068,7 @@
                           (if (= (.remaining bb) 0)
                             (persistent! block-list)
 
-                            (recur (conj! block-list (read-block bb enc-context)))))
+                            (recur (conj! block-list (read-block bb enc-context block-specs)))))
 
                         ;; Append the header block when we're done reading
                         (into [header]))
@@ -1082,6 +1097,38 @@
 
   (first (filter #(= (:meta-block-id %1) block-id) block-list)))
 
+(defn update-block-list
+  "Update the `block-list` with potentially new values from the `merged-map`.
+
+  The idea here is that the `merged-map` was generated as a merged view of all
+  the items in the `block-list`, sans various pieces of meta data. The
+  `merged-map` can then be used as the primary piece of data to be viewed and
+  updated/altered.
+
+
+  This was originally created for dealing with the character file. The
+  'character sheet' was created using the block-list by merging all blocks into
+  a giant dictionary. To re-create the block list from a character sheet then,
+  we need to update the top level kv pair of every block to the current value in
+  the character sheet.
+
+  When it's time to actually write the file, however, the block-list needs to
+  have all of their fields updated before being written back to a file. This
+  function performs that reverse mapping."
+  [block-list merged-map]
+
+  (map (fn [block]
+         ;; Map over every kv in the blocks
+         (->> block
+              (map (fn [[key value :as kv-pair]]
+                     ;; Look up the updated value in the character sheet
+                     (if (contains? merged-map key)
+                       [key (merged-map key)]
+                       kv-pair)))
+              ;; Put the pairs back into a map
+              (into {})))
+       block-list))
+
 (defn write-character-file
   [character savepath]
 
@@ -1099,19 +1146,7 @@
         ;; To re-create the block list from a character sheet then, we need to
         ;; update the top level kv pair of every block to the current value in
         ;; the character sheet.
-        updated-block-list (map (fn [block]
-                                  ;; Map over every kv in the blocks
-                                  (->> block
-                                       (map (fn [[key value :as kv-pair]]
-                                              ;; Look up the updated value in the character sheet
-                                              (if (contains? character key)
-                                                [key (character key)]
-                                                kv-pair)
-                                              )
-                                            )
-                                       ;; Put the pairs back into a map
-                                       (into {})))
-                                block-list)
+        updated-block-list (update-block-list block-list character)
 
         fileinfo (:meta-fileinfo character)
 
@@ -1130,7 +1165,7 @@
 
     (doseq [block (->> updated-block-list
                        (filter #(not= (:meta-block-id %1) :header)))]
-      (write-block bb block enc-context))
+      (write-block bb block enc-context block-specs))
 
     (.flip bb)
 
