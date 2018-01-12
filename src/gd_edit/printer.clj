@@ -61,6 +61,9 @@
          (coll? value)
          (format "collection of %d items" (count value))
 
+         (u/byte-array? value)
+         (format "byte array[%d]" (count value))
+
          (and (string? value) (empty? value))
          "\"\""
 
