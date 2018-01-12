@@ -37,7 +37,7 @@
                 {:path (str full-path)
                  :relpath relative-path
                  :map (first components)
-                 :difficulty (second components)})))))
+                 :difficulty (str/lower-case (second components))})))))
 
 (defn load-quest-files
   "Given a path to a character save path, return all associated quest progress data for
@@ -111,14 +111,18 @@
 
   (let [uid-index (quest-uid-index quest-defs)]
     ;; Annotate the quest progress with readable names
-    (->> (:quests quest-progress)
+    (->> quest-progress
 
          ;; Attach names to all tasks
-         (specter/transform [specter/ALL :tasks specter/ALL]
+         (specter/transform [:quests specter/ALL :tasks specter/ALL]
                             #(qst/quest-item-attach-name uid-index %))
 
          ;; Attach names to all quests
-         (map #(qst/quest-item-attach-name uid-index %)))))
+         (specter/transform [:quests specter/ALL]
+                            #(qst/quest-item-attach-name uid-index %))
+         )
+    )
+  )
 
 
 (defn load-annotated-quest-progress
@@ -131,11 +135,7 @@
     (->> quest-progress
          ;; Annotate progress with names
          (specter/transform [specter/MAP-VALS]
-                            #(annotate-quest-progress % quest-defs))
-
-         ;; Change difficulty names to lower case, just for presentation consistency
-         (specter/transform [specter/MAP-KEYS]
-                            str/lower-case))))
+                            #(annotate-quest-progress % quest-defs)))))
 
 (comment
  (def t
