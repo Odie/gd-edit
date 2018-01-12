@@ -30,8 +30,20 @@
                                 :data data
                                 :name (dbu/get-name data path)})))
 
+        ;; We want to also search quests and tasks by name
+        ;; Collect all items in the quest progress data tree that has a :name field
+        ;; The :name field is an annotation added during character load
+        quest-candidates (->> (utils/collect-walk-entire-tree #(:name %)
+                                                              (@globals/character :quest))
+
+                              (map (fn [[path data]]
+                                     (let [real-path (into [:quest] path)]
+                                       {:path real-path
+                                        :data data
+                                        :name (:name data)}))))
+
         ;; Filter against the name we're looking for
-        partial-matches (filter #(utils/ci-match % a-name) candidates)]
+        partial-matches (filter #(utils/ci-match (:name %) a-name) (concat candidates quest-candidates))]
 
     ;; Display the results
     (doseq [item partial-matches]
