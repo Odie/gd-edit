@@ -113,6 +113,11 @@
 ;;------------------------------------------------------------------------------
 ;; Path construction & File fetching utils
 ;;------------------------------------------------------------------------------
+(def database-file "database/database.arz")
+(def templates-file "database/templates.arc")
+(def localization-file "resources/Text_EN.arc")
+(def texture-file "resources/Items.arc")
+
 (defn get-game-dir
   ([]
    (get-game-dir (get-game-dir-search-list)))
@@ -139,6 +144,14 @@
    (get-gdx1-dir)
    (get-mod-dir)])
 
+(defn get-db-file-overrides
+  []
+  (->> [(io/file (get-game-dir) database-file)
+        (io/file (get-gdx1-dir) "database/GDX1.arz")
+        (io/file (get-mod-dir) database-file)]
+       (filter u/path-exists?)
+       (into [])))
+
 (defn get-file-and-overrides
   "Given the relative path of a game asset file, return a vector of all matched files.
 
@@ -149,15 +162,13 @@
   This function builds such a list for callers to process."
   [relative-path]
 
-  (->> (get-file-override-dirs)
-       (map #(io/file % relative-path))
-       (filter u/path-exists?)
-       (into [])))
+  (if (= relative-path database-file)
+    (get-db-file-overrides)
 
-(def database-file "database/database.arz")
-(def templates-file "database/templates.arc")
-(def localization-file "resources/Text_EN.arc")
-(def texture-file "resources/Items.arc")
+    (->> (get-file-override-dirs)
+         (filter u/path-exists?)
+         (map #(io/file % relative-path))
+         (into []))))
 
 (defn looks-like-game-dir
   [path]
