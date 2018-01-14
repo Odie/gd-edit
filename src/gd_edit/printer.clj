@@ -172,7 +172,7 @@
                               (map (comp count u/keyword->str))
                               (apply max))]
 
-      (doseq [[key value] (sort only-in-b)]
+      (doseq [[key value] (sort only-in-a)]
         (println
 
          ;; Print the key name
