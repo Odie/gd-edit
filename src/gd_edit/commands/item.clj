@@ -468,7 +468,7 @@
     (do
       (swap! character assoc-in val-path
              (merge (get-in @character val-path) item))
-      true)
+      val-path)
 
     ;; Did the call ask to have an item added to an inventory/sack?
     (path-is-inventory? character val-path)
