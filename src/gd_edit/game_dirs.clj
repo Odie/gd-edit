@@ -1,11 +1,19 @@
 (ns gd-edit.game-dirs
   (:require [clojure.java.io :as io]
             [gd-edit.utils :as u]
-            [gd-edit.globals :as globals])
+            [gd-edit.globals :as globals]
+            [gd-edit.vdf-parser :as vdf]
+            [com.rpl.specter :as specter])
 
   (:import [com.sun.jna.platform.win32 WinReg Advapi32Util]))
 
 (declare looks-like-game-dir)
+
+(defn- parse-int
+  "Try to parse the given string as an int. Returns Integer or nil."
+  [s]
+  (try (Integer/parseInt s)
+       (catch Exception e nil)))
 
 (defn get-steam-path
   "Get steam installation path"
@@ -16,19 +24,37 @@
                                          "SOFTWARE\\Valve\\Steam"
                                          "SteamPath")))
 
+(defn get-steam-library-folders
+  "Retrieves the library folders as defined in steamapps/libraryfolders.vdf"
+  []
+  (let [lib-folder-file (io/file (get-steam-path) "steamapps/libraryfolders.vdf")]
+    (when (.exists lib-folder-file)
+      (as-> lib-folder-file $
+        (vdf/parse $)
+        (get $ "LibraryFolders")
+        (filter #(parse-int (key %)) $)
+        (specter/transform [specter/ALL specter/FIRST] parse-int $)
+
+        ;; Sort by the directory priority
+        (sort-by first $)
+        ;; Grab the directories only
+        (map second $)))))
+
+
 (defn- standard-game-dirs
-  "Get the game's expected installation path"
+  "Get the game's expected installation paths"
   []
 
   (cond
     (u/running-osx?)
-    (u/expand-home "~/Dropbox/Public/GrimDawn")
+    [(u/expand-home "~/Dropbox/Public/GrimDawn")]
 
     (u/running-linux?)
-    ""
+    [""]
 
     :else
-    (str (get-steam-path) "\\steamapps\\common\\Grim Dawn")))
+    (->> (into [(get-steam-path)] (get-steam-library-folders))
+         (map #(str % "\\steamapps\\common\\Grim Dawn")))))
 
 (defn- clean-list
   "Removes nil from collection and return a list"
@@ -46,7 +72,7 @@
    (get-game-dir-search-list @globals/settings))
 
   ([settings]
-   (clean-list [(get settings :game-dir) (standard-game-dirs)])))
+   (clean-list (into [(get settings :game-dir)] (standard-game-dirs)))))
 
 (defn get-steam-cloud-save-dirs
   []
