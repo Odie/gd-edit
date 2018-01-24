@@ -131,6 +131,12 @@
   [obj path]
 
   (cond
+    ;; For items, we want to fetch and print all related db records.
+    (= (dbu/get-type obj) :item)
+    (show-item obj)
+
+    ;; For other types of interesting data, print out the
+    ;; name followed by the data itself.
     (dbu/get-type obj)
     (do
       (print-object-name (dbu/get-name obj path))
