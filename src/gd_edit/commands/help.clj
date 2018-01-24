@@ -203,6 +203,13 @@
                " all - combination of all of the above"
                ])]
    ["update" "Update to the latest version of gd-edit"]
+   ["swap-variant" "Swap the item out for one of its variants"
+    (str/join "\n"
+              ["Syntax: swap-variant <path-to-item>"
+               ""
+               "This command will try to locate any variants for the item at the path,"
+               "then lets you choose from an onscreen menu to swap with."
+               ])]
    ])
 
 (defn detail-help-text

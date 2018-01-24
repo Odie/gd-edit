@@ -52,8 +52,7 @@
   (clojure.string/split str #"\s+"))
 
 (def command-map
-  {
-   ["exit"]  (fn [input] (System/exit 0))
+  {["exit"]  (fn [input] (System/exit 0))
    ["q"]     (fn [input] (handlers/query-command-handler input))
    ["qshow"] (fn [input] (handlers/query-show-handler input))
    ["qn"]    (fn [input] (handlers/query-show-handler input))
@@ -81,7 +80,8 @@
    ["log"]     (fn [input] (handlers/log-handler input))
    ["update"]  (fn [input] (handlers/update-handler input))
    ["help"]    (fn [input] (gd-edit.commands.help/help-handler input))
-   ["diag"]    (fn [input] (gd-edit.commands.diag/diag-handler input))})
+   ["diag"]    (fn [input] (gd-edit.commands.diag/diag-handler input))
+   ["swap-variant"] (fn [input] (gd-edit.commands.item/swap-variant-handler input))})
 
 (defn- find-command
   "Try to find the \"longest\" command match"

@@ -4,8 +4,10 @@
              [globals :as globals]
              [inventory :as inventory]
              [printer :as printer]
+             [stack :as stack]
              [structure-walk :as sw]
              [utils :as u]]
+            [gd-edit.commands.help :as help]
             [clojure.string :as str]
             [clojure.core.reducers :as r]
             [jansi-clj.core :refer :all]
@@ -489,25 +491,32 @@
 ;;------------------------------------------------------------------------------
 ;; Command handlers
 ;;------------------------------------------------------------------------------
-(defn set-item-handler
-  [[input [path target-name level-cap-str]]]
+(defn item-at-fuzzy-path
+  [character path-str]
+  (sw/walk character (str/split path-str #"/")))
 
-  (let [path-keys (str/split path #"/")
-        result (sw/walk @gd-edit.globals/character path-keys)
-        {:keys [status found-item actual-path]} result
-
-        level-cap (when (some? level-cap-str)
-                    (Integer/parseInt level-cap-str))]
-
+(defn item-located-or-print-error
+  [walk-result]
+  (let [{:keys [status]} walk-result]
     (cond
       (= status :not-found)
       (println "The path does not specify an item")
 
       (= status :too-many-matches)
-      (sw/print-ambiguous-walk-result result)
-
+      (sw/print-ambiguous-walk-result walk-result)
 
       :else
+      walk-result)))
+
+(defn set-item-handler
+  [[input [path target-name level-cap-str]]]
+
+  (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
+                       (item-located-or-print-error))]
+    (let [{:keys [status found-item actual-path]} result
+          level-cap (when (some? level-cap-str)
+                      (Integer/parseInt level-cap-str))]
+
       ;; Try to construct the requested item
       (let [item (construct-item target-name @globals/db @globals/db-index level-cap)]
         ;; If construction was not successful, inform the user and abort
@@ -530,6 +539,69 @@
               (printer/show-item item))
             (println "Sorry, there is no room to fit the item.")))))))
 
+
+
+(defn- swap-variant-screen
+  [item-path variants]
+
+  (let [choices (->> (for [[idx variant] (->> variants
+                                              (sort-by :recordname)
+                                              (map-indexed vector))]
+                       [;; choice label
+                        (str (inc idx))
+
+                        ;; choice text
+                        ;; we'll print the unique fields of each variant
+                        (with-out-str
+                          (newline)
+                          (printer/print-map (->> variant
+                                                  (remove #(= :recordname (key %))))
+                                             :skip-item-count true))
+
+                        ;; choice action
+                        (fn[]
+                          ;; We're only know how to change the basename based on user choice for now
+                          (let [path-to-basename (conj item-path :basename)]
+                            (swap! globals/character update-in path-to-basename
+                                   (constantly (:recordname variant)))
+
+                            ;; Exit the menu
+                            (stack/pop! gd-edit.globals/menu-stack)))])
+                     (into []))
+        choices (conj choices ["a" "abort" (fn[] (stack/pop! gd-edit.globals/menu-stack))])]
+
+    {:display-fn
+     (fn []
+       (printer/displayable-path item-path)
+       (println "Which variant do you want?"))
+
+     :choice-map choices}))
+
+(defn swap-variant-screen! [item-path variants] (stack/push! gd-edit.globals/menu-stack
+                                                             (swap-variant-screen item-path variants)))
+
+
+(defn- swap-variant-print-usage
+  []
+  (println (->> (help/get-help-item "swap-variant")
+                (help/detail-help-text))))
+
+(defn swap-variant-handler
+  [[input [path]]]
+
+  (if (empty? path)
+    (swap-variant-print-usage)
+    (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
+                         (item-located-or-print-error))]
+      (let [{:keys [status found-item actual-path]} result
+
+            variants (->> (dbu/record-variants @globals/db (:basename found-item))
+                          (map set))]
+        (if (<= (count variants) 1)
+          (println "Sorry, can't find any variants for " (yellow (dbu/item-name found-item @globals/db-and-index)))
+
+          (swap-variant-screen! actual-path
+                                (dbu/unique-item-record-fields variants)))))))
 
 (comment
 

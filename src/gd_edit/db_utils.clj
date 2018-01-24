@@ -1,7 +1,9 @@
 (ns gd-edit.db-utils
   (:require [clojure.string :as str]
             [gd-edit.utils :as u]
-            [gd-edit.globals :as globals]))
+            [gd-edit.globals :as globals]
+            [clojure.java.io :as io]
+            [clojure.set :as set]))
 
 (defn record-by-name
   [recordname]
@@ -196,3 +198,48 @@
 
     :else
     nil))
+
+(defn db-get-subset
+  "Get all records that matches the given path.
+  Note that we'll have to walk through the entire db once."
+  [db path]
+
+  (filter #(str/starts-with? (:recordname %) path)
+          db))
+
+(defn db-get-sibling-records
+  [db path]
+
+  (db-get-subset @globals/db
+                 (-> (.getParentFile (io/file path))
+                     (str "/"))))
+
+(defn record-variants
+  [db record-path]
+
+  (let [siblings (db-get-sibling-records @globals/db record-path)
+        target-name (item-base-record-get-base-name (record-by-name record-path))]
+
+    (filter #(= target-name (item-base-record-get-base-name %)) siblings)))
+
+(defn unique-item-record-fields
+  "Given a collection of item record hashmaps, filter out non-unique fields for each of the record
+  in the collection. Return a collection of hashmaps."
+  [item-records]
+
+  (let [variants (if (set? item-records)
+                   item-records
+                   (set item-records))
+
+        ;; Figure out which fields seems unique
+        unique-fields (for [candidate variants]
+                        (let [other-variants (remove #(= % candidate) variants)]
+                          (apply set/difference candidate other-variants)))]
+
+    (->> unique-fields
+
+         ;; Remove fields that are not very interesting when looking at items
+         (map #(remove (fn [variant] (contains? #{"bitmap" "glowTexture" "baseTexture"} (key variant))) %))
+
+         ;; Turn the unique fields of each variant into a hashmap again
+         (map #(into {} %)))))
