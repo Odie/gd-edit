@@ -198,7 +198,7 @@
     ;; If a message can be retrieved, display it now.
     (println msg)))
 
-(defn- repl-iter
+(defn repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"
   []
 

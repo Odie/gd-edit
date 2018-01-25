@@ -542,7 +542,7 @@
 
 
 (defn- swap-variant-screen
-  [item-path variants]
+  [item-path target-field variants]
 
   (let [choices (->> (for [[idx variant] (->> variants
                                               (sort-by :recordname)
@@ -553,7 +553,7 @@
                         ;; choice text
                         ;; we'll print the unique fields of each variant
                         (with-out-str
-                          (newline)
+                          (println (:recordname variant))
                           (printer/print-map (->> variant
                                                   (remove #(= :recordname (key %))))
                                              :skip-item-count true))
@@ -561,8 +561,8 @@
                         ;; choice action
                         (fn[]
                           ;; We're only know how to change the basename based on user choice for now
-                          (let [path-to-basename (conj item-path :basename)]
-                            (swap! globals/character update-in path-to-basename
+                          (let [path-to-target-field (conj item-path target-field)]
+                            (swap! globals/character update-in path-to-target-field
                                    (constantly (:recordname variant)))
 
                             ;; Exit the menu
@@ -573,12 +573,16 @@
     {:display-fn
      (fn []
        (printer/displayable-path item-path)
-       (println "Which variant do you want?"))
+       (println (format "Pick a variant for the %s of %s"
+                        (u/keyword->str target-field)
+                        (dbu/item-name
+                         (get-in @globals/character item-path) @globals/db-and-index)))
+       (newline))
 
      :choice-map choices}))
 
-(defn swap-variant-screen! [item-path variants] (stack/push! gd-edit.globals/menu-stack
-                                                             (swap-variant-screen item-path variants)))
+(defn swap-variant-screen! [item-path target-field variants] (stack/push! gd-edit.globals/menu-stack
+                                                                          (swap-variant-screen item-path target-field variants)))
 
 
 (defn- swap-variant-print-usage
@@ -587,23 +591,39 @@
                 (help/detail-help-text))))
 
 (defn swap-variant-handler
-  [[input [path]]]
+  [[input [path target-field-name]]]
 
-  (if (empty? path)
+  (if (<= (count path) 1)
     (swap-variant-print-usage)
+
     (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
                          (item-located-or-print-error))]
       (let [{:keys [status found-item actual-path]} result
-
-            variants (->> (dbu/record-variants @globals/db (:basename found-item))
+            target-field-name (or target-field-name
+                                  "basename")
+            target-field (get {"basename" :basename
+                               "prefix" :prefix-name
+                               "suffix" :suffix-name}
+                              target-field-name)
+            variants (->> (dbu/record-variants @globals/db (target-field found-item))
                           (map set))]
-        (if (<= (count variants) 1)
-          (println "Sorry, can't find any variants for " (yellow (dbu/item-name found-item @globals/db-and-index)))
+        (cond
+          (not (contains? found-item target-field))
+          (println (format "Sorry, can't find '%s' on the item at '%'" target-field-name (printer/displayable-path actual-path)))
 
+          (<= (count variants) 1)
+          (println "Sorry, can't find any" target-field-name "variants for" (yellow (dbu/item-name found-item @globals/db-and-index)))
+
+          :else
           (swap-variant-screen! actual-path
+                                target-field
                                 (dbu/unique-item-record-fields variants)))))))
 
 (comment
+
+  (swap-variant-handler [nil ["weapon-sets/1/items/0" "suffix"]])
+
+  (gd-edit.core/repl-iter)
 
   (baseitem-valid-affix-paths @globals/db @globals/db-index "records/items/gearshoulders/b020a_shoulder.dbr")
 

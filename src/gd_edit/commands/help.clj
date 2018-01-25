@@ -205,11 +205,15 @@
    ["update" "Update to the latest version of gd-edit"]
    ["swap-variant" "Swap the item out for one of its variants"
     (str/join "\n"
-              ["Syntax: swap-variant <path-to-item>"
+              ["Syntax: swap-variant <path-to-item> <optional target-type>"
                ""
                "This command will try to locate any variants for the item at the path,"
                "then lets you choose from an onscreen menu to swap with."
-               ])]
+               ""
+               "Target type is an optional parameter and can be any of the following: "
+               "\tbasename, prefix, suffix."
+               "If a target type isn't specified, it's assumed that the user wants to"
+               "change the basename of the item."])]
    ])
 
 (defn detail-help-text

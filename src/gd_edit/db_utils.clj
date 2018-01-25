@@ -30,8 +30,10 @@
 (defn item-base-record-get-base-name
   [base-record]
 
-  (or (get base-record "itemNameTag") (-> (get base-record "description")
-                                          (str/replace "^k" ""))))
+  (or (get base-record "itemNameTag")
+      (when-let [description (get base-record "description")]
+            (str/replace description "^k" ""))))
+
 (defn record-has-display-name?
   [record]
 
@@ -214,13 +216,20 @@
                  (-> (.getParentFile (io/file path))
                      (str "/"))))
 
+(defn item-affix-or-base-display-name
+  [affix-or-base-record]
+
+  (or (get affix-or-base-record "lootRandomizerName")
+      (item-base-record-get-base-name affix-or-base-record)))
+
 (defn record-variants
   [db record-path]
 
   (let [siblings (db-get-sibling-records @globals/db record-path)
-        target-name (item-base-record-get-base-name (record-by-name record-path))]
+        target-name (item-affix-or-base-display-name (record-by-name record-path))]
 
-    (filter #(= target-name (item-base-record-get-base-name %)) siblings)))
+    (filter #(= target-name (item-affix-or-base-display-name %)) siblings)))
+
 
 (defn unique-item-record-fields
   "Given a collection of item record hashmaps, filter out non-unique fields for each of the record
@@ -239,7 +248,7 @@
     (->> unique-fields
 
          ;; Remove fields that are not very interesting when looking at items
-         (map #(remove (fn [variant] (contains? #{"bitmap" "glowTexture" "baseTexture"} (key variant))) %))
+         (map #(remove (fn [variant] (contains? #{"bitmap" "glowTexture" "baseTexture" "FileDescription"} (key variant))) %))
 
          ;; Turn the unique fields of each variant into a hashmap again
          (map #(into {} %)))))
