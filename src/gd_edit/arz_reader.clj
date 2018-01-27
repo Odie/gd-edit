@@ -231,17 +231,17 @@
   (->> (load-db-records-header-table bb header string-table)
 
        ;; Try to read each record
-       (map (fn [record-header]
+       (pmap (fn [record-header]
 
-              ;; Read a single record
-              (-> (load-db-record bb header string-table record-header localization-table)
+               (let [bb (.duplicate bb)]
 
-                  ;; Add in the recordname from the header
-                  (assoc :recordname (:filename record-header))
-              )))
+                 ;; Read a single record
+                 (-> (load-db-record bb header string-table record-header localization-table)
 
-       (doall)
-       ))
+                     ;; Add in the recordname from the header
+                     (assoc :recordname (:filename record-header))))))
+
+       (doall)))
 
 
 (defn load-game-db
@@ -297,7 +297,15 @@
   nil)
 
 
-#_(time  (load-game-db "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
+(comment
+
+  (time (def db
+          (load-game-db
+           (first (gd-edit.game-dirs/get-db-file-overrides))
+           @gd-edit.globals/localization-table)))
+
+  )
+
 #_(def f (mmap "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
 #_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
 #_(def h (load-db-header f))
