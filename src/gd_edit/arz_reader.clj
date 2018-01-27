@@ -4,9 +4,10 @@
             [clojure.string :as string]
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
-            ;; [fipp.clojure :as pp]
             [clojure.pprint :as pp]
-            [taoensso.timbre :as t])
+            [taoensso.timbre :as t]
+            ;; [clj-async-profiler.core :as prof]
+            )
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
@@ -96,20 +97,15 @@
   ;; Move the buffer to the beginning of the header
   (.position bb (:record-table-start header))
 
-  ;; Read all the headers
-  (let [record-headers (reduce
-                        (fn [accum _]
-                          (conj accum
-                                (s/read-struct arz-record-header bb)))
-                        []
-                        (range (:record-table-entries header)))]
+  ;; Read all the header entries
+  (->> (for [idx (range (:record-table-entries header))]
+         (s/read-struct arz-record-header bb))
 
-    ;; Look up all the record file names in the string table
-    (map (fn [item]
-           (->> (item :filename)
-                (nth string-table)
-                (assoc item :filename)))
-         record-headers)))
+       ;; Look up all the record file names in the string table
+       (map (fn [item]
+              (->> (item :filename)
+                   (nth string-table)
+                   (assoc item :filename))))))
 
 
 (defn- load-db-record
@@ -303,6 +299,16 @@
           (load-game-db
            (first (gd-edit.game-dirs/get-db-file-overrides))
            @gd-edit.globals/localization-table)))
+
+  (do
+    (prof/start {:interval (/ 1000000 2)})
+    (def db (load-game-db
+             (first (gd-edit.game-dirs/get-db-file-overrides))
+             @gd-edit.globals/localization-table))
+
+    (prof/stop {}))
+
+  (prof/serve-files 9000)
 
   ;; Make sure all loaded items are persistent collections
   (def t

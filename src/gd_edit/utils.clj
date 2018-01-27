@@ -112,6 +112,14 @@
   [time]
   (/ (float time) 1000000000))
 
+(defmacro time-with-msg
+  "Runs the given 'sexp'. When done, print the 'msg' and the run time in seconds."
+  [msg sexp]
+
+   `(let [[duration# result#] (timed ~sexp)]
+      (println ~msg "in" (nanotime->secs duration#) "seconds")
+      result#))
+
 ;;------------------------------------------------------------------------------
 ;; String comparison
 ;;------------------------------------------------------------------------------
