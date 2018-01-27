@@ -140,7 +140,7 @@
        ;; Did we finish reading the entire record?
        (if (<= (.remaining record-buffer) 0)
          ;; If so, return the accumulated record
-         (reduced record)
+         (reduced (persistent! record))
 
          ;; Otherwise, read one more entry...
          (let [type (.getShort record-buffer)
@@ -188,38 +188,38 @@
                      ;; Setup and loop and read out all the values into a vector
                      (loop [i 0
                             limit data-count
-                            accum []]
+                            accum (transient [])]
                        ;; Did we retrieve all the items?
                        (if (>= i limit)
 
                          ;; If so, return the items now
-                         accum
+                         (persistent! accum)
 
                          ;; Otherwise, grab one more item and loop
                          (recur (inc i)
                                 limit
-                                (conj accum (get-one-field))))))
+                                (conj! accum (get-one-field))))))
                ]
 
            (cond
              ;; Do we have more than one value?
              ;; Add it to the record
              (> 1 data-count)
-             (assoc record fieldname val)
+             (assoc! record fieldname val)
 
              ;; Otherwise, we only have a single value in the vector
              ;; If the value is not zero or empty string, add it to the record
              (and (not= val 0)
                   (not= val (float 0))
                   (not= val ""))
-             (assoc record fieldname val)
+             (assoc! record fieldname val)
 
              ;; Otherwise, don't append any new fields to the record
              ;; Just return it as is
              :else
              record
              ))))
-     {}             ;; Start reduce with an empty record
+     (transient {}) ;; Start reduce with an empty record
      (repeat 0)     ;; Have reduce loop forever. We'll check the exit condition in the lambda
      )))
 
@@ -304,13 +304,11 @@
            (first (gd-edit.game-dirs/get-db-file-overrides))
            @gd-edit.globals/localization-table)))
 
-  )
+  ;; Make sure all loaded items are persistent collections
+  (def t
+    (utils/collect-walk-entire-tree #(and (instance? clojure.lang.Seqable %)
+                                          (not (instance? clojure.lang.IPersistentCollection %))) db))
 
-#_(def f (mmap "/Users/Odie/Dropbox/Public/GrimDawn/database/database.arz"))
-#_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
-#_(def h (load-db-header f))
-#_(time (def st (load-db-string-table f h)))
-#_(time (def dt (load-db-records-header-table f h st)))
-#_(time (def rt (load-db-records f h st)))
+  )
 
 #_(time (dump-db-records @gd-edit.globals/db (io/file (gd-edit.utils/working-directory) "database")))
