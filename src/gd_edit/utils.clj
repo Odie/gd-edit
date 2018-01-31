@@ -169,6 +169,11 @@
 
   (str/join File/separator components))
 
+(defn components->filepath-unix-style
+  [components]
+
+  (str/join "/" components))
+
 (defn last-path-component
   [path]
 

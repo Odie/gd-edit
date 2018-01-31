@@ -213,7 +213,10 @@
   [db path]
 
   (db-get-subset @globals/db
-                 (-> (.getParentFile (io/file path))
+                 (-> path 
+                     (u/filepath->components)
+                     (drop-last)
+                     (u/components->filepath-unix-style)
                      (str "/"))))
 
 (defn item-affix-or-base-display-name
