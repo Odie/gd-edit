@@ -240,10 +240,20 @@
                    item-records
                    (set item-records))
 
+        required-fields #{"levelRequirement"}
+
+        strip-required-fields (fn [record-as-set]
+                                (->> record-as-set
+                                     (remove #(contains? required-fields (first %)))
+                                     (set)))
+
         ;; Figure out which fields seems unique
         unique-fields (for [candidate variants]
                         (let [other-variants (remove #(= % candidate) variants)]
-                          (apply set/difference candidate other-variants)))]
+                          (apply set/difference
+                                 candidate
+                                 (map strip-required-fields other-variants))))
+        ]
 
     (->> unique-fields
 
