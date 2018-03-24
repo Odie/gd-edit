@@ -147,12 +147,16 @@
 
   (->> name-idx
 
-            ;; Score and sort the item name index
-            ;; First, we rank by the name's overall similiarity
-            ;; This should help to filter out items that are not at all similar
-            (pmap (fn [[item-name item-record]]
-                    [(u/string-similarity (str/lower-case item-name) (str/lower-case target-name)) item-name item-record]))
-            (sort-by first >)))
+       (filter (fn [[item-name item-record]]
+                 (not (nil? item-name))))
+
+       ;; Score and sort the item name index
+       ;; First, we rank by the name's overall similiarity
+       ;; This should help to filter out items that are not at all similar
+       (pmap (fn [[item-name item-record]]
+               [(u/string-similarity (str/lower-case item-name) (str/lower-case target-name)) item-name item-record]))
+
+       (sort-by first >)))
 
 (defn idx-best-match
   "Take the index and an array of 'tokenized' item name, try to find the best match.
@@ -684,5 +688,8 @@
   (analyze-item-name item-name-idx affixes-all "stanching chain belt of caged souls")
 
   (analyze-item-name item-name-idx affixes-all "wraithbound infantry waistguard of vitality")
+
+  (time
+   (construct-item "badge of mastery" @globals/db @globals/db-index nil))
 
   )
