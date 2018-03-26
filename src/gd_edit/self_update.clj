@@ -7,7 +7,9 @@
              [utils :as utils]]
             [me.raynes.fs :as fs]
             [clj-http.client :as client])
-  (:import java.io.IOException))
+  (:import java.io.IOException
+           [java.nio.file Files]
+           [java.nio.file CopyOption StandardCopyOption]))
 
 (defn fetch-url [url-str]
   (let [response (client/get url-str
@@ -177,13 +179,14 @@
   (let [running-exe-path (io/file (System/getProperty "java.class.path"))
         backup-path (io/file (str running-exe-path ".bak"))]
 
-
     ;; Make a backup of the current exe/binary
     (if-not (.renameTo (io/file running-exe-path) (io/file backup-path))
       (println "Sorry. Could not rename the current executable.")
 
       ;; Replace the current binary with the new one
-      (if-not (.renameTo (io/file new-exe) (io/file running-exe-path))
+      (if-not (Files/move (.toPath (io/file new-exe))
+                          (.toPath (io/file running-exe-path))
+                          (into-array CopyOption [StandardCopyOption/REPLACE_EXISTING]))
         (println "Sorry. Could not rename the new version.")
 
         (do
