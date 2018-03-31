@@ -35,9 +35,11 @@
 (defn- tokenize-input
   [input]
 
-  [input
-   (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
-        (map strip-quotes))])
+  (if (nil? input)
+    [nil nil]
+    [input
+     (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
+          (map strip-quotes))]))
 
 
 (defn- repl-read
@@ -153,6 +155,11 @@
   (t/debug "Evaluating command from user:")
   (u/log-exp input)
   (u/log-exp tokens)
+
+  ;; Input is nil when the user hits ctrl-d
+  ;; In this case, exit the program
+  (when (nil? input)
+    (System/exit 0))
 
   (when-not (empty? (str/trim input))
     ;; Try to find the "longest" command match
