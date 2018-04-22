@@ -431,11 +431,13 @@
 
         ;; Now that we have a good idea of the basename of the item,
         ;; try to narrow down to "legal" prefixes only.
-        legal-affixes (into {}
-                            (map (fn [[k affix-set]]
-                                   [k (map #(get db-index %)
-                                           affix-set)])
-                                 (baseitem-valid-affix-paths @globals/db @globals/db-index (:recordname (:base analysis-all)))))
+        legal-affixes (->> (:recordname (:base analysis-all))
+                           (baseitem-valid-affix-paths @globals/db @globals/db-index)
+                           (map (fn [[k affix-set]]
+                                  [k (->> affix-set
+                                          (map #(get db-index %))
+                                          (filter some?))]))
+                           (into {}))
 
         affixes-legal (group-affixes-by-loot-name legal-affixes)
         analysis-legal (analyze-item-name item-name-idx
