@@ -1,5 +1,6 @@
 (ns gd-edit.structure
-  (:require [clojure.test])
+  (:require [clojure.test]
+            [clojure.pprint])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel])
