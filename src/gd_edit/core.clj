@@ -42,7 +42,7 @@
           (map strip-quotes))]))
 
 
-(defn- repl-read
+(defn repl-read
   []
 
   ;; Read a line
@@ -149,7 +149,7 @@
           (println (format "%s) %s" cmd-str disp-str)))
         (println)))))
 
-(defn- repl-eval
+(defn repl-eval
   [[input tokens :as input-vec] command-map]
 
   (t/debug "Evaluating command from user:")
@@ -463,7 +463,7 @@
   (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
   (jansi-clj.core/install!))
 
-(defn- initialize
+(defn initialize
   []
 
   ;; Try to load the settings file if it exists

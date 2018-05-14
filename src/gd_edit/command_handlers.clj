@@ -1476,6 +1476,27 @@
 
   (string/starts-with? (:skill-name skill) "records/skills/devotion"))
 
+(defn passive-skill? [skill]
+  (let [record (@globals/db-index (:skill-name skill))]
+    (= (get record "Class") "Skill_Passive")))
+
+(defn disable-devotion-skill [skill]
+  ;; If the given skill is not a devotion, do thing...
+  (if-not (skill-is-devotion? skill)
+    skill
+    (cond-> skill
+      ;; Passive skills should be marked "not enabled"
+      (passive-skill? skill) (assoc :enabled false)
+
+      ;; all skills should indicate no devotion points have been used/spent
+      ;; for this skill
+      :lastly (assoc :level 0))))
+
+(defn devotion-skill-enabled? [skill]
+  (if (passive-skill? skill)
+    (= (:enabled skill) true)
+    (> (:level skill) 0)))
+
 (defn skills-vec->skills-by-category
   [skills-list]
 
@@ -1538,7 +1559,8 @@
 
              ;; Remove all skills from the skills vector
              :skills (skills-by-category->skills-vec
-                      (dissoc skills-by-category :skills))}
+                      (dissoc skills-by-category :skills)
+                      )}
             character))))
 
 (defn respec-character-devotions
@@ -1550,8 +1572,11 @@
 
     (merge character
            (coerce-map-numbers-using-reference
-            {;; Refund 1 devotion point per devotions taken
-             :devotion-points (+ (:devotion-points character) (count devotions))
+            {;; Refund 1 devotion point per devotion point spent
+             :devotion-points (+ (:devotion-points character)
+                                 (->> devotions
+                                      (map #(:level %))
+                                      (reduce +)))
 
              ;; Remove all devotions from the skills vector
              :skills (skills-by-category->skills-vec
