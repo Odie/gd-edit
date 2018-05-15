@@ -1516,7 +1516,7 @@
        (into [])))
 
 (defn respec-character-attributes
-  [character]
+  [character option]
 
   (let [base-attr-points 50
         data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")]
@@ -1542,7 +1542,7 @@
 
 
 (defn respec-character-skills
-  [character]
+  [character option]
 
   (let [skills-by-category (skills-vec->skills-by-category (:skills character))
         skills (:skills skills-by-category)
@@ -1564,7 +1564,7 @@
             character))))
 
 (defn respec-character-devotions
-  [character]
+  [character options]
 
   ;; Grab a list of devtions taken
   (let [skills-by-category (skills-vec->skills-by-category (:skills character))
@@ -1578,18 +1578,20 @@
                                       (map #(:level %))
                                       (reduce +)))
 
-             ;; Remove all devotions from the skills vector
+             ;; Remove or disable all devotions depending on the given option
              :skills (skills-by-category->skills-vec
-                      (update skills-by-category
-                              :devotions
-                              #(map disable-devotion-skill %)))}
+                      (if (:hard options)
+                        (dissoc skills-by-category :devotions)
+                        (update skills-by-category
+                                :devotions
+                                #(map disable-devotion-skill %))))}
             character))))
 
 (defn respec-handler
   [[input tokens]]
 
   (let [mode (string/lower-case (or (first tokens) "all"))
-        valid-modes #{"all" "attributes" "devotions" "skills"}]
+        valid-modes #{"all" "attributes" "devotions" "skills" "hard"}]
 
     ;; Sanity check on the respec mode
     (if-not (contains? valid-modes mode)
@@ -1600,23 +1602,25 @@
           (println r-type)))
 
       ;; Try to modify the character according to the chosen mocd
-      (let [modified-character
+      (let [options (when (= mode "hard") {:hard true})
+            modified-character
             (cond
-              (= mode "all")
+              (or (= mode "all")
+                  (= mode "hard"))
               (do
-                (->> @globals/character
-                     (respec-character-devotions)
-                     (respec-character-skills)
-                     (respec-character-attributes)))
+                (-> @globals/character
+                    (respec-character-devotions options)
+                    (respec-character-skills options)
+                    (respec-character-attributes options)))
 
               (= mode "attributes")
-              (respec-character-attributes @globals/character)
+              (respec-character-attributes @globals/character options)
 
               (= mode "skills")
-              (respec-character-skills @globals/character)
+              (respec-character-skills @globals/character options)
 
               (= mode "devotions")
-              (respec-character-devotions @globals/character)
+              (respec-character-devotions @globals/character options)
 
               :else
               (throw (Throwable. (str "Unknown respec mode: " mode))))

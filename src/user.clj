@@ -36,7 +36,8 @@
 (defn cmd [s]
   "Send the command through the repl pipeline as if it were entered in the console"
   (binding [*in* (io/reader (StringReader. s))]
-    (ge/repl-eval (ge/repl-read) ge/command-map)))
+    (ge/repl-eval (ge/repl-read) ge/command-map)
+    nil))
 
 (comment
   (init)

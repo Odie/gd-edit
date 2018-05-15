@@ -171,12 +171,15 @@
 (defn print-map-difference
   [[only-in-a only-in-b _]]
 
-  (if (empty? only-in-b)
+  (if (and (empty? only-in-a) (empty? only-in-b))
     (println "Nothing has been changed")
 
-    (let [max-key-length (->> (keys only-in-b)
+    (let [changed-keys (->> (concat (keys only-in-a)
+                                    (keys only-in-b))
+                            (into #{}))
+          max-key-length (->> changed-keys
                               (map (comp count u/keyword->str))
-                              (apply max))]
+                              (apply max 0))]
 
       (doseq [[key value] (sort only-in-a)]
         (println
@@ -198,7 +201,7 @@
              (format "%s => %s" (yellow value) (yellow (only-in-b key)))))))
 
       (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count only-in-b)) "fields changed"))))
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count changed-keys)) "fields changed"))))
 
 
 (defn show-item
