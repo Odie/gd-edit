@@ -10,9 +10,7 @@
             [gd-edit.commands.help :as help]
             [clojure.string :as str]
             [clojure.core.reducers :as r]
-            [jansi-clj.core :refer :all]
-            [criterium.core :refer [bench quick-bench with-progress-reporting]]
-            ))
+            [jansi-clj.core :refer :all]))
 
 ;;------------------------------------------------------------------------------
 ;; Item utils
