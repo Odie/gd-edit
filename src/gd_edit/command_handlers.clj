@@ -1580,7 +1580,9 @@
 
              ;; Remove all devotions from the skills vector
              :skills (skills-by-category->skills-vec
-                      (dissoc skills-by-category :devotions))}
+                      (update skills-by-category
+                              :devotions
+                              #(map disable-devotion-skill %)))}
             character))))
 
 (defn respec-handler
