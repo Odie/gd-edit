@@ -157,7 +157,13 @@
                ""
                "> set inventory-sacks/0/inventory-items/0/stack-count 99"
                ])]
-
+   ["find all" "Find some character data by name in all locatable characters"
+    (str/join "\n"
+              ["Syntax: find all <a-name>"
+               ""
+               "This command works in the same way as 'find' except it will look through"
+               "all characters that the editor is able to locate."
+               ])]
    ["load"  "Load from a save file"]
    ["write" "Writes out the character that is currently loaded"
     (str/join "\n"
