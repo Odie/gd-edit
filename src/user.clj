@@ -21,6 +21,9 @@
   "Load the character and set as global state, then returns the character"
   (gec/load-character-file f))
 
+(defn write-character-file [character f]
+  (gdc/write-character-file character f))
+
 (defn print-character [character]
   (gd-edit.printer/print-map character))
 

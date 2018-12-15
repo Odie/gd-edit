@@ -467,6 +467,8 @@
     (println "[write-struct] spec:" spec)
     (println "[write-struct] (meta spec):" (meta spec)))
 
+  (swap! context assoc :mode :write)
+
   (cond
     ;; Did the spec attach a write function?
     ;; If so, call it now
@@ -476,6 +478,11 @@
     ;; If the spec looks like it is describing fields of a map...
     (ordered-map? spec)
     (do
+      ;; Did the spec say to use this piece of data as an anchor?
+      ;; If so, push this piece of data onto a stack in the context
+      (when (:anchor (meta spec))
+        (swap! context update :anchor-stack conj data))
+
       ;; We're going to loop and process all the fields until we are done
       (loop [spec-remaining spec]
 
@@ -496,7 +503,12 @@
                 (write-spec type bb val context))
 
               ;; Continue to process the next pair
-              (recur (drop 2 spec-remaining)))))))
+              (recur (drop 2 spec-remaining))))))
+
+      ;; Did the spec say to use this piece of data as an anchor?
+      ;; If so, pop the data off of the stack
+      (when (:anchor (meta spec))
+        (swap! context update :anchor-stack pop)))
 
     ;; Otherwise, let our multi-method's default handling do it's thing
     :else
@@ -524,7 +536,7 @@
   (assert (fn? cond-fn))
 
   ;; Send the currently read data to the cond-fn to retrieve the spec to be used
-  (when-let [spec (cond-fn data)]
+  (when-let [spec (cond-fn data context)]
     ;; Read the data using the retrieved spec if any
     (read-spec spec bb data context)))
 
@@ -535,6 +547,6 @@
   (assert (fn? cond-fn))
 
   ;; Send the currently read data to the cond-fn to retrieve the spec to be used
-  (when-let [spec (cond-fn data)]
+  (when-let [spec (cond-fn data context)]
     ;; write the data using the retrieved spec if any
     (write-spec spec bb data context)))

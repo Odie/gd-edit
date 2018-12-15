@@ -14,13 +14,17 @@
   [version body]
 
   `(s/conditional
-    (fn [~'data]
-      (cond
-        (>= (:version ~'data) ~version)
-        ~body
+    (fn [data# context#]
+      (let [;; where can we find the version data?
+            version-data# (if (= (:mode @context#) :write)
+                            (peek (:anchor-stack @context#))
+                            data#)]
+        (cond
+          (>= (:version version-data#) ~version)
+          ~body
 
-        :else
-        nil))))
+          :else
+          nil)))))
 
 ;;(set! *warn-on-reflection* true)
 (set! *unchecked-math* true)
@@ -46,7 +50,7 @@
    :character-level   :int32
    :hardcore-mode     :bool
    :expansion-character? (s/conditional
-                          (fn [data]
+                          (fn [data context]
                             (cond
                               (= (:version data) 1) nil
                               :else :byte)))))
@@ -430,7 +434,7 @@
                             :length 5)
 
    :hotslots                (s/conditional
-                             (fn [data]
+                             (fn [data context]
                                (cond
                                  (= (:version data) 4)
                                  (s/variable-count HotSlot :length 36)
@@ -453,57 +457,60 @@
    :last-monster-hitBy (s/string :ascii)))
 
 (def Block16
-  (s/ordered-map
-   :version                 :int32
-   :playtime-seconds        :int32
-   :death-count             :int32
-   :kill-count              :int32
-   :experience-from-kills   :int32
-   :health-potions-used     :int32
-   :energy-potions-used     :int32
-   :max-level               :int32
-   :hits-received           :int32
-   :hits-inflicted          :int32
-   :crits-inflicted         :int32
-   :crits-received          :int32
-   :greatest-damage-done    :float
+  (merge-meta
+   (s/ordered-map
+    :version                 :int32
+    :playtime-seconds        :int32
+    :death-count             :int32
+    :kill-count              :int32
+    :experience-from-kills   :int32
+    :health-potions-used     :int32
+    :energy-potions-used     :int32
+    :max-level               :int32
+    :hits-received           :int32
+    :hits-inflicted          :int32
+    :crits-inflicted         :int32
+    :crits-received          :int32
+    :greatest-damage-done    :float
 
-   :greatest-monster-killed (s/variable-count GreatestMonsterKilled :length 3)
+    :greatest-monster-killed (s/variable-count GreatestMonsterKilled :length 3)
 
-   :champion-kills              :int32
-   :last-monster-hit-DA         :float
-   :last-monster-hit-OA         :float
-   :greatest-damage-received    :float
-   :hero-kills                  :int32
-   :items-crafted               :int32
-   :relics-crafted              :int32
-   :tier2-relics-crafted        :int32
-   :tier3-relics-crafted        :int32
-   :devotion-shrines-unlocked   :int32
-   :one-shot-chests-unlocked    :int32
-   :lore-notes-collected        :int32
+    :champion-kills              :int32
+    :last-monster-hit-DA         :float
+    :last-monster-hit-OA         :float
+    :greatest-damage-received    :float
+    :hero-kills                  :int32
+    :items-crafted               :int32
+    :relics-crafted              :int32
+    :tier2-relics-crafted        :int32
+    :tier3-relics-crafted        :int32
+    :devotion-shrines-unlocked   :int32
+    :one-shot-chests-unlocked    :int32
+    :lore-notes-collected        :int32
 
-   :boss-kills                  (s/variable-count :int32 :length 3)
+    :boss-kills                  (s/variable-count :int32 :length 3)
 
-   :survival-greatest-wave      :int32
-   :survival-greatest-score     :int32
-   :survival-defense-built      :int32
-   :survival-powerups-activated :int32
+    :survival-greatest-wave      :int32
+    :survival-greatest-score     :int32
+    :survival-defense-built      :int32
+    :survival-powerups-activated :int32
 
-   :skills-map (after-block-version 11
-                                    (s/variable-count
-                                     (s/ordered-map
-                                      :skill-name    (s/string :ascii)
-                                      :level         :int32)))
+    :skills-map (after-block-version 11
+                                     (s/variable-count
+                                      (s/ordered-map
+                                       :skill-name    (s/string :ascii)
+                                       :level         :int32)))
 
-   :endless-souls (after-block-version 11 :int32)
+    :endless-souls (after-block-version 11 :int32)
 
-   :endless-essence (after-block-version 11 :int32)
+    :endless-essence (after-block-version 11 :int32)
 
-   :difficulty-skip (after-block-version 11 :byte)
+    :difficulty-skip (after-block-version 11 :byte)
 
-   :unique-items-found          :int32
-   :randomized-items-found      :int32))
+    :unique-items-found          :int32
+    :randomized-items-found      :int32)
+   {:anchor true}           ;; Do we want to keep track of this as we read/write the file?
+   ))
 
 
 (def Block10
