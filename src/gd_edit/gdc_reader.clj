@@ -9,6 +9,19 @@
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
+(defmacro after-block-version
+  "Only return the body (else nil) if the block version is greater than or equal to `version`."
+  [version body]
+
+  `(s/conditional
+    (fn [~'data]
+      (cond
+        (>= (:version ~'data) ~version)
+        ~body
+
+        :else
+        nil))))
+
 ;;(set! *warn-on-reflection* true)
 (set! *unchecked-math* true)
 
@@ -449,7 +462,7 @@
    :health-potions-used     :int32
    :energy-potions-used     :int32
    :max-level               :int32
-   :hit-received            :int32
+   :hits-received           :int32
    :hits-inflicted          :int32
    :crits-inflicted         :int32
    :crits-received          :int32
@@ -476,6 +489,18 @@
    :survival-greatest-score     :int32
    :survival-defense-built      :int32
    :survival-powerups-activated :int32
+
+   :skills-map (after-block-version 11
+                                    (s/variable-count
+                                     (s/ordered-map
+                                      :skill-name    (s/string :ascii)
+                                      :level         :int32)))
+
+   :endless-souls (after-block-version 11 :int32)
+
+   :endless-essence (after-block-version 11 :int32)
+
+   :difficulty-skip (after-block-version 11 :byte)
 
    :unique-items-found          :int32
    :randomized-items-found      :int32))
@@ -976,6 +1001,15 @@
          ;; If a custom read function was provided, use that
          ;; Otherwise, try to read using a block spec
          block-data (s/read-struct block-spec-or-read-fn bb context)
+
+         ;; _ (do
+         ;;     (println "read-block--------------")
+         ;;     (println "id" id)
+         ;;     (println "length" length)
+         ;;     (println "expected-end-position" expected-end-position)
+         ;;     (println "actual-position" (.position bb))
+         ;;     (println "block-data")
+         ;;     (clojure.pprint/pprint block-data))
 
          ;; Verify we've reached the expected position
          _ (assert (= expected-end-position (.position bb)))
