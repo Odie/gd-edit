@@ -160,8 +160,7 @@
       (if-let [[field-name field-spec] (first spec-pairs)]
         (do
           (when *debug*
-            (println "reading field name:" field-name)
-            (println "field spec:" field-spec))
+            (println (format "%-20s %s %2s %s" "reading field:" field-name "" field-spec)))
 
           ;; If the spec looks like it's asking to attach some static data
           ;; to the map...
@@ -173,7 +172,7 @@
             ;; Otherwise, try to read the spec and attach the result
             (let [field-val (read-spec field-spec bb data context)]
               (when *debug*
-                (print field-name "=> ")
+                (print (format "%20s" "") field-name "=> ")
                 (clojure.pprint/pprint field-val))
 
               ;; Keep reading and looping until we're done with the spec pairs
@@ -537,6 +536,8 @@
 
   ;; Send the currently read data to the cond-fn to retrieve the spec to be used
   (when-let [spec (cond-fn data context)]
+    (when *debug*
+      (println "conditional => " spec))
     ;; Read the data using the retrieved spec if any
     (read-spec spec bb data context)))
 

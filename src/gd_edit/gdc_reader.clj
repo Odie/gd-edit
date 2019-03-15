@@ -9,6 +9,8 @@
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
+(def ^:dynamic *debug* false)
+
 (defmacro after-block-version
   "Only return the body (else nil) if the block version is greater than or equal to `version`."
   [version body]
@@ -21,6 +23,25 @@
                             data#)]
         (cond
           (>= (:version version-data#) ~version)
+          ~body
+
+          :else
+          nil)))))
+
+(defmacro between-block-version
+  "Only return the body (else nil) if the block version is greater than or equal to `version`."
+  [v1 v2 body]
+
+  `(s/conditional
+    (fn [data# context#]
+      (let [;; where can we find the version data?
+            version-data# (if (= (:mode @context#) :write)
+                            (peek (:anchor-stack @context#))
+                            data#)]
+        (cond
+          (and
+           (>= (:version version-data#) ~v1)
+           (<= (:version version-data#) ~v2))
           ~body
 
           :else
@@ -49,28 +70,29 @@
    :player-class-name (s/string :ascii)
    :character-level   :int32
    :hardcore-mode     :bool
-   :expansion-character? (s/conditional
-                          (fn [data context]
-                            (cond
-                              (= (:version data) 1) nil
-                              :else :byte)))))
+   :expansion-character? :byte))
 
 (def Block1
-  (s/ordered-map
-   :version                :int32
-   :in-main-quest          :bool
-   :has-been-in-game       :bool
-   :last-difficulty        :byte
-   :greatest-difficulty-completed :byte
-   :iron                   :int32
-   :greatest-survival-difficulty-completed :byte
-   :tributes               :int32
-   :ui-compass-state       :byte
-   :always-show-loot       :int32
-   :show-skill-help        :bool
-   :alt-weapon-set         :bool
-   :alt-weapon-set-enabled :bool
-   :player-texture         (s/string :ascii)))
+  (merge-meta
+   (s/ordered-map
+    :version                :int32
+    :in-main-quest          :bool
+    :has-been-in-game       :bool
+    :last-difficulty        :byte
+    :greatest-difficulty-completed :byte
+    :iron                   :int32
+    :greatest-survival-difficulty-completed :byte
+    :tributes               :int32
+    :ui-compass-state       :byte
+    :always-show-loot       (between-block-version 2 4 :int32)
+    :show-skill-help        :bool
+    :alt-weapon-set         :bool
+    :alt-weapon-set-enabled :bool
+    :player-texture         (s/string :ascii)
+    :loot-filters           (after-block-version 5 (s/variable-count :byte)))
+
+   {:anchor true})           ;; Do we want to keep track of this as we read/write the file?
+  )
 
 (def Block2
   (s/ordered-map
@@ -1004,19 +1026,21 @@
          _ (when (nil? block-spec-or-read-fn)
              (throw (Throwable. (str"Don't know how to read block " id))))
 
+         _ (when *debug*
+             (println "read-block--------------")
+             (println "id" id)
+             (println "length" length)
+             (println "expected-end-position" expected-end-position)
+             (println "actual-position" (.position bb)))
+
          ;; Try to read the block
          ;; If a custom read function was provided, use that
          ;; Otherwise, try to read using a block spec
          block-data (s/read-struct block-spec-or-read-fn bb context)
 
-         ;; _ (do
-         ;;     (println "read-block--------------")
-         ;;     (println "id" id)
-         ;;     (println "length" length)
-         ;;     (println "expected-end-position" expected-end-position)
-         ;;     (println "actual-position" (.position bb))
-         ;;     (println "block-data")
-         ;;     (clojure.pprint/pprint block-data))
+         _ (when *debug*
+             (println "block-data")
+             (clojure.pprint/pprint block-data))
 
          ;; Verify we've reached the expected position
          _ (assert (= expected-end-position (.position bb)))
@@ -1084,11 +1108,19 @@
         enc-table (generate-encryption-table seed)
         enc-context (make-enc-context seed enc-table)
 
+        _ (when *debug*
+            (println "\n---------------------- Preamble ----------------------"))
         preamble (s/read-struct FilePreamble bb enc-context)
+        _ (when *debug*
+            (clojure.pprint/pprint preamble))
+
         _ (validate-preamble preamble)
 
-
+        _ (when *debug*
+            (println "\n---------------------- Header ----------------------"))
         header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
+        _ (when *debug*
+            (clojure.pprint/pprint header))
 
         header-checksum (Integer/toUnsignedLong (.getInt bb))
         _ (assert (= header-checksum (:enc-state @enc-context)))
