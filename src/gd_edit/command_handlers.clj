@@ -311,7 +311,10 @@
                       (conj accum
                             [(str display-idx)                    ; command string
                              (format "%s (%s save)"
-                                     (u/last-path-component (.getPath dir))
+                                     (let [char-name (u/last-path-component (.getPath dir))]
+                                       (if (= \_ (first char-name))
+                                         (subs char-name 1)
+                                         char-name))
                                      (save-dir-type dir))         ; menu display string
                              (fn []                               ; function to run when selected
                                (let [savepath (.getPath (io/file dir "player.gdc"))]
