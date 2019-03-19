@@ -13,13 +13,30 @@
   "Initialize various globals, such as db and db-index"
   (gd-edit.core/initialize))
 
+(defn resolve-save-file [f]
+  ;; If the given file exists, nothing needs to be done to resolve the path
+  (if (.isFile (io/file f))
+    f
+
+    (->> (dirs/get-save-dir-search-list)  ;; look in all save dirs
+         (mapcat #(vector (io/file % f)   ;; just `f`, full path to save file
+                          (io/file % (str "_" f) "player.gdc"))) ;; _`f`/player.gdc, `f` is just the character dir name
+         (filter #(.isFile %))
+         first)))
+
 (defn load-character-file [f]
   "Loads the returns the character at the file location"
   (gdc/load-character-file f))
 
 (defn load-character [f]
   "Load the character and set as global state, then returns the character"
-  (gec/load-character-file f))
+
+  (if-let [target-file (resolve-save-file f)]
+    (gec/load-character-file target-file)
+    (println "File not found: " f)))
+
+(defn write-character-file [character f]
+  (gdc/write-character-file character f))
 
 (defn write-character-file [character f]
   (gdc/write-character-file character f))
@@ -45,16 +62,9 @@
 (comment
   (init)
 
-  (load-character "")
+  (load-character "Odie")
 
-  (do
-    (gd-edit.command-handlers/load-character-file
-     (-> (dirs/get-save-dir-search-list)
-         (second)
-         (io/file "_Odie/player.gdc")
-         (.getPath)
-         ))
-    nil)
+  (write-character-file @globals/character "/tmp/player.gdc")
 
   (cmd "show character-name")
 

@@ -159,75 +159,81 @@
   [^ByteBuffer bb context]
 
   (let [version (read-int! bb context)
-        has-data (read-bool! bb context)
-        sack-count (read-int! bb context)
-        focused-sack (read-int! bb context)
-        selected-sack (read-int! bb context)
+        has-data (read-bool! bb context)]
+    (if-not has-data
+      {:version           version
+       :has-data          has-data}
 
-        inventory-sacks (reduce (fn  [accum _]
-                                  (conj accum (read-block bb context {0 InventorySack})))
-                         []
-                         (range sack-count))
+      (let [sack-count (read-int! bb context)
+            focused-sack (read-int! bb context)
+            selected-sack (read-int! bb context)
 
-        use-alt-weaponset (read-bool! bb context)
+            inventory-sacks (reduce (fn  [accum _]
+                                      (conj accum (read-block bb context {0 InventorySack})))
+                                    []
+                                    (range sack-count))
 
-        equipment (reduce (fn  [accum _]
-                            (conj accum (s/read-struct EquipmentItem bb context)))
-                          []
-                          (range 12))
+            use-alt-weaponset (read-bool! bb context)
 
-        alternate1 (read-bool! bb context)
-        alternate1-set (reduce (fn  [accum _]
-                            (conj accum (s/read-struct EquipmentItem bb context)))
-                          []
-                          (range 2))
+            equipment (reduce (fn  [accum _]
+                                (conj accum (s/read-struct EquipmentItem bb context)))
+                              []
+                              (range 12))
 
-        alternate2 (read-bool! bb context)
-        alternate2-set (reduce (fn  [accum _]
-                                 (conj accum (s/read-struct EquipmentItem bb context)))
-                               []
-                               (range 2))]
-    {:version           version
-     :has-data          has-data
-     :sack-count        sack-count
-     :focused-sack      focused-sack
-     :selected-sack     selected-sack
-     :inventory-sacks   inventory-sacks
-     :use-alt-weaponset use-alt-weaponset
-     :equipment         equipment
-     :weapon-sets       [{:unused alternate1
-                          :items alternate1-set}
-                         {:unused alternate2
-                          :items alternate2-set}]}))
+            alternate1 (read-bool! bb context)
+            alternate1-set (reduce (fn  [accum _]
+                                     (conj accum (s/read-struct EquipmentItem bb context)))
+                                   []
+                                   (range 2))
+
+            alternate2 (read-bool! bb context)
+            alternate2-set (reduce (fn  [accum _]
+                                     (conj accum (s/read-struct EquipmentItem bb context)))
+                                   []
+                                   (range 2))]
+        {:version           version
+         :has-data          has-data
+         :sack-count        sack-count
+         :focused-sack      focused-sack
+         :selected-sack     selected-sack
+         :inventory-sacks   inventory-sacks
+         :use-alt-weaponset use-alt-weaponset
+         :equipment         equipment
+         :weapon-sets       [{:unused alternate1
+                              :items alternate1-set}
+                             {:unused alternate2
+                              :items alternate2-set}]}))))
 
 (defn write-block3
   [^ByteBuffer bb block context]
 
   (write-int! bb (:version block) context)
   (write-bool! bb (:has-data block) context)
-  (write-int! bb (:sack-count block) context)
-  (write-int! bb (:focused-sack block) context)
-  (write-int! bb (:selected-sack block) context)
 
-  (assert (= (:sack-count block) (count (:inventory-sacks block))))
-  (doseq [sack (:inventory-sacks block)]
-    (write-block bb sack context {0 InventorySack}))
+  (when (:has-data block)
+    (write-int! bb (:sack-count block) context)
+    (write-int! bb (:focused-sack block) context)
+    (write-int! bb (:selected-sack block) context)
 
-  (write-bool! bb (:use-alt-weaponset block) context)
+    (assert (= (:sack-count block) (count (:inventory-sacks block))))
+    (doseq [sack (:inventory-sacks block)]
+      (write-block bb sack context {0 InventorySack}))
 
-  (assert (=  (count (:equipment block)) 12))
-  (doseq [item (:equipment block)]
-    (s/write-struct EquipmentItem bb item context))
+    (write-bool! bb (:use-alt-weaponset block) context)
 
-  (write-bool! bb (get-in block [:weapon-sets 0 :unused]) context)
-  (assert (=  (count (get-in block [:weapon-sets 0 :items])) 2))
-  (doseq [item (get-in block [:weapon-sets 0 :items])]
-    (s/write-struct EquipmentItem bb item context))
+    (assert (=  (count (:equipment block)) 12))
+    (doseq [item (:equipment block)]
+      (s/write-struct EquipmentItem bb item context))
 
-  (write-bool! bb (get-in block [:weapon-sets 1 :unused]) context)
-  (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
-  (doseq [item (get-in block [:weapon-sets 1 :items])]
-    (s/write-struct EquipmentItem bb item context)))
+    (write-bool! bb (get-in block [:weapon-sets 0 :unused]) context)
+    (assert (=  (count (get-in block [:weapon-sets 0 :items])) 2))
+    (doseq [item (get-in block [:weapon-sets 0 :items])]
+      (s/write-struct EquipmentItem bb item context))
+
+    (write-bool! bb (get-in block [:weapon-sets 1 :unused]) context)
+    (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
+    (doseq [item (get-in block [:weapon-sets 1 :items])]
+      (s/write-struct EquipmentItem bb item context))))
 
 
 ;; For reference only
