@@ -3,7 +3,7 @@
 
 (set-env! :resource-paths #{"resources" "src"}
           :source-paths   #{"test"}
-          :dependencies   '[[org.clojure/clojure "1.9.0-alpha14"]
+          :dependencies   '[[org.clojure/clojure "1.9.0"]
                             [org.clojure/tools.namespace "0.2.11" :scope "test"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
                             [jline/jline "2.14.5"]
@@ -15,7 +15,7 @@
                             [net.java.dev.jna/jna-platform "4.2.2"]
                             [spyscope "0.1.6" :scope "test"]
                             ;; [fipp "0.6.8"]
-                            [org.clojure/core.async "0.2.395"]
+                            [org.clojure/core.async "0.4.490"]
                             [progress "1.0.2"]
                             [com.dropbox.core/dropbox-core-sdk "2.1.2" :scope "test"]
 

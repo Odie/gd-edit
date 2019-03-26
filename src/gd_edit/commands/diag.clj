@@ -19,8 +19,7 @@
         result (str/starts-with? jvm-version "1.8")
         test-info (str "JVM version: " jvm-version)]
 
-    (print-test-header result test-info)
-    result))
+    [result test-info]))
 
 (defn- verify-game-dir-present
   []
@@ -32,8 +31,8 @@
                     (str "Game directory exists")
                     (str "Game directory does not exist"))]
 
-    (print-test-header result test-info)
-    result))
+    ;;(print-test-header result test-info)
+    [result test-info]))
 
 (defn verify-file-exists
   [file-path]
@@ -45,31 +44,34 @@
                     (str "File exists: " file-path)
                     (str "File does not exist: " file-path))]
 
-    (print-test-header result test-info)
-    result))
+    [result test-info]))
 
 (defn- test-passes?
   [test-fn-call]
 
-  (if (apply (first test-fn-call) (rest test-fn-call))
-    true
-    false))
+  (apply (first test-fn-call) (rest test-fn-call)))
 
 (defn- verify-test
-  [[test-fn-call err-msg]]
+  [[test-fn-call additional-message]]
 
-  (if (test-passes? test-fn-call)
-    true
-    (do (println err-msg)
-        (newline)
-        false)))
+  (let [[passed? test-msg] (test-passes? test-fn-call)]
+    (cond-> {:test-fn-call test-fn-call
+             :passed? passed?
+             :test-msg test-msg}
+      (not passed?) (assoc :additional-message additional-message))))
 
-(defn diag-handler
-  [[input tokens]]
+(defn print-failed-diag-tests
+  [test-results]
+  (doseq [test-result test-results]
+    (when-not (:passed? test-result)
+      (print-test-header (:passed? test-result) (:test-msg test-result))
+      (println (:additional-message test-result)))))
+
+(defn diag-info
+  []
 
   (let [tests [[[verify-jvm-version]
-                (yellow "Please make sure you're running Java 1.8 or above")
-                ]
+                (yellow "Please make sure you're running Java 1.8 or above")]
 
                [[verify-game-dir-present]
                 (yellow "Please use the 'gamedir' command to help the editor find your game installation directory")]
@@ -81,9 +83,22 @@
                 (yellow "Cannot find file: Text_EN.arc. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]
 
                [[verify-file-exists (io/file (dirs/get-game-dir) dirs/texture-file)]
-                 (yellow "Cannot find file: Items.arc. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]]
+                (yellow "Cannot find file: Items.arc. Please set the gamedir properly and make sure all GD game files are present in the game installation directory")]]]
 
-        all-tests-passed (every? verify-test tests)]
+    (map verify-test tests)))
+
+
+
+(defn diag-handler
+  [[input tokens]]
+
+  (let [test-results (diag-info)
+        all-tests-passed (every? :passed? test-results)]
+
+    (doseq [test-result test-results]
+      (print-test-header (:passed? test-result) (:test-msg test-result))
+      (when-not (:passed? test-result)
+        (println (:additional-message test-result))))
 
     (newline)
     (if all-tests-passed

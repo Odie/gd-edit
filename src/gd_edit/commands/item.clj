@@ -8,6 +8,7 @@
              [structure-walk :as sw]
              [utils :as u]]
             [gd-edit.commands.help :as help]
+            [gd-edit.commands.diag :as diag]
             [clojure.string :as str]
             [clojure.core.reducers :as r]
             [jansi-clj.core :refer :all]))
@@ -479,7 +480,6 @@
     ;; Did the call ask to have an item added to an inventory/sack?
     (path-is-inventory? character val-path)
     (if-let [coord (inventory/fit-new-item (second val-path)
-                                           (get-in @character val-path)
                                            item)]
       (do
         (swap! character update-in val-path conj (merge item coord))
@@ -512,36 +512,46 @@
       :else
       walk-result)))
 
+
 (defn set-item-handler
   [[input [path target-name level-cap-str]]]
 
-  (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
-                       (item-located-or-print-error))]
-    (let [{:keys [status found-item actual-path]} result
-          level-cap (when (some? level-cap-str)
-                      (Integer/parseInt level-cap-str))]
+  ;; Do some sanity checks before we try creating and placing an item
+  (let [diag-info (diag/diag-info)]
+    (if-not (every? :passed? diag-info)
+      (do
+        (diag/print-failed-diag-tests diag-info)
+        (println)
+        (println (red "Cannot create the item because the editor hasn't been configured properly.")))
 
-      ;; Try to construct the requested item
-      (let [item (construct-item target-name @globals/db @globals/db-index level-cap)]
-        ;; If construction was not successful, inform the user and abort
-        (cond
-          (nil? item)
-          (println "Sorry, the item could not be constructed")
+      ;; Actually do the work...
+      (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
+                           (item-located-or-print-error))]
+        (let [{:keys [status found-item actual-path]} result
+              level-cap (when (some? level-cap-str)
+                          (Integer/parseInt level-cap-str))]
 
-          (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item @globals/db-and-index))) 0.8))
-          (do
-            (printer/show-item item)
-            (println "Sorry, the item generated doesn't look like the item you asked for.")
-            (println (red "Item not altered")))
+          ;; Try to construct the requested item
+          (let [item (construct-item target-name @globals/db @globals/db-index level-cap)]
+            ;; If construction was not successful, inform the user and abort
+            (cond
+              (nil? item)
+              (println "Sorry, the item could not be constructed")
 
-          ;; Otherwise, put the item into the character sheet
-          :else
-          (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
-            (do
-              (println "Item placed in" (yellow (printer/displayable-path placed-path)))
-              (println)
-              (printer/show-item item))
-            (println "Sorry, there is no room to fit the item.")))))))
+              (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item @globals/db-and-index))) 0.8))
+              (do
+                (printer/show-item item)
+                (println "Sorry, the item generated doesn't look like the item you asked for.")
+                (println (red "Item not altered")))
+
+              ;; Otherwise, put the item into the character sheet
+              :else
+              (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
+                (do
+                  (println "Item placed in" (yellow (printer/displayable-path placed-path)))
+                  (println)
+                  (printer/show-item item))
+                (println "Sorry, there is no room to fit the item.")))))))))
 
 
 

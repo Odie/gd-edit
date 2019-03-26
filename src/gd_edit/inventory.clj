@@ -14,6 +14,10 @@
             [clojure.java.io :as io]
             ))
 
+(defn- character-inventory
+  [n]
+  (get-in @globals/character [:inventory-sacks n :inventory-items]))
+
 (defn pixel-dims->slot-dims
   [dims]
 
@@ -22,6 +26,7 @@
          :height (/ (:height dims) 32)))
 
 (defn inv-slot-dims
+  "Return the expected dimensions of character/inventory-sacks/`num`"
   [num]
 
   (let [grid-info (if (= num 0)
@@ -165,9 +170,14 @@
        (items->dims items)))
 
 (defn occupied-slots
-  [inv-idx inv-items]
+  "Return a list of occupied slot ids.
+  inv-idx: index of the inventory/sack in the character.
+           This is used to determine the dimensions and the items in the inventory/sack."
+  [inv-idx]
 
-  (let [;; Determine the total size/dimensions of the inventory
+  (let [inv-items (character-inventory inv-idx)
+
+        ;; Determine the total size/dimensions of the inventory
         inv-dims (inv-slot-dims inv-idx)
 
         ;; The given inventory items should have X, Y in slot coordinates already.
@@ -181,12 +191,11 @@
 (defn empty-slots
   "Return a list of empty slot ids.
   inv-idx: index of the inventory/sack in the character
-           This is used to determine the total size of the inventory
-  inv-items: list of items in the inventory "
-  [inv-idx inv-items]
+           This is used to determine the dimensions and the items in the inventory/sack."
+  [inv-idx]
 
   (let [;; Generate a list of slot ids that are occupied
-        occupied-slots (set (occupied-slots inv-idx inv-items))
+        occupied-slots (set (occupied-slots inv-idx))
 
         ;; Generate a list of number that represent all slots in the inventory/sack
         inv-dims (inv-slot-dims inv-idx)
@@ -197,12 +206,11 @@
 (defn fit-new-item
   "Given an inventory and an new item, return the coordinate in the sack
   where the given item can be placed"
-  [inv-idx inv-items new-item]
+  [inv-idx new-item]
 
   (let [new-item-dims (item->dims new-item)
-        empty-slots (set (empty-slots inv-idx inv-items))
+        empty-slots (set (empty-slots inv-idx))
         stride (stride inv-idx)]
-
 
     ;; Look for some empty slot such that...
     (if-let [target-slot
@@ -210,10 +218,9 @@
                      (let [candidate-rect (merge new-item (slot-id->coord candidate-slot stride) new-item-dims)
                            required-slots (set (rect->slot-ids candidate-rect stride))]
 
-                       ;; All slots required when placing the item there are empty/available
+                       ;; Are all slots required to place the item empty/available?
                        (if (= (set/intersection required-slots empty-slots) required-slots)
-                         candidate-slot)
-                       ))
+                         candidate-slot)))
                    (sort empty-slots))]
 
       (slot-id->coord target-slot stride))))
