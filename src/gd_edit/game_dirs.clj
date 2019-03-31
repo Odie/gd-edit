@@ -158,6 +158,11 @@
   "Returns the directory for Ashes of Malmouth dlc."
   (io/file (get-game-dir) "gdx1"))
 
+(defn get-gdx2-dir
+  []
+  "Returns the directory for Forgotten Gods dlc."
+  (io/file (get-game-dir) "gdx2"))
+
 (defn get-mod-dir
   "Returns the configured mod's directory"
   []
@@ -168,12 +173,14 @@
   []
   [(get-game-dir)
    (get-gdx1-dir)
+   (get-gdx2-dir)
    (get-mod-dir)])
 
 (defn get-db-file-overrides
   []
   (->> [(io/file (get-game-dir) database-file)
         (io/file (get-gdx1-dir) "database/GDX1.arz")
+        (io/file (get-gdx2-dir) "database/GDX2.arz")
         (io/file (get-mod-dir) database-file)]
        (filter u/path-exists?)
        (into [])))
