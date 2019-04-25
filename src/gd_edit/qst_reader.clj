@@ -16,25 +16,25 @@
 ;; Quest File format defs
 ;;------------------------------------------------------------------------------
 (def FilePreamble
-  (s/ordered-map
+  (s/struct-def
    :magic   :int32
    :version :int32))
 
 (def Condition-Header
-  (s/ordered-map
+  (s/struct-def
    :version     :byte
    :comparision :int32))
 
 (def Condition-On-Quest
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :on-quest
          :quest       (s/string :utf-8)
          :on          :bool)))
 
 (def Condition-Quest-Task-Complete
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :quest-task-complete
          :quest       (s/string :utf-8)
          :task        :int32
@@ -42,51 +42,51 @@
 
 (def Condition-Has-Experience
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :has-experience
          :amount      :int32)))
 
 (def Condition-Is-Level
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :is-level
          :level       :int32)))
 
 (def Condition-Is-Difficulty
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :is-difficulty
          :difficulty  :int32)))
 
 (def Condition-Is-Hardcore
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :is-hardcore
          :hardcore    :bool)))
 
 (def Condition-Has-Faction
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :has-faction
          :faction     (s/string :utf-8)
          :value       :int32)))
 
 (def Condition-Has-Token
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :has-token
          :token   (s/string :utf-8)
          :has     :bool)))
 
 (def Condition-Has-Money
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :has-money
          :amount  :int32)))
 
 (def Condition-Has-Item
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :has-item
          :dbr       (s/string :utf-8)
          :count     :int32
@@ -94,14 +94,14 @@
 
 (def Condition-Has-Killed
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type :has-killed
-         :monster-names (s/variable-count (s/string :utf-8))
+         :monster-names (s/array (s/string :utf-8))
          :count         :int32)))
 
 (def Condition-Has-Quest-Objective
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :has-quest-objective
          :quest-file    (s/string :utf-8)
          :task-uid      :int32
@@ -109,7 +109,7 @@
          :satisfied     :bool)))
 
 (def Lua-Args
-  (s/ordered-map
+  (s/struct-def
    :type          :int32
    :bool-val      :bool
    :number-val    :float
@@ -117,19 +117,19 @@
 
 (def Condition-Lua-Script
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :has-lua-script
          :function-name (s/string :utf-8)
-         :args          (s/variable-count Lua-Args))))
+         :args          (s/array Lua-Args))))
 
 (def Condition-Knows-Player
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :known          :bool)))
 
 (def Condition-On-Quest-Task
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :on-quest-task
          :quest         (s/string :utf-8)
          :task          :int32
@@ -137,72 +137,72 @@
 
 (def Condition-Used-Quest-Item
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :used-quest-task
          :dbr           (s/string :utf-8)
          :count         :int32)))
 
 (def Condition-Has-Killed-Proxy
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :has-killed-proxy
-         :proxy-names  (s/variable-count (s/string :utf-8))
+         :proxy-names  (s/array (s/string :utf-8))
          :count        :int32)))
 
 (def Condition-Wait-For-Completion
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :wait-for-completion)))
 
 (def Condition-Server-Has-Token
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :server-has-token
          :token        (s/string :utf-8)
          :has          :bool)))
 
 (def Condition-Quest-Blocked
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :quest-blocked
          :quest        (s/string :utf-8)
          :blocked      :bool)))
 
 (def Condition-Anyone-Has-Token
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :anyone-has-token
          :token        (s/string :utf-8)
          :has          :bool)))
 
 (def Condition-Check-Random-Value
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :check-random-value
          :name         (s/string :utf-8)
          :value        :int32)))
 
 (def Condition-Owns-DLC
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :owns-dlc
          :dlc-id       :int32)))
 
 (def Condition-Has-Tribute
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :has-tribute
          :amount       :int32)))
 
 (def Condition-Earned-Devotion
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :earned-devotion
          :amount       :int32)))
 
 (def Condition-Has-Mastery
   (into Condition-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :has-mastery
          :mastery      :int32
          :has          :bool)))
@@ -261,7 +261,7 @@
                              (read-condition bb context)))}))))
 
 (def Action-Header
-  (s/ordered-map
+  (s/struct-def
    :version   :byte))
 
 (defn Action-Begin-Quest
@@ -270,132 +270,132 @@
 
 (def Action-Begin-Quest-Task
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :begin-quest-task
          :quest        (s/string :utf-8)
          :task         :int32)))
 
 (def Action-Complete-Quest
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :complete-quest
          :quest        (s/string :utf-8))))
 
 (def Action-Complete-Quest-Task
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :complete-quest-task
          :quest    (s/string :utf-8)
          :task     :int32)))
 
 (def Action-Give-Money
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :give-money
          :amount   :int32)))
 
 (def Action-Give-Faction
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :give-faction
          :faction      (s/string :utf-8)
          :amount       :int32)))
 
 (def Action-Give-Item
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :give-item
          :dbr          (s/string :utf-8)
          :amount       :int32)))
 
 (def Action-Give-Level
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :give-level
          :amount       :int32)))
 
 (def Action-Give-Experience
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :give-experience
          :amount       :int32)))
 
 (def Action-Give-Token
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :give-token
          :token        (s/string :utf-8))))
 
 (def Action-Remove-Token
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type  :remove-token
          :token        (s/string :utf-8))))
 
 (def Action-Lua-Script
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :lua-script
          :function-name (s/string :utf-8)
-         :args          (s/variable-count Lua-Args))))
+         :args          (s/array Lua-Args))))
 
 (def Action-Debug-Print
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :debug-print
          :text          (s/string :utf-8))))
 
 (def Action-Play-Sound
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :play-sound
          :dbr           (s/string :utf-8))))
 
 (def Action-Play-Animation
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :play-animation
          :animation     :int32)))
 
 (def Action-Give-Skill-Point
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :give-skill-point
          :amount        :int32)))
 
 (def Action-Open-Merchant-Window
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :open-merchant-window)))
 
 (def Action-Notification
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :notification
          :tag           (s/string :utf-8))))
 
 (def Action-Give-Attribute-Point
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :give-attribute-point
          :amount        :int32)))
 
 (def Action-Script-Event
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :script-event
          :event-name    (s/string :utf-8))))
 
 (def Action-Give-Random-Item
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :give-random-item
          :dbr           (s/string :utf-8)
          :amount        :int32)))
 
 (def Action-Generate-Random-Value
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :generate-random-value
          :name          (s/string :utf-8)
          :min           :int32
@@ -403,44 +403,44 @@
 
 (def Action-Cast-Skill
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :cast-skill
          :dbr           (s/string :utf-8))))
 
 (def Action-Unlock-Faction
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :unlock-faction
          :faction       (s/string :utf-8))))
 
 (def Action-Set-Faction
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :set-faction
          :faction       (s/string :utf-8)
          :amount        :int32)))
 
 (def Action-Give-Devotion
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :give-devotion
          :amount        :int32)))
 
 (def Action-Give-Tribute
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :give-tribute
          :amount        :int32)))
 
 (def Action-Unlock-Tutorial
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :unlock-tutorial
          :page          :int32)))
 
 (def Action-Play-Video
   (into Action-Header
-        (s/ordered-map
+        (s/struct-def
          :static/type   :play-video
          :path          (s/string :utf-8)
          :allow-skip    :bool)))
@@ -490,46 +490,46 @@
     (s/read-struct spec bb context {:type type})))
 
 (def QuestEvent
-  (s/ordered-map
+  (s/struct-def
    :static/type  :quest-event
    :flags        :int32
    :conditions   read-conditions
-   :actions      (s/variable-count read-action)))
+   :actions      (s/array read-action)))
 
 (def QuestObjective
-  (s/ordered-map
+  (s/struct-def
    :static/type  :quest-objective
    :uid          :int32
    :flags        :int32
    :conditions   read-conditions
-   :actions      (s/variable-count read-action)))
+   :actions      (s/array read-action)))
 
 (def QuestTask
-  (s/ordered-map
+  (s/struct-def
    :static/type    :quest-task
    :uid            :int32
    :flags          :int32
-   :on-accept      (s/variable-count QuestEvent)
-   :objectives     (s/variable-count QuestObjective)
-   :on-complete    (s/variable-count QuestEvent)
+   :on-accept      (s/array QuestEvent)
+   :objectives     (s/array QuestObjective)
+   :on-complete    (s/array QuestEvent)
    :is-blocker     :bool
    :dont-propegate :bool))
 
 (def Quest
-  (s/ordered-map
+  (s/struct-def
    :static/type :quest
    :uid         :int32
    :flags       :int32
-   :tasks       (s/variable-count QuestTask)))
+   :tasks       (s/array QuestTask)))
 
 (def StringTable
-  (s/ordered-map
+  (s/struct-def
    :name      (s/string :utf-8)
-   :tags      (s/variable-count (s/string :utf-8))))
+   :tags      (s/array (s/string :utf-8))))
 
 (def StringTables
-  (s/ordered-map
-   :string-tables (s/variable-count StringTable)))
+  (s/struct-def
+   :string-tables (s/array StringTable)))
 
 (defn read-block-start
   [bb context]

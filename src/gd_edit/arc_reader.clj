@@ -12,7 +12,7 @@
   (:gen-class))
 
 (def arc-header
-  (s/ordered-map
+  (s/struct-def
    :magic :int32
    :version :int32
    :file-entries :int32
@@ -22,7 +22,7 @@
    :record-table-offset :int32))
 
 (def arc-record-header
-  (s/ordered-map
+  (s/struct-def
    :entry-type :int32
    :offset :int32
    :compressed-size :int32
@@ -35,13 +35,13 @@
    :string-entry-offset :int32))
 
 (def arc-file-part-header
-  (s/ordered-map
+  (s/struct-def
    :offset :int32
    :compressed-size :int32
    :decompressed-size :int32))
 
 (def tex-header
-  (s/ordered-map
+  (s/struct-def
    :magic          (s/string :ascii
                              :length 3)
    :version      :byte
@@ -50,13 +50,13 @@
 
 
 (def dds-preamble
-  (s/ordered-map
+  (s/struct-def
    :magic          (s/string :ascii
                              :length 3)
    :variant      :byte))
 
 (def dds-header
-  (s/ordered-map
+  (s/struct-def
    :size         :int32
    :flags        :int32
    :height       :int32

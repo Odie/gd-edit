@@ -13,7 +13,7 @@
 (declare read-block read-block-start read-and-verify-block-end)
 
 (def FilePreamble
-  (s/ordered-map
+  (s/struct-def
    :magic   :int32
    :version :int32))
 
@@ -25,9 +25,9 @@
 ;; Tokens block
 (def Block10
   ^{:known-versions #{2}}
-  (s/ordered-map
+  (s/struct-def
    :version :int32
-   :tokens (s/variable-count (s/string :ascii))))
+   :tokens (s/array (s/string :ascii))))
 
 
 (defn objectives-count
@@ -42,12 +42,12 @@
 
 
 (def TaskInnerBlock
-  (s/ordered-map
+  (s/struct-def
    :state :int32
    :in-progress :byte
-   :objectives (s/variable-count :int32
-                                 :read-length-fn objectives-count
-                                 :skip-write-length true)))
+   :objectives (s/array :int32
+                        :read-length-fn objectives-count
+                        :skip-write-length true)))
 
 
 (defn read-task-block
@@ -71,25 +71,25 @@
 
 (def Task
   (gdc/merge-meta
-   (s/ordered-map
+   (s/struct-def
     :static/type :task
     :id1 :int32
     :id2 UID
 
     ;; :state :int32
     ;; :in-progress :byte
-    ;; :objectives (s/variable-count :int32
-    ;;                               :read-length-fn objectives-count
-    ;;                               :skip-write-length true)
+    ;; :objectives (s/array :int32
+    ;;                      :read-length-fn objectives-count
+    ;;                      :skip-write-length true)
     )
    {:struct/read read-task-block
     :struct/write write-task-block}))
 
 
 (def TaskListBlock
-  (s/ordered-map
+  (s/struct-def
    :static/type :task-list-block
-   :tasks (s/variable-count Task)))
+   :tasks (s/array Task)))
 
 
 (defn read-quest-single
@@ -110,11 +110,11 @@
 
 (def Quest
   (gdc/merge-meta
-   (s/ordered-map
+   (s/struct-def
     :static/type :quest
     :id1 :int32
     :id2 UID
-    :tasks (s/variable-count Task))
+    :tasks (s/array Task))
 
    {:struct/read read-quest-single
     :struct/write write-quest-single}))
@@ -123,9 +123,9 @@
 ;; Quests block
 (def Block11
   ^{:known-versions #{3}}
-  (s/ordered-map
+  (s/struct-def
    :version :int32
-   :quests (s/variable-count Quest)))
+   :quests (s/array Quest)))
 
 (def block-specs
   {10 Block10

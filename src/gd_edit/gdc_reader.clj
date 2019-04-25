@@ -59,12 +59,12 @@
   (with-meta obj (merge (meta obj) map)))
 
 (def FilePreamble
-  (s/ordered-map
+  (s/struct-def
    :magic   :int32
    :version :int32))
 
 (def Header
-  (s/ordered-map
+  (s/struct-def
    :character-name    (s/string :utf-16-le)
    :male              :bool
    :player-class-name (s/string :ascii)
@@ -74,7 +74,7 @@
 
 (def Block1
   (merge-meta
-   (s/ordered-map
+   (s/struct-def
     :version                :int32
     :in-main-quest          :bool
     :has-been-in-game       :bool
@@ -89,13 +89,13 @@
     :alt-weapon-set         :bool
     :alt-weapon-set-enabled :bool
     :player-texture         (s/string :ascii)
-    :loot-filters           (after-block-version 5 (s/variable-count :byte)))
+    :loot-filters           (after-block-version 5 (s/array :byte)))
 
    {:anchor true})           ;; Do we want to keep track of this as we read/write the file?
   )
 
 (def Block2
-  (s/ordered-map
+  (s/struct-def
    :version                :int32
    :level-in-bio           :int32
    :experience             :int32
@@ -112,7 +112,7 @@
 
 
 (def Item
-  (s/ordered-map
+  (s/struct-def
    :basename       (s/string :ascii)
    :prefix-name    (s/string :ascii)
    :suffix-name    (s/string :ascii)
@@ -133,26 +133,26 @@
 
 (def InventoryItem
   (into Item
-        (s/ordered-map
+        (s/struct-def
          :X :int32
          :Y :int32)))
 
 (def StashItem
   (into Item
-        (s/ordered-map
+        (s/struct-def
          :X :int32
          :Y :int32)))
 
 (def EquipmentItem
   (into Item
-        (s/ordered-map
+        (s/struct-def
          :attached :bool)))
 
 
 (def InventorySack
-  (s/ordered-map
+  (s/struct-def
    :unused :bool
-   :inventory-items (s/variable-count InventoryItem)))
+   :inventory-items (s/array InventoryItem)))
 
 
 (defn read-block3
@@ -239,7 +239,7 @@
 ;; For reference only
 (def Block3
   (with-meta
-    (s/ordered-map
+    (s/struct-def
      :version           :int32
      :has-data          :bool
      :sack-count        :int32
@@ -248,20 +248,20 @@
      :inventory-sacks   :ignore
      :use-alt-weaponset :bool
      :equipment         :ignore
-     :weapon-sets       (s/ordered-map
+     :weapon-sets       (s/struct-def
                          :unused :bool
-                         :items (s/variable-count EquipmentItem
-                                                  :length 2)))
+                         :items (s/array EquipmentItem
+                                         :length 2)))
     {:struct/read read-block3
      :struct/write write-block3}))
 
 
 (def Stash
-  (s/ordered-map
+  (s/struct-def
    :width  :int32
    :height :int32
 
-   :items  (s/variable-count StashItem)
+   :items  (s/array StashItem)
    ))
 
 (defn read-block4
@@ -288,7 +288,7 @@
 
 (def Block4
   (with-meta
-    (s/ordered-map)
+    (s/struct-def)
     {:struct/read read-block4
      :struct/write write-block4}))
 
@@ -297,47 +297,47 @@
 
 
 (def Block5
-  (s/ordered-map
+  (s/struct-def
 
    :version :int32
 
-   :spawn-points (s/variable-count
-                  (s/variable-count UID)
+   :spawn-points (s/array
+                  (s/array UID)
                   :length 3)
 
-   :current-respawn (s/variable-count UID
-                     :length 3)
+   :current-respawn (s/array UID
+                             :length 3)
 ))
 
 (def Block6
-  (s/ordered-map
+  (s/struct-def
    :version :int32
 
-   :teleporter-points (s/variable-count
-                       (s/variable-count UID)
+   :teleporter-points (s/array
+                       (s/array UID)
                        :length 3)
    ))
 
 (def Block7
-  (s/ordered-map
+  (s/struct-def
    :version :int32
 
-   :markers (s/variable-count
-             (s/variable-count UID)
+   :markers (s/array
+             (s/array UID)
              :length 3)
 ))
 
 (def Block17
-  (s/ordered-map
+  (s/struct-def
    :version :int32
 
-   :shrines (s/variable-count
-             (s/variable-count UID)
+   :shrines (s/array
+             (s/array UID)
              :length 6)
    ))
 
 (def CharacterSkill
-  (s/ordered-map
+  (s/struct-def
    :skill-name               (s/string :ascii)
    :level                    :int32
    :enabled                  :bool
@@ -350,7 +350,7 @@
    :autocast-controller-name (s/string :ascii)))
 
 (def ItemSkill
-  (s/ordered-map
+  (s/struct-def
    :skill-name               (s/string :ascii)
    :autocast-skill-name      (s/string :ascii)
    :autocast-controller-name (s/string :ascii)
@@ -359,23 +359,23 @@
    ))
 
 (def Block8
-  (s/ordered-map
+  (s/struct-def
    :version :int32
 
-   :skills                     (s/variable-count CharacterSkill)
+   :skills                     (s/array CharacterSkill)
    :masteries-allowed          :int32
    :skill-points-reclaimed     :int32
    :devotion-points-reclaimed  :int32
-   :item-skills                (s/variable-count ItemSkill)))
+   :item-skills                (s/array ItemSkill)))
 
 (def Block12
-  (s/ordered-map
+  (s/struct-def
    :version :int32
-   :lore-item-names (s/variable-count
+   :lore-item-names (s/array
                      (s/string :ascii))))
 
 (def Faction
-  (s/ordered-map
+  (s/struct-def
    :faction-changed  :bool
    :faction-unlocked :bool
    :faction-value    :float
@@ -383,10 +383,10 @@
    :negative-boost   :float))
 
 (def Block13
-  (s/ordered-map
+  (s/struct-def
    :version        :int32
    :my-faction     :int32
-   :faction-values (s/variable-count Faction)))
+   :faction-values (s/array Faction)))
 
 (defn read-hotslot
   [^ByteBuffer bb context]
@@ -435,7 +435,7 @@
 
 (def HotSlot
   (merge-meta
-   (s/ordered-map
+   (s/struct-def
     :skill-name          (s/string :ascii)
     :item-name           (s/string :ascii)
     :bitmap-up           (s/string :ascii)
@@ -448,14 +448,14 @@
     :struct/write write-hotslot}))
 
 (def Block14
-  (s/ordered-map
+  (s/struct-def
    :version                :int32
    :equipment-selection    :bool
    :skill-window-selection :int32
    :skill-setting-valid    :bool
 
-   :skill-sets             (s/variable-count
-                            (s/ordered-map
+   :skill-sets             (s/array
+                            (s/struct-def
                              :primary-skill   (s/string :ascii)
                              :secondary-skill (s/string :ascii)
                              :skill-active    :bool)
@@ -465,19 +465,19 @@
                              (fn [data context]
                                (cond
                                  (= (:version data) 4)
-                                 (s/variable-count HotSlot :length 36)
+                                 (s/array HotSlot :length 36)
                                  :else
-                                 (s/variable-count HotSlot :length 46))))
+                                 (s/array HotSlot :length 46))))
    :camera-distance        :float
    ))
 
 (def Block15
-  (s/ordered-map
+  (s/struct-def
    :version :int32
-   :tutorials-unlocked (s/variable-count :int32)))
+   :tutorials-unlocked (s/array :int32)))
 
 (def GreatestMonsterKilled
-  (s/ordered-map
+  (s/struct-def
    :name               (s/string :ascii)
    :level              :int32
    :life-mana          :int32
@@ -486,7 +486,7 @@
 
 (def Block16
   (merge-meta
-   (s/ordered-map
+   (s/struct-def
     :version                 :int32
     :playtime-seconds        :int32
     :death-count             :int32
@@ -501,7 +501,7 @@
     :crits-received          :int32
     :greatest-damage-done    :float
 
-    :greatest-monster-killed (s/variable-count GreatestMonsterKilled :length 3)
+    :greatest-monster-killed (s/array GreatestMonsterKilled :length 3)
 
     :champion-kills              :int32
     :last-monster-hit-DA         :float
@@ -516,7 +516,7 @@
     :one-shot-chests-unlocked    :int32
     :lore-notes-collected        :int32
 
-    :boss-kills                  (s/variable-count :int32 :length 3)
+    :boss-kills                  (s/array :int32 :length 3)
 
     :survival-greatest-wave      :int32
     :survival-greatest-score     :int32
@@ -524,8 +524,8 @@
     :survival-powerups-activated :int32
 
     :skills-map (after-block-version 11
-                                     (s/variable-count
-                                      (s/ordered-map
+                                     (s/array
+                                      (s/struct-def
                                        :skill-name    (s/string :ascii)
                                        :level         :int32)))
 
@@ -542,11 +542,11 @@
 
 
 (def Block10
-  (s/ordered-map
+  (s/struct-def
    :version               :int32
 
-   :tokens-per-difficulty (s/variable-count
-                           (s/variable-count
+   :tokens-per-difficulty (s/array
+                           (s/array
                             (s/string :ascii))
                            :length 3)))
 

@@ -15,7 +15,7 @@
   (:gen-class))
 
 (def arz-header
-  (s/ordered-map
+  (s/struct-def
    :unknown              :int16
    :version              :int16
    :record-table-start   :int32
@@ -26,7 +26,7 @@
 
 
 (def arz-string-table
-  (s/variable-count
+  (s/array
    (s/string :ascii)
    :length-prefix :int32))
 
@@ -80,7 +80,7 @@
 
 
 (def arz-record-header
-  (s/ordered-map
+  (s/struct-def
    :filename          :int32
    :type              (s/string :ascii)
    :offset            :int32

@@ -22,8 +22,7 @@
    :int32  [:int32   4 (fn[^ByteBuffer bb & prim-specs] (.getInt bb))   ]
    :int64  [:int64   8 (fn[^ByteBuffer bb & prim-specs] (.getLong bb))  ]
    :float  [:float   4 (fn[^ByteBuffer bb & prim-specs] (.getFloat bb)) ]
-   :double [:double  4 (fn[^ByteBuffer bb & prim-specs] (.getDouble bb))]
-   })
+   :double [:double  4 (fn[^ByteBuffer bb & prim-specs] (.getDouble bb))]})
 
 
 (defn atom?
@@ -54,7 +53,7 @@
    (take-nth 2 (rest spec))))
 
 
-(defn ordered-map?
+(defn struct-def?
   [spec]
   (= (-> spec
          meta
@@ -67,7 +66,7 @@
   [spec]
 
   ;; If it looks like an ordered map
-  (if (ordered-map? spec)
+  (if (struct-def? spec)
 
     ;; strip all the odd number fields
     (take-nth 2 (rest spec))
@@ -152,7 +151,7 @@
     (fn? spec)
     (spec bb context)
 
-    (ordered-map? spec)
+    (struct-def? spec)
     (loop [spec-pairs (partition 2 spec)
            data data]
 
@@ -206,18 +205,18 @@
         (throw (Throwable. (str "Cannot handle spec:" spec)))))))
 
 
-(defn ordered-map
+(defn struct-def
   "Tags the given spec so read-structure will return a map instead of a vector.
   Returns the collection it was given."
   [& fields]
   (with-meta (into [] fields) {:struct/return-type :map}))
 
 
-(defn variable-count
+(defn array
   "Tags the given spec to say it will repeat a number of times.
 
   Exmaple:
-  (variable-count :uint32 :count-prefix :uint16)
+  (array :uint32 :count-prefix :uint16)
 
   This says we will read a :uint16 first to determine how many :uint32 to read
   from the stream."
@@ -234,14 +233,14 @@
     ;; Attach the meta info to the spec
     ;; Any sequence can be have meta info attached
     (with-meta spec-seq
-      {:struct/type :variable-count
+      {:struct/type :array
        :struct/length length
        :struct/length-prefix length-prefix
        :struct/read-length-fn read-length-fn
        :struct/skip-write-length skip-write-length})))
 
 
-(defmethod read-spec :variable-count
+(defmethod read-spec :array
   [spec bb data context]
 
   (let [;; Destructure fields in the attached meta info
@@ -256,7 +255,7 @@
                  :else (read-spec length-prefix bb data context))
 
         _ (when *debug*
-            (println "variable-count:" length))
+            (println "array:" length))
 
         ;; Unwrap the spec so we can read it
         unwrapped-spec (first spec)
@@ -374,7 +373,7 @@
 
 (defmulti write-spec spec-type)
 
-(defmethod write-spec :variable-count
+(defmethod write-spec :array
   [spec ^ByteBuffer bb data context]
 
   (let [;; Destructure fields in the attached meta info
@@ -394,7 +393,7 @@
         unwrapped-spec (first spec)]
 
     (when *debug*
-      (println "[write-spec :variable-count] spec" spec))
+      (println "[write-spec :array] spec" spec))
 
     ;; Write out each item in the sequence
     (doseq [item data]
@@ -475,7 +474,7 @@
     ((:struct/write (meta spec)) bb data context)
 
     ;; If the spec looks like it is describing fields of a map...
-    (ordered-map? spec)
+    (struct-def? spec)
     (do
       ;; Did the spec say to use this piece of data as an anchor?
       ;; If so, push this piece of data onto a stack in the context
