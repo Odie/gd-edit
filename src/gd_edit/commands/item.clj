@@ -10,7 +10,6 @@
             [gd-edit.commands.help :as help]
             [gd-edit.commands.diag :as diag]
             [clojure.string :as str]
-            [clojure.core.reducers :as r]
             [jansi-clj.core :refer :all]))
 
 ;;------------------------------------------------------------------------------
@@ -28,7 +27,7 @@
 (defn swap-first-two
   [vec]
 
-  (->> (apply conj [] (second vec) (first vec) (drop 2 vec))))
+  (apply conj [] (second vec) (first vec) (drop 2 vec)))
 
 (defn- baseitem-loottable-path
   [dbr]
@@ -43,7 +42,6 @@
   (filter (fn [item]
             (str/starts-with?
              (:recordname item)
-             ;; (baseitem-loottable-path baseitem-dbr-path)
              "records/items/loottables/"))
           db))
 
@@ -53,8 +51,7 @@
   (filter (fn [item]
             (some
              #(= (val %) mentioned-value)
-             item)
-            )
+             item))
           loottables))
 
 (defn- baseitem-valid-affix-paths
@@ -88,7 +85,8 @@
 ;; Item generation
 ;;------------------------------------------------------------------------------
 (defn compare-match-candidates
-  "Expects 2 items in the form of [score candidate matched-name matched-records]. Return true or false indicating if c1 > c2."
+  "Expects 2 items in the form of [score candidate matched-name matched-records].
+  Return true or false indicating if c1 > c2."
   [c1 c2]
 
   (cond
@@ -137,8 +135,7 @@
                            (map (fn [[k v]] [k (prefer-material-over-blueprint v)]))
                            (into {})
                            )]
-    item-name-idx
-    ))
+    item-name-idx))
 
 
 (defn name-idx-best-matches
@@ -150,7 +147,7 @@
                  (not (nil? item-name))))
 
        ;; Score and sort the item name index
-       ;; First, we rank by the name's overall similiarity
+       ;; First, we rank by the name's overall similarity
        ;; This should help to filter out items that are not at all similar
        (pmap (fn [[item-name item-record]]
                [(u/string-similarity (str/lower-case item-name) (str/lower-case target-name)) item-name item-record]))
@@ -175,7 +172,7 @@
         best-match (->> candidates
                         (map (fn [candidate]
                                ;; For each candidate, return a pair [best-match, candidate]
-                               (let [[score matched-name matched-records] (->> (clojure.string/join " " candidate)
+                               (let [[score matched-name matched-records] (->> (str/join " " candidate)
                                                                                (name-idx-best-matches idx)
                                                                                (first))]
                                  [score candidate matched-name matched-records])))
@@ -191,7 +188,7 @@
 (defn analyze-multipart-item-name
   [item-name-idx prefix-name-idx suffix-name-idx item-name]
 
-  (let [tokens (clojure.string/split item-name #" ")
+  (let [tokens (str/split item-name #" ")
         tokens-cursor tokens
 
         ;; See if we can match part of the item name against the prefix index
@@ -229,14 +226,12 @@
         ;; Advance the tokens cursor if possible
         tokens-cursor (if (not (nil? suffix-best-match))
                         (drop (count (nth suffix-best-match 1)) tokens-cursor)
-                        tokens-cursor)
-        ]
+                        tokens-cursor)]
 
     {:base base-record
      :prefix prefix-record
      :suffix suffix-record
-     :remaining-tokens tokens-cursor
-     }))
+     :remaining-tokens tokens-cursor}))
 
 (defn- item-def->item
   [def]
@@ -263,28 +258,26 @@
 (defn analyze-item-name
   [item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} target-name]
 
-  (u/plet [tokens (clojure.string/split target-name #" ")
-           tokens-cursor tokens
+  (let [tokens (str/split target-name #" ")
 
-           ;; Try to match against the whole name directly
-           whole-item-match {:base (get-in (idx-best-match item-name-idx tokens-cursor) [3 0])}
+        ;; Try to match against the whole name directly
+        whole-item-match {:base (get-in (idx-best-match item-name-idx tokens) [3 0])}
 
-           ;; Try to break down the item into multiple part components
-           multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
+        ;; Try to break down the item into multiple part components
+        multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
 
-           ;; Of the two results, figure out which one matches the input name more closely
-           ;; Return that item
-           match (->> [whole-item-match multi-part-match]
-                      (sort-by #(u/string-similarity
-                                 (str/lower-case target-name)
-                                 (str/lower-case (or
-                                                  (dbu/item-name (item-def->item %1) @globals/db-and-index)
-                                                  "")))
-                               >)
-                      (first))
-           ]
+        ;; Of the two results, figure out which one matches the input name more closely
+        ;; Return that item
+        match (->> [whole-item-match multi-part-match]
+                   (sort-by #(u/string-similarity
+                              (str/lower-case target-name)
+                              (str/lower-case (or
+                                               (dbu/item-name (item-def->item %1) @globals/db-and-index)
+                                               "")))
+                            >)
+                   (first))]
 
-          match))
+    match))
 
 (defn name-idx-highest-level-by-name
   [idx name level-cap]
@@ -447,8 +440,6 @@
         affixes-final (if (= analysis-final analysis-legal)
                         affixes-legal
                         affixes-all)]
-
-
     (analysis->item analysis-final db item-name-idx
                     affixes-final
                     level-cap)))

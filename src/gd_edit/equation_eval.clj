@@ -162,5 +162,4 @@
    (evaluate equation-string {}))
 
   ([equation-string params]
-
    (eval-ast (make-ast equation-string) params)))

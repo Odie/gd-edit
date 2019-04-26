@@ -1,7 +1,7 @@
-(ns gd-edit.arz-reader
+(ns gd-edit.io.arz
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as utils]
-            [clojure.string :as string]
+            [clojure.string :as str]
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
             [clojure.pprint :as pp]
@@ -155,7 +155,7 @@
                                      (let [str (nth string-table (.getInt record-buffer))]
 
                                        ;; If the string looks like a "tag" name used for localization...
-                                       (if (string/starts-with? (string/lower-case str)"tag")
+                                       (if (str/starts-with? (str/lower-case str)"tag")
                                          ;; (do
                                          ;;   (if (nil? (localization-table str))
                                          ;;     ;; (println "replacing \"" str "\" with" (localization-table str))

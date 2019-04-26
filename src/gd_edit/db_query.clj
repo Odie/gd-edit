@@ -1,7 +1,7 @@
 (ns gd-edit.db-query
-  (:require [clojure.string :as string]
-            [gd-edit.utils :as u]
-            [clj-fuzzy.metrics :as metrics]))
+  (:require [clj-fuzzy.metrics :as metrics]
+            [clojure.string :as str]
+            [gd-edit.utils :as u]))
 
 (defn pair-has-key
   [name]
@@ -11,8 +11,8 @@
   ;; Answer if the key contains a string
   (fn [pair]
     (-> (first pair)
-        (string/lower-case)
-        (.contains (string/lower-case name)))))
+        (str/lower-case)
+        (.contains (str/lower-case name)))))
 
 (defn hashmap-has-key
   [name]
@@ -20,7 +20,7 @@
   (fn [map]
     (->> (keys map)
          (some (fn [key]
-                 (-> (string/lower-case key)
+                 (-> (str/lower-case key)
                      (.contains name)))))))
 
 (defmacro qand
@@ -101,8 +101,7 @@
                                                first
                                                keys
                                                (map str))
-                                          order
-                                          )]
+                                          order)]
     (cond
       (not (empty? order-fields))
       (reduce
@@ -110,8 +109,7 @@
          (->> transformed-result
               (sort-by (fn [record] (or (get record sort-field) 0)) >)))
        result
-       (reverse order-fields)
-       )
+       (reverse order-fields))
 
       ;; By default, we'll sort the results by the recordname
       :else
@@ -191,7 +189,7 @@
 
 (defn strip-quotes
   [input]
-  (string/replace input #"^\"|\"$" ""))
+  (str/replace input #"^\"|\"$" ""))
 
 (defn coerce-query-val
   [input]
@@ -269,7 +267,7 @@
       result
 
       ;; order keyword found? sort the info into a separate :order vector
-      (= (string/lower-case (first ast)) "order")
+      (= (str/lower-case (first ast)) "order")
       (recur (drop 2 ast)
              (update result :order conj (second ast)))
 
@@ -353,10 +351,3 @@
   [db query-string]
 
   (query db (query-string->query-predicates query-string)))
-
-#_(def r (time
-          (query gd-edit.core/db
-                 (tokens->query-predicate ["recordname" "~" "affix"])
-                 (tokens->query-predicate ["key" "~" "cold"])
-                 (tokens->query-predicate ["levelreq" "=" 74])
-                 )))

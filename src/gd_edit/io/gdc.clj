@@ -1,7 +1,7 @@
-(ns gd-edit.gdc-reader
+(ns gd-edit.io.gdc
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as utils]
-            [clojure.string :as string]
+            [clojure.string :as str]
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
@@ -985,7 +985,7 @@
 
   (into {}
         (for [id [1 2 3 4 5 6 7 8 10 12 13 14 15 16 17]]
-          (when-let [block-spec-var (ns-resolve 'gd-edit.gdc-reader (symbol (str "Block" id)))]
+          (when-let [block-spec-var (resolve (symbol (str "Block" id)))]
             [id (var-get block-spec-var)]))))
 
 (defn read-block-header

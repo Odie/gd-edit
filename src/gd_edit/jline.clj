@@ -26,6 +26,3 @@
         (initialize))
 
       (.readLine reader prompt)))))
-
-
-#_(initialize)

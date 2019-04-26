@@ -1,10 +1,9 @@
 (ns gd-edit.qst-reader-test
-  (:require [gd-edit.qst-reader :as sut]
-            [midje.sweet :refer :all]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [gd-edit.utils :as u]))
-
+            [gd-edit.io.qst :as sut]
+            [gd-edit.utils :as u]
+            [midje.sweet :refer :all]))
 
 ;;------------------------------------------------------------------------------
 ;; Try loading some test quest files

@@ -1,12 +1,11 @@
 (ns repl
-  (:require [gd-edit
-             [core :as ge]
-             [command-handlers :as gec]
-             [globals :as globals]
-             [gdc-reader :as gdc]
-             [printer]
-             [game-dirs :as dirs]]
-            [clojure.java.io :as io])
+  (:require [clojure.java.io :as io]
+            [gd-edit.command-handlers :as gec]
+            [gd-edit.core :as ge]
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.globals :as globals]
+            [gd-edit.io.gdc :as gdc]
+            gd-edit.printer)
   (:import [java.io BufferedReader StringReader]))
 
 (defn init []

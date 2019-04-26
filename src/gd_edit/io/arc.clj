@@ -1,15 +1,13 @@
-(ns gd-edit.arc-reader
+(ns gd-edit.io.arc
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as u]
             [clojure.java.io :as io]
-            [clojure.string :as string]
             [taoensso.timbre :as t]
             [clojure.string :as str])
   (:import  [java.nio ByteBuffer]
             [java.nio.file Path Paths Files FileSystems StandardOpenOption]
             [java.nio.channels FileChannel]
-            [net.jpountz.lz4 LZ4Factory])
-  (:gen-class))
+            [net.jpountz.lz4 LZ4Factory]))
 
 (def arc-header
   (s/struct-def
@@ -198,7 +196,7 @@
      (fn[accum line]
        ;; In the localization files, a = sign is used to separate the key and the value
        ;; Can we find a "=" sign?
-       (let [split-index (string/index-of line "=")]
+       (let [split-index (str/index-of line "=")]
 
          ;; If we can't find a = sign, stop processing this line
          (if (= nil split-index)
@@ -206,9 +204,8 @@
 
            ;; We did find a = sign, extract the key and value then add them to the map
            (assoc accum
-                  (string/trim (subs line 0 split-index))
-                  (string/trim (subs line (inc split-index)))))
-       ))
+                  (str/trim (subs line 0 split-index))
+                  (str/trim (subs line (inc split-index)))))))
      {}
      lines)))
 
@@ -338,24 +335,3 @@
 ;;  Location = file-header :record-table-offset field
 ;;  Total size = file-header :record-table-size
 ;; String table
-
-#_(time (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
-#_(def l (load-localization-table "/Users/Odie/Dropbox/Public/GrimDawn2/resources/text_en.arc"))
-#_(def f (u/mmap "/Users/Odie/Dropbox/Public/GrimDawn/resources/text_en.arc"))
-#_(.order f java.nio.ByteOrder/LITTLE_ENDIAN)
-#_(def h (load-header f))
-#_(time (def dt (load-record-headers f h)))
-#_(time (def r (load-record f h (nth dt 0))))
-
-#_(def l (load-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc"))
-#_(unpack-arc-file "/Users/Odie/Dropbox/Public/GrimDawn2/database/templates.arc" (io/file (u/working-directory) "templates"))
-
-#_(def t (make-load-tex-fn "/Users/Odie/Dropbox/Public/GrimDawn2/resources/Items.arc" (comp texture-dimensions read-tex-header)))
-#_(t "gearweapons/hammers1h/bitmaps/f002_blunt.tex")
-
-(comment
-
-  (require gd-edit.qst-reader)
-  (unpack-arc-file "/Volumes/Untitled/Program Files (x86)/Steam/steamapps/common/Grim Dawn/resources/scripts.arc" "/tmp/scripts/")
-
-  )

@@ -1,14 +1,13 @@
-(ns gd-edit.gdd-reader
-  (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils]
-            [clojure.string :as string]
+(ns gd-edit.io.gdd
+  (:require clojure.inspector
             [clojure.java.io :as io]
-            [gd-edit.utils :as u]
+            [clojure.string :as str]
             [gd-edit.globals :as globals]
-            [gd-edit.gdc-reader :as gdc]
-            [clojure.inspector])
-  (:import  [java.nio ByteBuffer ByteOrder]
-            [java.io FileOutputStream]))
+            [gd-edit.io.gdc :as gdc]
+            [gd-edit.structure :as s]
+            [gd-edit.utils :as u])
+  (:import java.io.FileOutputStream
+           [java.nio ByteBuffer ByteOrder]))
 
 (declare read-block read-block-start read-and-verify-block-end)
 
@@ -153,7 +152,7 @@
 
   ;; Verify we've reached the expected position
   (assert (= expected-end-position (.position bb))
-          (utils/fmt "[block #{id}] Expected to be at stream position: #{expected-end-position}, but current at #{(.position bb)}. Position is off by: #{(- expected-end-position (.position bb) )}"))
+          (u/fmt "[block #{id}] Expected to be at stream position: #{expected-end-position}, but current at #{(.position bb)}. Position is off by: #{(- expected-end-position (.position bb) )}"))
 
   ;; Verify we have the correct enc-state at this point
   (let [checksum (Integer/toUnsignedLong (.getInt bb))]
@@ -204,7 +203,7 @@
 (defn load-quest-file
   [filepath]
 
-  (let [bb ^ByteBuffer (utils/file-contents filepath)
+  (let [bb ^ByteBuffer (u/file-contents filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) seed-mask)

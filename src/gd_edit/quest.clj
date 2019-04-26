@@ -1,18 +1,15 @@
 (ns gd-edit.quest
-  (:require [clojure.java.io :as io]
+  (:require clojure.data
+            [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.data]
-            [gd-edit
-             [globals :as globals]
-             [utils :as u]
-             [game-dirs :as dirs]
-             [arc-reader :as arc]
-             [gdd-reader :as gdd]
-             [qst-reader :as qst]]
-            [com.rpl.specter :as specter])
-
-  (:import  [java.nio ByteBuffer]))
-
+            [com.rpl.specter :as specter]
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.globals :as globals]
+            [gd-edit.io.arc :as arc]
+            [gd-edit.io.gdd :as gdd]
+            [gd-edit.io.qst :as qst]
+            [gd-edit.utils :as u])
+  (:import java.nio.ByteBuffer))
 
 (defn quest-files
   "Given a path to a save file (gdc), retrieve all associated quest progress files."

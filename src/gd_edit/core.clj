@@ -1,36 +1,33 @@
 (ns gd-edit.core
   (:gen-class)
-  (:require [clojure.edn :as edn]
+  (:require [clojure.core.async :as async :refer [>!! thread]]
+            [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as string]
-            [gd-edit
-             [arc-reader :as arc-reader]
-             [arz-reader :as arz-reader]
-             [command-handlers :as handlers]
-             [game-dirs :as dirs]
-             [globals :as globals]
-             [jline :as jl]
-             [utils :as utils]
-             [self-update :as su]]
-            [gd-edit.commands.item]
-            [gd-edit.commands.find]
-            [gd-edit.commands.help]
-            [gd-edit.commands.diag]
-            [jansi-clj.core :refer :all]
-            [gd-edit.utils :as u]
-            [clojure.core.async :as async :refer [thread >!!]]
-            [progress.file :as progress]
             [clojure.string :as str]
+            [clojure.tools.cli :refer [parse-opts]]
+            [gd-edit.command-handlers :as handlers]
+            gd-edit.commands.diag
+            gd-edit.commands.find
+            gd-edit.commands.help
+            gd-edit.commands.item
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.globals :as globals]
+            [gd-edit.io.arc :as arc-reader]
+            [gd-edit.io.arz :as arz-reader]
+            [gd-edit.jline :as jl]
+            [gd-edit.self-update :as su]
+            [gd-edit.utils :as u]
+            [jansi-clj.core :refer :all]
+            [progress.file :as progress]
             [taoensso.timbre :as t]
-            [taoensso.timbre.appenders.core :as appenders]
-            [clojure.tools.cli :refer [parse-opts]])
+            [taoensso.timbre.appenders.core :as appenders])
   (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
 
 (defn- strip-quotes
   "Strip quotes from a string"
   [value]
-  (clojure.string/replace value #"^\"|\"$" ""))
+  (str/replace value #"^\"|\"$" ""))
 
 (defn- tokenize-input
   [input]
@@ -51,7 +48,7 @@
 
 (defn split-at-space
   [str]
-  (clojure.string/split str #"\s+"))
+  (str/split str #"\s+"))
 
 (def command-map
   {["exit"]  (fn [input] (System/exit 0))
@@ -188,8 +185,8 @@
         ;; They shouldn't be passed to the command handlers
         (not (nil? command-handler))
         (let [param-tokens (drop (count command) tokens)
-              command-input-string (string/trim (subs input (->> command
-                                                                 (string/join " ")
+              command-input-string (str/trim (subs input (->> command
+                                                                 (str/join " ")
                                                                  (count))))]
           (command-handler [command-input-string param-tokens]))
 
@@ -548,18 +545,3 @@
 
 
 ;;===============================================================================
-(comment
-
-  (time
-   (gd-edit.core/initialize))
-
-  (time (do
-            (gd-edit.command-handlers/load-character-file
-             (-> (dirs/get-save-dir-search-list)
-                 (first)
-                 (io/file "_Odie/player.gdc")
-                 (.getPath)
-                 ))
-            nil))
-
-  )

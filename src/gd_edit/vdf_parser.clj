@@ -51,14 +51,6 @@
 
 (comment
 
-  (let [grammar (slurp (io/resource "vdf.grammar"))
-        parser (insta/parser grammar :auto-whitespace :standard)
-        file (io/file "/Volumes/Untitled/Program Files (x86)/Steam/steamapps/libraryfolders.vdf")]
-
-    (println "grammar:")
-    (println grammar)
-    (parser (slurp file)))
-
    (->> "/Volumes/Untitled/Program Files (x86)/Steam/steamapps/libraryfolders.vdf"
         (io/file)
         parse)

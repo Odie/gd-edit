@@ -1,33 +1,28 @@
 (ns gd-edit.command-handlers
-  (:require [clojure.java.io :as io]
-            [clojure.string :as string]
-            [clojure.data]
-            [gd-edit
-             [arc-reader :as arc-reader]
-             [arz-reader :as arz-reader]
-             [db-query :as query]
-             [game-dirs :as dirs]
-             [gdc-reader :as gdc]
-             [gdd-reader :as gdd]
-             [globals :as globals]
-             [utils :as u]
-             [self-update :as su]
-             [equation-eval :as eq]
-             [stack :as stack]
-             [structure-walk :as sw]
-             [db-utils :as dbu]
-             [quest :as quest]]
-            [gd-edit.commands.item :as item-commands]
-            [jansi-clj.core :refer :all]
-
-            [clojure.string :as str]
-            [gd-edit.utils :as utils]
-            [me.raynes.fs :as fs]
-
-            [gd-edit.printer :as printer]
+  (:require clojure.data
+            [clojure.java.io :as io]
             [clojure.java.shell :refer [sh]]
-            [taoensso.timbre :as t]
-            [gd-edit.jline]))
+            [clojure.string :as str]
+            [gd-edit.commands.item :as item-commands]
+            [gd-edit.db-query :as query]
+            [gd-edit.db-utils :as dbu]
+            [gd-edit.equation-eval :as eq]
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.globals :as globals]
+            [gd-edit.io.arc :as arc-reader]
+            [gd-edit.io.arz :as arz-reader]
+            [gd-edit.io.gdc :as gdc]
+            [gd-edit.io.gdd :as gdd]
+            gd-edit.jline
+            [gd-edit.printer :as printer]
+            [gd-edit.quest :as quest]
+            [gd-edit.self-update :as su]
+            [gd-edit.stack :as stack]
+            [gd-edit.structure-walk :as sw]
+            [gd-edit.utils :as u]
+            [jansi-clj.core :refer :all]
+            [me.raynes.fs :as fs]
+            [taoensso.timbre :as t]))
 
 (declare load-db-in-background build-db-index clean-display-string item-name)
 
@@ -166,7 +161,7 @@
   "Given a path, return a path with the first n path components"
   [n path]
 
-  (clojure.string/join "/" (take n (clojure.string/split path #"/"))))
+  (clojure.string/join "/" (take n (str/split path #"/"))))
 
 (defn db-partial-record-path-matches
   [db path]
@@ -181,8 +176,8 @@
               (if (every? (fn [item-pair]
                             (u/ci-match (second item-pair) (first item-pair)))
 
-                          (partition 2 (interleave (clojure.string/split path #"/")
-                                                   (clojure.string/split item #"/"))))
+                          (partition 2 (interleave (str/split path #"/")
+                                                   (str/split item #"/"))))
 
                 ;; Take the string of the first n+1 components and put it in the set
                 (conj accum item)
@@ -199,7 +194,7 @@
                "r/"
                (first tokens))
 
-        path-components (string/split path #"/")
+        path-components (str/split path #"/")
 
         ;; Grab a list of items from the db that partially matches the specified path
         matches (->> path
@@ -207,7 +202,7 @@
 
                      ;; Filter out all results that have too few path components
                      (filter (fn [item]
-                               (>= (count (string/split item #"/")) (count path-components))
+                               (>= (count (str/split item #"/")) (count path-components))
                                )))
 
         sorted-matches
@@ -264,13 +259,13 @@
 
 (defn- is-cloud-save?
   [dir]
-  (not (nil? (some #(string/starts-with? dir %)
+  (not (nil? (some #(str/starts-with? dir %)
                    (map #(.getParent (io/file %)) (dirs/get-steam-cloud-save-dirs))))))
 
 (defn- is-mod-save?
   [dir]
 
-  (let [path-components (string/split (str dir) #"[/\\]")
+  (let [path-components (str/split (str dir) #"[/\\]")
         length (count path-components)]
     (if (and (u/case-insensitive= (path-components (- length 3)) "save")
              (u/case-insensitive= (path-components (- length 2)) "user"))
@@ -421,7 +416,7 @@
     :else
     (do
       (let [;; Split the given path into components
-            path-keys (string/split (first tokens) #"/")
+            path-keys (str/split (first tokens) #"/")
 
             ;; Try to walk the path fuzzily
             result (sw/walk @globals/character path-keys)
@@ -451,7 +446,7 @@
               ;; This helps the user verify what they're looking at is what is asked for.
               (println (->> (:actual-path result)
                             (map u/keyword->str)
-                            (string/join "/")))
+                            (str/join "/")))
               (printer/print-object found-item (:actual-path result))))))))
 
 
@@ -624,7 +619,7 @@
          (contains? #{:level-in-bio :max-level :character-level} (first field-path)))
     (prompt-yes-no ["Changing the level manually is not recommended."
                     "Please use the 'level' command instead."
-                    (utils/fmt "Try 'level #{new-val}'.")
+                    (u/fmt "Try 'level #{new-val}'.")
                     ""
                     "Are you sure you want to change the value of this field manually?"]
                    false)
@@ -646,7 +641,7 @@
     (do
       ;; Split a path into components.
       ;; We're going to use these as keys to navigate into the character sheet
-      (let [path-keys (string/split (first tokens) #"/")
+      (let [path-keys (str/split (first tokens) #"/")
             walk-result (sw/walk @globals/character path-keys)
             {:keys [status]} walk-result]
 
@@ -703,9 +698,9 @@
                 (= newval :failed)
                 (println "Please provide a value that is of type" (-> (type value)
                                                                       (str)
-                                                                      (string/split #"\.")
+                                                                      (str/split #"\.")
                                                                       (last)
-                                                                      (string/lower-case)))
+                                                                      (str/lower-case)))
 
                 :else
                 (if-not (warn-user-before-set-val @globals/character val-path newval)
@@ -748,7 +743,7 @@
         ;; Filter for all items that starts with the filename followed by .bakXXX
         save-backups (->> sibling-files
                           (filter #(.isFile %1))
-                          (filter #(string/starts-with? (.getName %1) filename))
+                          (filter #(str/starts-with? (.getName %1) filename))
                           (filter #(re-matches #"\.bak.*$" (subs (.getName %) (count filename)))))]
 
     (format "%s.bak%d" filepath (inc (count save-backups)))))
@@ -800,7 +795,7 @@
     (u/print-indent 1)
     (println (yellow savepath))
 
-    (gd-edit.gdc-reader/write-character-file character (.getCanonicalPath (io/file savepath)))))
+    (gd-edit.io.gdc/write-character-file character (.getCanonicalPath (io/file savepath)))))
 
 (defn- rename-save-dir-if-required
   [character]
@@ -885,7 +880,7 @@
         (fs/copy-dir from-char-dir-file to-char-dir-file)
 
         ;; Write out the character to the new location
-        (gd-edit.gdc-reader/write-character-file modified-character
+        (gd-edit.io.gdc/write-character-file modified-character
                                                  (-> modified-character
                                                      (get-savepath)
                                                      (io/file)
@@ -1018,7 +1013,7 @@
 
   (->> (dbu/record-by-name "records/ui/skills/skills_mastertable.dbr")
        ;; Grab all the fields named "skillCtrlPaneXXX"
-       (filter (fn [[k v]] (string/starts-with? (str k) "skillCtrlPane")))
+       (filter (fn [[k v]] (str/starts-with? (str k) "skillCtrlPane")))
 
        ;; sort by the number behind the "skillCtrlPane" string
        (sort-by (fn [[k v]]
@@ -1061,7 +1056,7 @@
   "Remove any strange formatting symbols from a display string"
   [s]
 
-  (string/replace s #"\^." ""))
+  (str/replace s #"\^." ""))
 
 (defn- print-character-classes
   [character db]
@@ -1477,7 +1472,7 @@
 (defn skill-is-devotion?
   [skill]
 
-  (string/starts-with? (:skill-name skill) "records/skills/devotion"))
+  (str/starts-with? (:skill-name skill) "records/skills/devotion"))
 
 (defn passive-skill? [skill]
   (let [record (@globals/db-index (:skill-name skill))]
@@ -1593,7 +1588,7 @@
 (defn respec-handler
   [[input tokens]]
 
-  (let [mode (string/lower-case (or (first tokens) "all"))
+  (let [mode (str/lower-case (or (first tokens) "all"))
         valid-modes #{"all" "attributes" "devotions" "skills" "hard"}]
 
     ;; Sanity check on the respec mode

@@ -1,16 +1,14 @@
-(ns gd-edit.qst-reader
-  (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils]
-            [clojure.string :as string]
+(ns gd-edit.io.qst
+  (:require clojure.inspector
             [clojure.java.io :as io]
-            [gd-edit.utils :as u]
-            [gd-edit.globals :as globals]
-            [gd-edit.gdc-reader :as gdc]
-            [clojure.inspector]
+            [clojure.string :as str]
             [com.rpl.specter :as specter]
-            [clojure.string :as str])
-  (:import  [java.nio ByteBuffer ByteOrder]
-            [java.io FileOutputStream]))
+            [gd-edit.globals :as globals]
+            [gd-edit.io.gdc :as gdc]
+            [gd-edit.structure :as s]
+            [gd-edit.utils :as u])
+  (:import java.io.FileOutputStream
+           [java.nio ByteBuffer ByteOrder]))
 
 ;;------------------------------------------------------------------------------
 ;; Quest File format defs
@@ -544,7 +542,7 @@
 
   ;; Verify we've reached the expected position
   (assert (= expected-end-position (.position bb))
-          (utils/fmt "[Block #{id}]Expected to be at stream position: #{expected-end-position}, but current at #{(.position bb)}. Position is off by: #{(- expected-end-position (.position bb) )}"))
+          (u/fmt "[Block #{id}]Expected to be at stream position: #{expected-end-position}, but current at #{(.position bb)}. Position is off by: #{(- expected-end-position (.position bb) )}"))
 
   ;; Verify we have the correct enc-state at this point
   (let [checksum (Integer/toUnsignedLong (.getInt bb))]
@@ -642,7 +640,7 @@
   "Loads a quest-file map from the given file path"
   [filepath]
 
-  (load-quest (utils/file-contents filepath)))
+  (load-quest (u/file-contents filepath)))
 
 (defn quest-name
   "Get the overall name of the quest"

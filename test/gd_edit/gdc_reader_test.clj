@@ -1,12 +1,10 @@
 (ns gd-edit.gdc-reader-test
-  (:require [midje.sweet :refer :all]
-            [gd-edit.gdc-reader :refer :all]
+  (:require boot.core
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [boot.core]
-
+            [gd-edit.io.gdc :refer :all]
             [gd-edit.utils :as u]
-            ))
+            [midje.sweet :refer :all]))
 
 ;;------------------------------------------------------------------------------
 ;; Try loading some test save files

@@ -5,14 +5,13 @@
   The fit-new-item function, in particular is useful for attempting to add a new item
   into a sack.
   "
-  (:require [gd-edit.globals :as globals]
-            [gd-edit.arc-reader :as arc]
-            [gd-edit.game-dirs :as dirs]
-            [gd-edit.utils :as u]
+  (:require [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.string :as str]
-            [clojure.java.io :as io]
-            ))
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.globals :as globals]
+            [gd-edit.io.arc :as arc]
+            [gd-edit.utils :as u]))
 
 (defn- character-inventory
   [n]

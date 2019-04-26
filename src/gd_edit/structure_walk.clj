@@ -1,11 +1,11 @@
 (ns gd-edit.structure-walk
   (:require [gd-edit.utils :as u]
             [gd-edit.db-utils :as dbu]
-            [clojure.string :as string]))
+            [clojure.string :as str]))
 
 (defn- str-without-dash
   [str]
-  (string/replace str "-" ""))
+  (str/replace str "-" ""))
 
 (defn- coerce-to-int
   [input]
@@ -128,7 +128,7 @@
   [result]
 
   (println (format "Cannot traverse path because \"%s\""
-                   (clojure.string/join "/" (:longest-path result)))
+                   (str/join "/" (:longest-path result)))
            "matches more than one item:")
 
   (doseq [ambiguous-item (->> (:ambiguous-matches result)

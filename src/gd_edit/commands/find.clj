@@ -1,18 +1,17 @@
 (ns gd-edit.commands.find
-  (:require [clojure.java.io :as io]
-            [gd-edit.commands.help :as help]
-            [gd-edit
-             [globals :as globals]
-             [utils :as utils]
-             [db-utils :as dbu]
-             [db-query :as query]
-             [printer :as printer]
-             [game-dirs :as dirs]
-             [gdc-reader :as gdc]]
+  (:require [clj-fuzzy.metrics :as metrics]
+            [clojure.java.io :as io]
+            [clojure.pprint :refer [pprint]]
             [clojure.string :as str]
-            [clj-fuzzy.metrics :as metrics]
-            [jansi-clj.core :refer :all]
-            [clojure.pprint :refer [pprint]]))
+            [gd-edit.commands.help :as help]
+            [gd-edit.db-query :as query]
+            [gd-edit.db-utils :as dbu]
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.globals :as globals]
+            [gd-edit.io.gdc :as gdc]
+            [gd-edit.printer :as printer]
+            [gd-edit.utils :as utils]
+            [jansi-clj.core :refer :all]))
 
 (defn- print-usage
   []
