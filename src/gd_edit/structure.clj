@@ -60,44 +60,18 @@
          :struct/return-type)
      :map))
 
-
-(defn strip-orderedmap-fields
-  "Returns a spec with the keyname fields stripped if it looks like an orderedmap"
-  [spec]
-
-  ;; If it looks like an ordered map
-  (if (struct-def? spec)
-
-    ;; strip all the odd number fields
-    (take-nth 2 (rest spec))
-
-    ;; Doesn't look like an ordered map...
-    ;; Return the spec untouched
-    spec))
-
-
-(defn- merge-default-rw-fns-
-  [context]
-  (assert (or (map? context) (nil? context)))
-  (merge {:rw-fns primitives-specs}
-         (or context {})))
-
-
 (defn- merge-default-rw-fns
   [context]
-
-  (if (atom? context)
-    (do
-      (swap! context merge-default-rw-fns-)
-      context)
-    (merge-default-rw-fns- context)))
-
-
-(defn try-get-read-fn
-  [spec]
-  (if (fn? spec)
-    spec
-    (:struct/read (meta spec))))
+  (letfn [(merge-default  [context]
+            (assert (or (map? context) (nil? context)))
+            (merge-with merge
+                        {:rw-fns primitives-specs}
+                        (or context {})))]
+    (let [context (if (atom? context)
+                    context
+                    (atom context))]
+      (swap! context merge-default)
+      context)))
 
 (defn read-struct
   "Spec can also be a single primitive spec. In that case, we'll just read
@@ -119,12 +93,13 @@
      ;; Callers can provide a map or an atom to specify how to read primitives.
      ;; Read in the value using either a supplied read function or
      ;; by following the spec
-     (if-let [read-fn (try-get-read-fn spec)]
+     (if-let [read-fn (if (fn? spec)
+                        spec
+                        (:struct/read (meta spec)))]
        (read-fn bb context)
        (read-spec spec bb (or data {}) context)))))
 
-
-(defn- get-rw-fns
+(defn- rw-fns
   "Given a user supplied context object, try to fetch the :rw-fns field.
   Optionally, fetch the vector that represents reading/writing a specific type of field.
 
@@ -132,13 +107,19 @@
   the serialization process. If that is the case, then fetching the :rw-fns field
   becomes just ever so slightly more complicated than simply looking up a key."
   ([context]
-   (get-rw-fns context nil))
+   (rw-fns context nil))
 
   ([context spec]
    (cond-> context
      (atom? context) (deref)
      true (:rw-fns)
-     (some? spec) (get spec))))
+     (some? spec) (get spec)))
+
+  ([context spec read-or-write]
+   (let [fns (rw-fns context spec)]
+     (cond
+       (= :read read-or-write) (nth fns 2)
+       (= :write read-or-write) (nth fns 3)))))
 
 (defmethod read-spec :default
   [spec bb data context]
@@ -152,64 +133,56 @@
     (spec bb context)
 
     (struct-def? spec)
-    (loop [spec-pairs (partition 2 spec)
-           data data]
-
-      ;; Grab the next field name and spec
-      (if-let [[field-name field-spec] (first spec-pairs)]
-        (do
-          (when *debug*
-            (println (format "%-20s %s %2s %s" "reading field:" field-name "" field-spec)))
-
-          ;; If the spec looks like it's asking to attach some static data
-          ;; to the map...
-          (if (= (namespace field-name) "static")
-            ;; Attach the data
-            (recur (rest spec-pairs)
-                   (assoc data field-name field-spec))
-
-            ;; Otherwise, try to read the spec and attach the result
-            (let [field-val (read-spec field-spec bb data context)]
+    (reduce (fn [data [field-name field-spec]]
               (when *debug*
-                (print (format "%20s" "") field-name "=> ")
-                (clojure.pprint/pprint field-val))
+                (println (format "%-20s %s %2s %s" "reading field:" field-name "" field-spec)))
 
-              ;; Keep reading and looping until we're done with the spec pairs
-              (recur (rest spec-pairs)
-                     (assoc data field-name field-val)))))
+              ;; If the spec looks like it's asking to attach some static data
+              ;; to the map...
+              (if (= (namespace field-name) "static")
+                ;; Attach the static data. We're done with this iteration
+                (assoc data field-name field-spec)
 
-        ;; If we're done with all the spec pairs, return the data that's been read
-        data))
+                ;; Otherwise, try to read the spec and attach the result
+                (let [field-val (read-spec field-spec bb data context)]
+                  (when *debug*
+                    (print (format "%20s" "") field-name "=> ")
+                    (clojure.pprint/pprint field-val))
 
+                  ;; Keep reading and looping until we're done with the spec pairs
+                  (assoc data field-name field-val))))
+            data
+            (partition 2 spec))
 
-    ;; If we're looking at some sequence, assume this is a sequence of specs and
-    ;; read through it all
-
-    ;; (sequential? spec)
-    ;; (read-spec-sequential spec bb prim-specs context)
 
     ;; Otherwise, we should be dealing with some kind of primitive...
+    ;; spec, we should be dealing with some kind of primitive...
     ;; Look up the primitive keyword in the primitives map
     :else
-    (if-let [rw-fns (get-rw-fns context spec)]
+    (if-let [read-fn (rw-fns context spec :read)]
 
       ;; Execute the read function now
-      ((nth rw-fns 2) bb context)
+      (read-fn bb context)
 
       ;; If a read function cannot be found, give up...
       (do
         (when *debug*
           (println "context:" context)
           (println "spec:" spec)
-          (println "fn:" (get-rw-fns context spec)))
-        (throw (Throwable. (str "Cannot handle spec:" spec)))))))
+          (println "fn:" (rw-fns context spec)))
+        (throw (ex-info (str "Cannot handle spec:" spec) {}))))))
 
 
 (defn struct-def
   "Tags the given spec so read-structure will return a map instead of a vector.
+  If the item in the list is a map, it will used as the meta info of the structure.
   Returns the collection it was given."
   [& fields]
-  (with-meta (into [] fields) {:struct/return-type :map}))
+  (let [[fields meta-info] (if (map? (last fields))
+                             [(butlast fields) (last fields)]
+                             [fields {}])
+        meta-info (merge meta-info {:struct/return-type :map})]
+    (with-meta (into [] fields) meta-info)))
 
 
 (defn array
@@ -255,25 +228,10 @@
                  :else (read-spec length-prefix bb data context))
 
         _ (when *debug*
-            (println "array:" length))
+            (println "array:" length))]
 
-        ;; Unwrap the spec so we can read it
-        unwrapped-spec (first spec)
-
-        ;; Read the spec "length" number of times and accumulate the result into a vector
-        ;; We're abusing reduce here by producing a lazy sequence to control the number of
-        ;; iterations we run.
-        coll (reduce
-         (fn [accum i]
-           ;; Read another one out
-           (conj accum (read-struct unwrapped-spec bb context)))
-         []
-         (range length))
-
-        ]
-    coll
-    ))
-
+    (into [] (for [i (range length)]
+               (read-struct (first spec) bb context)))))
 
 (defn string
   "Returns a spec used to read a string of a specific type of encoding.
@@ -322,8 +280,7 @@
                  (read-spec length-prefix bb data context))
 
         ;; Create a temp buffer to hold the bytes before turning it into a java string
-        buffer (byte-array (buffer-size-for-string length requested-encoding))
-        ]
+        buffer (byte-array (buffer-size-for-string length requested-encoding))]
 
     ;; Read the string bytes into the buffer
     (.get bb buffer 0 (buffer-size-for-string length requested-encoding))
@@ -331,7 +288,7 @@
     ;; If the context asked for bytes to be transformed, do it now
     ;; FIXME!!!  Reading API for byte array is very different here.
     ;;           Would be nice if this is "read-bytes".
-    (if-let [transform-fn (get-rw-fns context :transform-bytes!)]
+    (if-let [transform-fn (rw-fns context :transform-bytes!)]
       (transform-fn buffer context))
 
     (if (= :bytes requested-encoding)
@@ -348,13 +305,11 @@
    ;; sequence of bytes reduced from individual items in the given sequence
    (reduce
     (fn [accum item]
-      (conj accum (byte item))) [] seq)
-   ))
+      (conj accum (byte item))) [] seq)))
 
 
 (defn bytes->bytebuffer
   [bytes]
-
   (ByteBuffer/wrap bytes))
 
 
@@ -379,25 +334,22 @@
   (let [;; Destructure fields in the attached meta info
         {static-length :struct/length
          length-prefix :struct/length-prefix
-         skip-write-length :struct/skip-write-length} (meta spec)
+         skip-write-length :struct/skip-write-length} (meta spec)]
 
-        ;; Write out the spec if we're not dealing with a sequence with a static/implied length
-        _ (if (and (= static-length -1)
-                   (not skip-write-length))
+    ;; Write out the spec if we're not dealing with a sequence with a static/implied length
+    (if (and (= static-length -1)
+               (not skip-write-length))
 
-            ;; Write out the length of the sequence first
-            (let [write-fn (prim-spec-get-write-fn (get-rw-fns context) length-prefix)]
-              (write-fn bb (count data) context)))
-
-        ;; Unwrap the spec so we can read it
-        unwrapped-spec (first spec)]
+        ;; Write out the length of the sequence first
+        (let [write-fn (prim-spec-get-write-fn (rw-fns context) length-prefix)]
+          (write-fn bb (count data) context)))
 
     (when *debug*
       (println "[write-spec :array] spec" spec))
 
     ;; Write out each item in the sequence
     (doseq [item data]
-      (write-struct unwrapped-spec bb item context))))
+      (write-struct (first spec) bb item context))))
 
 (defmethod write-spec :string
   [spec ^ByteBuffer bb data context]
@@ -431,14 +383,13 @@
         _ (if (= static-length -1)
             ;; What is the string length we're writing out to file?
             (let [claimed-str-length (count data)
-                  write-fn (prim-spec-get-write-fn (get-rw-fns context) length-prefix)]
+                  write-fn (prim-spec-get-write-fn (rw-fns context) length-prefix)]
               (write-fn bb claimed-str-length context)))
 
         ;; If the context asked for bytes to be transformed, do it now
-        str-bytes (if-let [transform-fn (get-rw-fns context :transform-bytes!)]
+        str-bytes (if-let [transform-fn (rw-fns context :transform-bytes!)]
                     (transform-fn str-bytes context)
-                    str-bytes)
-        ]
+                    str-bytes)]
 
     ;; The string has now been converted to the right encoding and transformed.
     ;; Write it out now.
@@ -449,10 +400,10 @@
 
   ;; Look up how we're supposed to deal with this primitive
   ;; If the primitive is found...
-  (if-let [primitives-spec (get-rw-fns context spec)]
+  (if-let [write-fn (rw-fns context spec :write)]
 
       ;; Execute the read function now
-      ((nth primitives-spec 3) bb data context)
+      (write-fn bb data context)
 
       ;; Otherwise, give up
       (throw (Throwable. (str "Cannot handle spec:" spec)))))
@@ -481,27 +432,11 @@
       (when (:anchor (meta spec))
         (swap! context update :anchor-stack conj data))
 
-      ;; We're going to loop and process all the fields until we are done
-      (loop [spec-remaining spec]
 
-        ;; If we're written the entire spec, we're done.
-        ;; Return the byte buffer
-        (if (empty? spec-remaining)
-          bb
-
-          ;; Otherwise, grab the next value to be written
-          (do
-            (let [[key type] spec-remaining
-
-                  ;; Look up the value to be written
-                  val (key data)]
-
-              ;; Write out the item according to the spec
-              (when-not (= (namespace key) "static")
-                (write-spec type bb val context))
-
-              ;; Continue to process the next pair
-              (recur (drop 2 spec-remaining))))))
+      (doseq [[key type] (partition 2 spec)
+              :let [val (data key)]]
+        (when-not (= (namespace key) "static")
+          (write-spec type bb val context)))
 
       ;; Did the spec say to use this piece of data as an anchor?
       ;; If so, pop the data off of the stack

@@ -53,11 +53,6 @@
 (declare read-block  read-byte!  read-int!  read-bool!  read-float!  read-bytes!  read-string!
          write-block write-byte! write-int! write-bool! write-float! write-bytes! write-string!)
 
-(defn merge-meta
-  "Merges the provided map into the meta map of the provided object."
-  [obj map]
-  (with-meta obj (merge (meta obj) map)))
-
 (def FilePreamble
   (s/struct-def
    :magic   :int32
@@ -73,26 +68,26 @@
    :expansion-character? :byte))
 
 (def Block1
-  (merge-meta
-   (s/struct-def
-    :version                :int32
-    :in-main-quest          :bool
-    :has-been-in-game       :bool
-    :last-difficulty        :byte
-    :greatest-difficulty-completed :byte
-    :iron                   :int32
-    :greatest-survival-difficulty-completed :byte
-    :tributes               :int32
-    :ui-compass-state       :byte
-    :always-show-loot       (between-block-version 2 4 :int32)
-    :show-skill-help        :bool
-    :alt-weapon-set         :bool
-    :alt-weapon-set-enabled :bool
-    :player-texture         (s/string :ascii)
-    :loot-filters           (after-block-version 5 (s/array :byte)))
+  (s/struct-def
+   :version                :int32
+   :in-main-quest          :bool
+   :has-been-in-game       :bool
+   :last-difficulty        :byte
+   :greatest-difficulty-completed :byte
+   :iron                   :int32
+   :greatest-survival-difficulty-completed :byte
+   :tributes               :int32
+   :ui-compass-state       :byte
+   :always-show-loot       (between-block-version 2 4 :int32)
+   :show-skill-help        :bool
+   :alt-weapon-set         :bool
+   :alt-weapon-set-enabled :bool
+   :player-texture         (s/string :ascii)
+   :loot-filters           (after-block-version 5 (s/array :byte))
 
-   {:anchor true})           ;; Do we want to keep track of this as we read/write the file?
-  )
+   ;; Push this item onto a stack as we read the structure,
+   ;; so we can figure out its version and perform conditional reading on fields
+   {:anchor true}))
 
 (def Block2
   (s/struct-def
@@ -107,8 +102,7 @@
    :cunning                :float
    :spirit                 :float
    :health                 :float
-   :energy                 :float
-   ))
+   :energy                 :float))
 
 
 (def Item
@@ -238,22 +232,21 @@
 
 ;; For reference only
 (def Block3
-  (with-meta
-    (s/struct-def
-     :version           :int32
-     :has-data          :bool
-     :sack-count        :int32
-     :focused-sack      :int32
-     :selected-sack     :int32
-     :inventory-sacks   :ignore
-     :use-alt-weaponset :bool
-     :equipment         :ignore
-     :weapon-sets       (s/struct-def
-                         :unused :bool
-                         :items (s/array EquipmentItem
-                                         :length 2)))
-    {:struct/read read-block3
-     :struct/write write-block3}))
+  (s/struct-def
+   :version           :int32
+   :has-data          :bool
+   :sack-count        :int32
+   :focused-sack      :int32
+   :selected-sack     :int32
+   :inventory-sacks   :ignore
+   :use-alt-weaponset :bool
+   :equipment         :ignore
+   :weapon-sets       (s/struct-def
+                       :unused :bool
+                       :items (s/array EquipmentItem
+                                       :length 2))
+   {:struct/read read-block3
+    :struct/write write-block3}))
 
 
 (def Stash
@@ -261,8 +254,7 @@
    :width  :int32
    :height :int32
 
-   :items  (s/array StashItem)
-   ))
+   :items  (s/array StashItem)))
 
 (defn read-block4
   [^ByteBuffer bb context]
@@ -287,10 +279,9 @@
     (write-block bb stash context {0 Stash})))
 
 (def Block4
-  (with-meta
-    (s/struct-def)
-    {:struct/read read-block4
-     :struct/write write-block4}))
+  (s/struct-def
+   {:struct/read read-block4
+    :struct/write write-block4}))
 
 (def UID
   (s/string :bytes :length 16))
@@ -333,8 +324,7 @@
 
    :shrines (s/array
              (s/array UID)
-             :length 6)
-   ))
+             :length 6)))
 
 (def CharacterSkill
   (s/struct-def
@@ -355,8 +345,7 @@
    :autocast-skill-name      (s/string :ascii)
    :autocast-controller-name (s/string :ascii)
    :unknown-bytes            (s/string :ascii :length 4)
-   :unknown                  (s/string :ascii)
-   ))
+   :unknown                  (s/string :ascii)))
 
 (def Block8
   (s/struct-def
@@ -408,8 +397,7 @@
        :default-text (read-string! bb context {:encoding :utf-16-le})}
 
       :else
-      {:type type}
-      )))
+      {:type type})))
 
 (defn write-hotslot
   [^ByteBuffer bb hotslot context]
@@ -430,20 +418,18 @@
         (write-string! bb (:item-name hotslot) context)
         (write-string! bb (:bitmap-up hotslot) context)
         (write-string! bb (:bitmap-down hotslot) context)
-        (write-string! bb (:default-text hotslot) context {:encoding :utf-16-le})
-        ))))
+        (write-string! bb (:default-text hotslot) context {:encoding :utf-16-le})))))
 
 (def HotSlot
-  (merge-meta
-   (s/struct-def
-    :skill-name          (s/string :ascii)
-    :item-name           (s/string :ascii)
-    :bitmap-up           (s/string :ascii)
-    :bitmap-down         (s/string :ascii)
-    :default-text        (s/string :ascii)
-    :type                :int32
-    :item-equip-location :int32
-    :is-item-skill       :bool)
+  (s/struct-def
+   :skill-name          (s/string :ascii)
+   :item-name           (s/string :ascii)
+   :bitmap-up           (s/string :ascii)
+   :bitmap-down         (s/string :ascii)
+   :default-text        (s/string :ascii)
+   :type                :int32
+   :item-equip-location :int32
+   :is-item-skill       :bool
    {:struct/read read-hotslot
     :struct/write write-hotslot}))
 
@@ -468,8 +454,7 @@
                                  (s/array HotSlot :length 36)
                                  :else
                                  (s/array HotSlot :length 46))))
-   :camera-distance        :float
-   ))
+   :camera-distance        :float))
 
 (def Block15
   (s/struct-def
@@ -485,60 +470,58 @@
    :last-monster-hitBy (s/string :ascii)))
 
 (def Block16
-  (merge-meta
-   (s/struct-def
-    :version                 :int32
-    :playtime-seconds        :int32
-    :death-count             :int32
-    :kill-count              :int32
-    :experience-from-kills   :int32
-    :health-potions-used     :int32
-    :energy-potions-used     :int32
-    :max-level               :int32
-    :hits-received           :int32
-    :hits-inflicted          :int32
-    :crits-inflicted         :int32
-    :crits-received          :int32
-    :greatest-damage-done    :float
+  (s/struct-def
+   :version                 :int32
+   :playtime-seconds        :int32
+   :death-count             :int32
+   :kill-count              :int32
+   :experience-from-kills   :int32
+   :health-potions-used     :int32
+   :energy-potions-used     :int32
+   :max-level               :int32
+   :hits-received           :int32
+   :hits-inflicted          :int32
+   :crits-inflicted         :int32
+   :crits-received          :int32
+   :greatest-damage-done    :float
 
-    :greatest-monster-killed (s/array GreatestMonsterKilled :length 3)
+   :greatest-monster-killed (s/array GreatestMonsterKilled :length 3)
 
-    :champion-kills              :int32
-    :last-monster-hit-DA         :float
-    :last-monster-hit-OA         :float
-    :greatest-damage-received    :float
-    :hero-kills                  :int32
-    :items-crafted               :int32
-    :relics-crafted              :int32
-    :tier2-relics-crafted        :int32
-    :tier3-relics-crafted        :int32
-    :devotion-shrines-unlocked   :int32
-    :one-shot-chests-unlocked    :int32
-    :lore-notes-collected        :int32
+   :champion-kills              :int32
+   :last-monster-hit-DA         :float
+   :last-monster-hit-OA         :float
+   :greatest-damage-received    :float
+   :hero-kills                  :int32
+   :items-crafted               :int32
+   :relics-crafted              :int32
+   :tier2-relics-crafted        :int32
+   :tier3-relics-crafted        :int32
+   :devotion-shrines-unlocked   :int32
+   :one-shot-chests-unlocked    :int32
+   :lore-notes-collected        :int32
 
-    :boss-kills                  (s/array :int32 :length 3)
+   :boss-kills                  (s/array :int32 :length 3)
 
-    :survival-greatest-wave      :int32
-    :survival-greatest-score     :int32
-    :survival-defense-built      :int32
-    :survival-powerups-activated :int32
+   :survival-greatest-wave      :int32
+   :survival-greatest-score     :int32
+   :survival-defense-built      :int32
+   :survival-powerups-activated :int32
 
-    :skills-map (after-block-version 11
-                                     (s/array
-                                      (s/struct-def
-                                       :skill-name    (s/string :ascii)
-                                       :level         :int32)))
+   :skills-map (after-block-version 11
+                                    (s/array
+                                     (s/struct-def
+                                      :skill-name    (s/string :ascii)
+                                      :level         :int32)))
 
-    :endless-souls (after-block-version 11 :int32)
+   :endless-souls (after-block-version 11 :int32)
 
-    :endless-essence (after-block-version 11 :int32)
+   :endless-essence (after-block-version 11 :int32)
 
-    :difficulty-skip (after-block-version 11 :byte)
+   :difficulty-skip (after-block-version 11 :byte)
 
-    :unique-items-found          :int32
-    :randomized-items-found      :int32)
-   {:anchor true}           ;; Do we want to keep track of this as we read/write the file?
-   ))
+   :unique-items-found          :int32
+   :randomized-items-found      :int32
+   {:anchor true}))
 
 
 (def Block10
@@ -1168,8 +1151,7 @@
                                (.getChannel))]
     (.write file-channel bb)
     (.force file-channel true)
-    (.close file-channel)
-    ))
+    (.close file-channel)))
 
 (defn get-block
   [block-list block-id]
@@ -1249,13 +1231,3 @@
     (.flip bb)
 
     (write-to-file bb savepath)))
-
-#_(def r (time (load-character-file "/Users/Odie/Dropbox/Public/GrimDawn/main/_Hetzer/player.gdc")))
-#_(time (do
-          (reset! gd-edit.globals/character
-                  (gd-edit.gdc-reader/load-character-file (io/file (gd-edit.game-dirs/get-save-dir) "_Blank Slate/player.gdc")))
-          nil))
-
-#_(reset! gd-edit.globals/character nil)
-
-#_(write-character-file @gd-edit.globals/character "/tmp/player.gdc")

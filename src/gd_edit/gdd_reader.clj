@@ -70,18 +70,17 @@
 
 
 (def Task
-  (gdc/merge-meta
-   (s/struct-def
-    :static/type :task
-    :id1 :int32
-    :id2 UID
+  (s/struct-def
+   :static/type :task
+   :id1 :int32
+   :id2 UID
 
-    ;; :state :int32
-    ;; :in-progress :byte
-    ;; :objectives (s/array :int32
-    ;;                      :read-length-fn objectives-count
-    ;;                      :skip-write-length true)
-    )
+   ;; :state :int32
+   ;; :in-progress :byte
+   ;; :objectives (s/array :int32
+   ;;                      :read-length-fn objectives-count
+   ;;                      :skip-write-length true)
+
    {:struct/read read-task-block
     :struct/write write-task-block}))
 
@@ -109,12 +108,11 @@
   (gdc/write-block bb (assoc data :meta-block-id 0) context {0 TaskListBlock}))
 
 (def Quest
-  (gdc/merge-meta
-   (s/struct-def
-    :static/type :quest
-    :id1 :int32
-    :id2 UID
-    :tasks (s/array Task))
+  (s/struct-def
+   :static/type :quest
+   :id1 :int32
+   :id2 UID
+   :tasks (s/array Task)
 
    {:struct/read read-quest-single
     :struct/write write-quest-single}))
