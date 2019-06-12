@@ -215,8 +215,32 @@
   []
 
   (while true
-    (u/log-exceptions
-      (repl-iter))))
+    (try
+
+      ;; Run a repl iteration
+      (repl-iter)
+
+      ;; Handle potential errors
+      (catch Exception e
+        (let [data (ex-data e)]
+          (cond
+            (= (:cause data) :db-not-loaded)
+            (do
+              (println (red "Oops!"))
+              (println "This command requires some game data to function correctly.")
+              (println "Please help the editor find the game installation directory using the 'gamedir' command.")
+              (println "See 'help gamedir' for more info.")
+              (newline))
+
+            ;; The exception has no additional data attached...
+            ;; Print out the stacktrace so it can be diagnosed by *somebody*
+            :else
+            (do
+              (println "Caught exception:" (.getMessage e))
+              (clojure.stacktrace/print-stack-trace e)
+              (newline)
+
+              (t/info e))))))))
 
 (declare startup-sanity-checks print-build-info log-build-info)
 

@@ -315,6 +315,6 @@
     (utils/collect-walk-entire-tree #(and (instance? clojure.lang.Seqable %)
                                           (not (instance? clojure.lang.IPersistentCollection %))) db))
 
+  ;; Dump each db record into a directory as individual files
+  (time (dump-db-records @gd-edit.globals/db (io/file (gd-edit.utils/working-directory) "database")))
   )
-
-#_(time (dump-db-records @gd-edit.globals/db (io/file (gd-edit.utils/working-directory) "database")))

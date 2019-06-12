@@ -5,7 +5,7 @@
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.io.gdc :as gdc]
-            gd-edit.printer)
+            [gd-edit.printer])
   (:import [java.io BufferedReader StringReader]))
 
 (defn init []

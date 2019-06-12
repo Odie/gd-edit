@@ -5,10 +5,49 @@
             [clojure.java.io :as io]
             [clojure.set :as set]))
 
+(defn deref-or-exception
+  "Check if `r` satisfies `pred`. If so, return dereferenced `r`, otherwise, throw an exception."
+  [r pred error-msg error-map]
+
+  (let [data @r]
+    (if (not (pred data))
+      (throw
+       (ex-info error-msg error-map))
+      data)))
+
+(defn db
+  "Returns the loaded game db, or throws an error if the db is not loaded"
+  []
+
+  (deref-or-exception globals/db #(not (empty? %))
+                      "Game DB has not been loaded"
+                      {:cause :db-not-loaded}))
+
+(defn db-recordname-index
+  "Returns the index, or throws an error if the db is not loaded"
+  []
+
+  (deref-or-exception globals/db-index #(not (empty? %))
+                      "Game DB has not been loaded"
+                      {:cause :db-not-loaded}))
+
+(defn db-and-index
+  []
+
+  (deref-or-exception globals/db-and-index #(not (empty? %))
+                      "Game DB has not been loaded"
+                      {:cause :db-not-loaded}))
+
+(defn localization-table
+  []
+  (deref-or-exception globals/db-and-index #(not (empty? %))
+                      "Game DB has not been loaded"
+                      {:cause :db-not-loaded}))
+
 (defn record-by-name
   [recordname]
 
-  (@globals/db-index recordname))
+  (get (db-recordname-index) recordname))
 
 (defn related-db-records
   [record db-and-index]
@@ -152,7 +191,7 @@
   [loc-table faction-index]
 
   (when (>= faction-index 6)
-    (when-let [faction-str (@globals/localization-table (str "tagFactionUser" (- faction-index 6)))]
+    (when-let [faction-str ((localization-table) (str "tagFactionUser" (- faction-index 6)))]
       (when-not (str/starts-with? faction-str "User")
         faction-str))))
 
@@ -165,7 +204,7 @@
                        4  "Cronley's Gang"}]
     (or
      (faction-names index)
-     (faction-name-from-loc-table @globals/localization-table index))))
+     (faction-name-from-loc-table (localization-table) index))))
 
 (defn item-is-materia?
   [item]
@@ -190,7 +229,7 @@
 
   (cond
     (is-item? obj)
-    (item-name obj @globals/db-and-index)
+    (item-name obj (db-and-index))
 
     (is-skill? obj)
     (skill-name obj)
@@ -212,8 +251,8 @@
 (defn db-get-sibling-records
   [db path]
 
-  (db-get-subset @globals/db
-                 (-> path 
+  (db-get-subset (db)
+                 (-> path
                      (u/filepath->components)
                      (drop-last)
                      (u/components->filepath-unix-style)
@@ -228,7 +267,7 @@
 (defn record-variants
   [db record-path]
 
-  (let [siblings (db-get-sibling-records @globals/db record-path)
+  (let [siblings (db-get-sibling-records (db) record-path)
         target-name (item-affix-or-base-display-name (record-by-name record-path))]
 
     (filter #(= target-name (item-affix-or-base-display-name %)) siblings)))

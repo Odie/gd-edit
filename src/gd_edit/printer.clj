@@ -219,8 +219,8 @@
       (print-map item))
 
     :else
-    (let [related-records (dbu/related-db-records item @globals/db-and-index)
-          name (dbu/item-name item @globals/db-and-index)]
+    (let [related-records (dbu/related-db-records item (dbu/db-and-index))
+          name (dbu/item-name item (dbu/db-and-index))]
       (when (not (nil? name))
         (println (yellow name))
         (newline))

@@ -137,7 +137,7 @@
 
       ;; Run a query against the db using generated predicates
       (set-new-query-result! globals/query-state
-                             (query/query @globals/db predicates)
+                             (query/query (dbu/db) predicates)
                              input)
 
       (print-paginated-result @globals/query-state))))
@@ -198,7 +198,7 @@
 
         ;; Grab a list of items from the db that partially matches the specified path
         matches (->> path
-                     (db-partial-record-path-matches @gd-edit.globals/db)
+                     (db-partial-record-path-matches (dbu/db))
 
                      ;; Filter out all results that have too few path components
                      (filter (fn [item]
@@ -678,7 +678,7 @@
                  (dbu/is-item? (get-in @globals/character (butlast val-path)))
                  (= :relic-name (last val-path)))
                 (do
-                  (set-item--relic-name @globals/db val-path newval)
+                  (set-item--relic-name (dbu/db) val-path newval)
                   (swap! globals/character
                          set-character-field
                          ;; Set the item's relic-completion-level field...
@@ -1094,7 +1094,7 @@
   "Show the class of the loaded character"
   [[input tokens]]
 
-  (print-character-classes @globals/character @globals/db))
+  (print-character-classes @globals/character (dbu/db)))
 
 (defn class-list-handler
   "Show the class of the loaded character"
@@ -1153,7 +1153,7 @@
 
           ;; Inform the user what happened
           (println "Removing class:" matched-class)
-          (print-character-classes modified-character @globals/db)
+          (print-character-classes modified-character (dbu/db))
 
           (println)
           (println "Updating the following fields:")
@@ -1210,7 +1210,7 @@
 
               ;; Inform the user what happened
               (println "Adding class:" (klass "skillDisplayName"))
-              (print-character-classes modified-character @globals/db)
+              (print-character-classes modified-character (dbu/db))
 
               (println)
               (println "Updating the following fields:")
@@ -1475,7 +1475,7 @@
   (str/starts-with? (:skill-name skill) "records/skills/devotion"))
 
 (defn passive-skill? [skill]
-  (let [record (@globals/db-index (:skill-name skill))]
+  (let [record ((dbu/db-recordname-index) (:skill-name skill))]
     (= (get record "Class") "Skill_Passive")))
 
 (defn disable-devotion-skill [skill]

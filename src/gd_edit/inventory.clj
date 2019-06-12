@@ -11,7 +11,8 @@
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.io.arc :as arc]
-            [gd-edit.utils :as u]))
+            [gd-edit.utils :as u]
+            [gd-edit.db-utils :as dbu]))
 
 (defn- character-inventory
   [n]
@@ -29,8 +30,8 @@
   [num]
 
   (let [grid-info (if (= num 0)
-                    (@globals/db-index "records/ui/character/characterinventory/inventory_grid0.dbr")
-                    (@globals/db-index "records/ui/character/characterinventory/inventory_grid1.dbr"))]
+                    (dbu/record-by-name "records/ui/character/characterinventory/inventory_grid0.dbr")
+                    (dbu/record-by-name "records/ui/character/characterinventory/inventory_grid1.dbr"))]
     (-> {:width (grid-info "inventoryXSize")
          :height (grid-info "inventoryYSize")}
         (pixel-dims->slot-dims))))
@@ -144,7 +145,7 @@
 
   (->> items
        (map :basename)
-       (map @globals/db-index)
+       (map (dbu/db-recordname-index))
        (map item->bitmap-name)
        (map strip-first-component)
        (map texture-slot-dims)))
@@ -156,7 +157,7 @@
 
   (->> item
        (:basename)
-       (@globals/db-index)
+       ((dbu/db-recordname-index))
        (item->bitmap-name)
        (strip-first-component)
        (texture-slot-dims)))

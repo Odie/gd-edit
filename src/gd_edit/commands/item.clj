@@ -272,7 +272,7 @@
                    (sort-by #(u/string-similarity
                               (str/lower-case target-name)
                               (str/lower-case (or
-                                               (dbu/item-name (item-def->item %1) @globals/db-and-index)
+                                               (dbu/item-name (item-def->item %1) (dbu/db-and-index))
                                                "")))
                             >)
                    (first))]
@@ -424,7 +424,7 @@
         ;; Now that we have a good idea of the basename of the item,
         ;; try to narrow down to "legal" prefixes only.
         legal-affixes (->> (:recordname (:base analysis-all))
-                           (baseitem-valid-affix-paths @globals/db @globals/db-index)
+                           (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index))
                            (map (fn [[k affix-set]]
                                   [k (->> affix-set
                                           (map #(get db-index %))
@@ -508,41 +508,33 @@
   [[input [path target-name level-cap-str]]]
 
   ;; Do some sanity checks before we try creating and placing an item
-  (let [diag-info (diag/diag-info)]
-    (if-not (every? :passed? diag-info)
-      (do
-        (diag/print-failed-diag-tests diag-info)
-        (println)
-        (println (red "Cannot create the item because the editor hasn't been configured properly.")))
+  (if-let [result (->> (item-at-fuzzy-path @globals/character path)
+                       (item-located-or-print-error))]
+    (let [{:keys [status found-item actual-path]} result
+          level-cap (when (some? level-cap-str)
+                      (Integer/parseInt level-cap-str))]
 
-      ;; Actually do the work...
-      (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
-                           (item-located-or-print-error))]
-        (let [{:keys [status found-item actual-path]} result
-              level-cap (when (some? level-cap-str)
-                          (Integer/parseInt level-cap-str))]
+      ;; Try to construct the requested item
+      (let [item (construct-item target-name (dbu/db) (dbu/db-recordname-index) level-cap)]
+        ;; If construction was not successful, inform the user and abort
+        (cond
+          (nil? item)
+          (println "Sorry, the item could not be constructed")
 
-          ;; Try to construct the requested item
-          (let [item (construct-item target-name @globals/db @globals/db-index level-cap)]
-            ;; If construction was not successful, inform the user and abort
-            (cond
-              (nil? item)
-              (println "Sorry, the item could not be constructed")
+          (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
+          (do
+            (printer/show-item item)
+            (println "Sorry, the item generated doesn't look like the item you asked for.")
+            (println (red "Item not altered")))
 
-              (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item @globals/db-and-index))) 0.8))
-              (do
-                (printer/show-item item)
-                (println "Sorry, the item generated doesn't look like the item you asked for.")
-                (println (red "Item not altered")))
-
-              ;; Otherwise, put the item into the character sheet
-              :else
-              (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
-                (do
-                  (println "Item placed in" (yellow (printer/displayable-path placed-path)))
-                  (println)
-                  (printer/show-item item))
-                (println "Sorry, there is no room to fit the item.")))))))))
+          ;; Otherwise, put the item into the character sheet
+          :else
+          (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
+            (do
+              (println "Item placed in" (yellow (printer/displayable-path placed-path)))
+              (println)
+              (printer/show-item item))
+            (println "Sorry, there is no room to fit the item.")))))))
 
 
 
@@ -571,9 +563,9 @@
                                    (constantly (:recordname variant)))
 
                             ;; Exit the menu
-                            (stack/pop! gd-edit.globals/menu-stack)))])
+                            (stack/pop! globals/menu-stack)))])
                      (into []))
-        choices (conj choices ["a" "abort" (fn[] (stack/pop! gd-edit.globals/menu-stack))])]
+        choices (conj choices ["a" "abort" (fn[] (stack/pop! globals/menu-stack))])]
 
     {:display-fn
      (fn []
@@ -581,12 +573,12 @@
        (println (format "Pick a variant for the %s of %s"
                         (u/keyword->str target-field)
                         (dbu/item-name
-                         (get-in @globals/character item-path) @globals/db-and-index)))
+                         (get-in @globals/character item-path) (dbu/db-and-index))))
        (newline))
 
      :choice-map choices}))
 
-(defn swap-variant-screen! [item-path target-field variants] (stack/push! gd-edit.globals/menu-stack
+(defn swap-variant-screen! [item-path target-field variants] (stack/push! globals/menu-stack
                                                                           (swap-variant-screen item-path target-field variants)))
 
 
@@ -601,7 +593,7 @@
   (if (<= (count path) 1)
     (swap-variant-print-usage)
 
-    (if-let [result (->> (item-at-fuzzy-path @gd-edit.globals/character path)
+    (if-let [result (->> (item-at-fuzzy-path @globals/character path)
                          (item-located-or-print-error))]
       (let [{:keys [status found-item actual-path]} result
             target-field-name (or target-field-name
@@ -610,14 +602,14 @@
                                "prefix" :prefix-name
                                "suffix" :suffix-name}
                               target-field-name)
-            variants (->> (dbu/record-variants @globals/db (target-field found-item))
+            variants (->> (dbu/record-variants (dbu/db) (target-field found-item))
                           (map set))]
         (cond
           (not (contains? found-item target-field))
           (println (format "Sorry, can't find '%s' on the item at '%'" target-field-name (printer/displayable-path actual-path)))
 
           (<= (count variants) 1)
-          (println "Sorry, can't find any" target-field-name "variants for" (yellow (dbu/item-name found-item @globals/db-and-index)))
+          (println "Sorry, can't find any" target-field-name "variants for" (yellow (dbu/item-name found-item (dbu/db-and-index))))
 
           :else
           (swap-variant-screen! actual-path
@@ -630,12 +622,12 @@
 
   (gd-edit.core/repl-iter)
 
-  (baseitem-valid-affix-paths @globals/db @globals/db-index "records/items/gearshoulders/b020a_shoulder.dbr")
+  (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index) "records/items/gearshoulders/b020a_shoulder.dbr")
 
   (count
-   (all-loottable-records @globals/db))
+   (all-loottable-records (dbu/db)))
 
-  (loottable-records-with-mentions (all-loottable-records @globals/db) "records/items/faction/weapons/blunt1h/f002a_blunt.dbr")
+  (loottable-records-with-mentions (all-loottable-records (dbu/db)) "records/items/faction/weapons/blunt1h/f002a_blunt.dbr")
 
   (set-item-handler  [nil ["inv/1/items" "Oleron's Wrath"]])
   (set-item-handler  [nil ["inv/1/items" "mythical stormheart"]])
@@ -644,45 +636,45 @@
 
 
   ;; Item with quality tag
-  (assert (= (select-keys (construct-item "mythical stormheart" @globals/db @globals/db-index nil) [:basename])
+  (assert (= (select-keys (construct-item "mythical stormheart" (dbu/db) (dbu/db-and-index) nil) [:basename])
              {:basename "records/items/upgraded/gearweapons/swords1h/d010_sword.dbr"}))
 
   ;; Relic generation
-  (assert (= (select-keys (construct-item "Oleron's Wrath" @globals/db @globals/db-index nil) [:basename])
+  (assert (= (select-keys (construct-item "Oleron's Wrath" (dbu/db) (dbu/db-and-index) nil) [:basename])
              {:basename "records/items/gearrelic/d019_relic.dbr"}))
 
   ;; Item with suffix
-  (assert (= (select-keys (construct-item "legion warhammer of valor" @globals/db @globals/db-index nil) [:basename :suffix-name])
+  (assert (= (select-keys (construct-item "legion warhammer of valor" (dbu/db) (dbu/db-and-index) nil) [:basename :suffix-name])
              {:basename "records/items/faction/weapons/blunt1h/f002b_blunt.dbr"
               :suffix-name "records/items/lootaffixes/suffix/b_sh002_g.dbr"}))
 
   ;; Item with prefix and suffix
-  (assert (= (select-keys (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index nil) [:basename :prefix-name :suffix-name])
+  (assert (= (select-keys (construct-item "stonehide Dreeg-Sect Legguards of the boar" (dbu/db) (dbu/db-and-index) nil) [:basename :prefix-name :suffix-name])
 
              {:basename "records/items/gearlegs/b001e_legs.dbr"
               :prefix-name "records/items/lootaffixes/prefix/b_ar028_ar_f.dbr"
               :suffix-name "records/items/lootaffixes/suffix/a006b_ch_att_physpi_10.dbr"}))
 
   (time
-   (construct-item "mythical stormheart" @globals/db @globals/db-index nil))
+   (construct-item "mythical stormheart" (dbu/db) (dbu/db-and-index) nil))
 
   (time
-   (construct-item "legion warhammer of valor" @globals/db @globals/db-index nil))
+   (construct-item "legion warhammer of valor" (dbu/db) (dbu/db-and-index) nil))
 
   (time
-   (construct-item "stonehide Dreeg-Sect Legguards of the boar" @globals/db @globals/db-index 50))
+   (construct-item "stonehide Dreeg-Sect Legguards of the boar" (dbu/db) (dbu/db-and-index) 50))
 
   (time
-   (construct-item "stanching chain belt of caged souls" @globals/db @globals/db-index 12))
+   (construct-item "stanching chain belt of caged souls" (dbu/db) (dbu/db-and-index) 12))
 
   (time
-   (construct-item "Lokarr's Gaze" @globals/db @globals/db-index nil))
+   (construct-item "Lokarr's Gaze" (dbu/db) (dbu/db-and-index) nil))
 
   (def item-name-idx
-    (build-item-name-idx @globals/db))
+    (build-item-name-idx (dbu/db)))
 
   (def
-    affixes-all (->> @globals/db
+    affixes-all (->> (dbu/db)
                      (reshape-records-as-affixes)
                      (group-affixes-by-loot-name)))
 
@@ -691,6 +683,6 @@
   (analyze-item-name item-name-idx affixes-all "wraithbound infantry waistguard of vitality")
 
   (time
-   (construct-item "badge of mastery" @globals/db @globals/db-index nil))
+   (construct-item "badge of mastery" (dbu/db) (dbu/db-and-index) nil))
 
   )
