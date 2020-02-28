@@ -156,16 +156,24 @@
   [results]
   {:pre [(sequential? results)]}
 
-  (doseq [kv-map results]
-    (println (:recordname kv-map))
-    (doseq [[key value] (->> kv-map
-                             seq
-                             (filter #(not (keyword? (first %1))))
-                             (sort-by first))]
+  ;; The results might just be a list of strings
+  (if (string? (first results))
+    ;; In that case, just show the strings
+    (doseq [s results]
+      (println s))
 
-      (println (format "\t%s: %s" key (yellow value))))
+    ;; Otherwise, we'll assume we're looking at a db record...
+    ;; Print the record
+    (doseq [kv-map results]
+      (println (:recordname kv-map))
+      (doseq [[key value] (->> kv-map
+                               seq
+                               (filter #(not (keyword? (first %1))))
+                               (sort-by first))]
 
-    (newline)))
+        (println (format "\t%s: %s" key (yellow value))))
+
+      (newline))))
 
 
 (defn print-map-difference

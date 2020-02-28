@@ -193,6 +193,12 @@
   (when (.exists file-path)
     file-path))
 
+(defn file-extension
+  [f]
+  (let [filename (str f)]
+    (when-let [idx (str/last-index-of filename ".")]
+      (subs filename (inc idx)))))
+
 ;;------------------------------------------------------------------------------
 ;; Core lib extensions
 ;;------------------------------------------------------------------------------

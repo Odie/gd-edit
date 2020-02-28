@@ -119,10 +119,12 @@
 (defn query
   "Given a db (list of maps) and some predicates, return all maps that
   satisfies all predicates "
-  [db {:keys [predicates order]}]
+  [db {:keys [predicates order display-opts]}]
 
-  (-> (predicates->result db predicates)
-      (order-results order)))
+  (let [records (-> (predicates->result db predicates)
+                    (order-results order))]
+    (cond->> records
+      (contains? display-opts :rn-only) (map :recordname records))))
 
 (defn query-string-compare
   [op record-val query-val]
@@ -249,8 +251,8 @@
       ;;   "levelreq = 65"
       ;; This makes queries less verbose.
       :else
-      (qand  (u/ci-match key target)
-             (query-compare op value coerced-val)))))
+      (qand (u/ci-match key target)
+            (query-compare op value coerced-val)))))
 
 ;; The outputted query predicates is currently a list of predicates.
 ;; An item might also be a vector, in which case, a single kv-pair must satisfy all the predicates
@@ -259,7 +261,8 @@
 
   (loop [ast query-ast
          result {:order []
-                 :predicates []}]
+                 :predicates []
+                 :display-opts #{}}]
 
     (cond
       ;; Done walking through the ast?
@@ -270,6 +273,10 @@
       (= (str/lower-case (first ast)) "order")
       (recur (drop 2 ast)
              (update result :order conj (second ast)))
+
+      (= (str/lower-case (first ast)) "rn-only")
+      (recur (drop 1 ast)
+             (update result :display-opts conj :rn-only))
 
       ;; Take a peek at the first item
       (not (sequential? (first ast)))
@@ -327,12 +334,11 @@
                ;; Drop the item in as the last item on the top of the stack
                (assoc ast-stack
                       (dec (count ast-stack))
-                      (conj (last ast-stack) token)))
-        ))))
+                      (conj (last ast-stack) token)))))))
 
 (defn query-string->tokens
   [input]
-  (into [] (re-seq #"(?:\!\=)|(?:\>\=)|(?:\<\=)|(?:\*\=)|[\(\)\~\<\>\=]|\"[^\"]+\"|[\w\/\.]+" input)))
+  (into [] (re-seq #"(?:\!\=)|(?:\>\=)|(?:\<\=)|(?:\*\=)|[\(\)\~\<\>\=]|\"[^\"]+\"|[\w\/\.-]+" input)))
 
 (defn query-string->query-predicates
   [input]

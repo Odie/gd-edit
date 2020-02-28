@@ -176,12 +176,19 @@
    (get-gdx2-dir)
    (get-mod-dir)])
 
+(defn files-with-extension
+  [directory ext]
+  (->> (io/file directory "database")
+       file-seq
+       (filter #(and (.isFile %)
+                     (u/case-insensitive= (u/file-extension %) ext)))))
+
 (defn get-db-file-overrides
   []
-  (->> [(io/file (get-game-dir) database-file)
-        (io/file (get-gdx1-dir) "database/GDX1.arz")
-        (io/file (get-gdx2-dir) "database/GDX2.arz")
-        (io/file (get-mod-dir) database-file)]
+  (->> (concat [(io/file (get-game-dir) database-file)
+                (io/file (get-gdx1-dir) "database/GDX1.arz")
+                (io/file (get-gdx2-dir) "database/GDX2.arz")]
+               (files-with-extension (get-mod-dir) "arz"))
        (filter u/path-exists?)
        (into [])))
 

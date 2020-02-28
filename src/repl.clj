@@ -5,11 +5,14 @@
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.io.gdc :as gdc]
-            [gd-edit.printer])
+            [gd-edit.printer]
+            [gd-edit.db-utils :as dbu]
+            [gd-edit.utils :as u])
   (:import [java.io BufferedReader StringReader]))
 
-(defn init []
+(defn init
   "Initialize various globals, such as db and db-index"
+  []
   (gd-edit.core/initialize))
 
 (defn resolve-save-file [f]
@@ -23,19 +26,18 @@
          (filter #(.isFile %))
          first)))
 
-(defn load-character-file [f]
+(defn load-character-file
   "Loads the returns the character at the file location"
+  [f]
   (gdc/load-character-file f))
 
-(defn load-character [f]
+(defn load-character
   "Load the character and set as global state, then returns the character"
+  [f]
 
   (if-let [target-file (resolve-save-file f)]
     (gec/load-character-file target-file)
     (println "File not found: " f)))
-
-(defn write-character-file [character f]
-  (gdc/write-character-file character f))
 
 (defn write-character-file [character f]
   (gdc/write-character-file character f))
@@ -52,11 +54,86 @@
 (defn db-index []
   @globals/db-index)
 
-(defn cmd [s]
+(defn cmd
   "Send the command through the repl pipeline as if it were entered in the console"
+  [s]
   (binding [*in* (io/reader (StringReader. s))]
     (ge/repl-eval (ge/repl-read) ge/command-map)
     nil))
+
+
+(defn collect-record-names
+  [coll [k value]]
+  (cond
+    (= k :recordname)
+    coll
+
+    (and
+     (string? value)
+     (.startsWith value "records/"))
+    (conj coll value)
+
+    (or
+     (list? value)
+     (vector? value))
+    (concat
+     coll
+     (filter #(and (string? %)
+                   (.startsWith % "records/")) value))
+
+    :else
+    coll))
+
+(defn related-db-records
+  [record db-and-index]
+
+  (let [;; Collect all values in the record that look like a db record
+        related-recordnames (->> record
+                                 (reduce collect-record-names #{}))
+
+        ;; Retrieve all related records by name
+        related-records (map #((:index db-and-index) %1) related-recordnames)]
+
+    related-records))
+
+(defn referenced-records
+  [record]
+  (related-db-records (if (string? record)
+                        ((db-index) record)
+                        record)
+                      @globals/db-and-index)
+
+  )
+
+(defn record-might-be-item
+  [record]
+  (some (fn [[k _]]
+          (u/ci-match k "item")) record))
+
+(defn reachable-records
+  [roots]
+
+  (let [interesting-classes #{"LevelTable" "LootItemTable_DynWeight" "LootRandomizer"}]
+    (loop [front roots
+           explored []]
+      (if (empty? front)
+        explored
+
+        (let [node (first front)
+              ;; _ (println "node: " (:recordname node))
+              related (->> (related-db-records node @globals/db-and-index)
+                           (filter #(or (= "LevelTable" (get % "Class"))
+                                        (u/ci-match (get % "Class") "loot")
+                                        ;; (= "LootItemTable_DynWeight" (get %"Class"))
+                                        (record-might-be-item %)
+                                        ))
+                           )]
+          (recur
+           (concat
+            (rest front)
+            related)
+           (conj explored node)))))))
+
 
 (comment
   (init)
@@ -70,4 +147,48 @@
   (cmd "show skills")
 
   (cmd "respec")
+
+  (cmd "mod pick")
+
+  (cmd "mod")
+
+
+
+  (let [loot-masters (->> (db)
+                          (filter #(= "LootMasterTable" (get % "Class"))))]
+
+    (->> (reachable-records loot-masters)
+         (map #(get % "Class"))
+         (into #{})
+         ;; count
+         )
+    )
+
+  "LevelTable"
+  "LootItemTable_DynWeight"
+  "OneShot_Food"
+
+  (->> (reachable-records [((db-index) "records/items/loottables/mastertables/mt_crafting_blueprints_runes_c201.dbr")])
+       ;; (map #(get % "Class"))
+       ;; (into #{})
+       count
+       )
+
+  (referenced-records
+   "records/items/loottables/mastertables/mt_crafting_blueprints_runes_c201.dbr")
+
+  (referenced-records
+   "records/items/loottables/blueprints/lt_blueprints_mobilityrunes_c201.dbr")
+
+  (referenced-records
+  "records/items/loottables/materia/tdyn_comp_magical_a01.dbr")
+
+  (referenced-records
+   "records/items/autopickup/materia/compa_polishedemerald.dbr")
+
+  (referenced-records
+   "records/items/autopickup/materia/compa_markofillusions.dbr")
+
+
+
 )

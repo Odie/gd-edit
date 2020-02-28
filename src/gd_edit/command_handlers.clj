@@ -90,13 +90,19 @@
   [query-state-atom]
   (swap! query-state-atom update :page (fn [oldval] (paginate-next oldval @query-state-atom))))
 
+(defn get-pagination-size
+  [result {:keys [pagination-size] :as query-state}]
+  (if (string? (first result))
+    100
+    pagination-size))
 
 (defn get-paginated-result
-  [result {:keys [page pagination-size] :as query-state}]
+  [result {:keys [page] :as query-state}]
 
-  (->> result
-       (drop (* page pagination-size))
-       (take pagination-size)))
+  (let [pagination-size (get-pagination-size result query-state)]
+    (->> result
+         (drop (* page pagination-size))
+         (take pagination-size))))
 
 
 (defn set-new-query-result!
@@ -110,7 +116,8 @@
 (defn print-paginated-result
   [query-state]
 
-  (let [{:keys [result page pagination-size]} query-state
+  (let [{:keys [result page]} query-state
+        pagination-size (get-pagination-size result query-state)
         paginated-result (get-paginated-result result query-state)
         start-entry (* page pagination-size)
         end-entry (+ start-entry (min (count paginated-result) pagination-size))]
@@ -134,7 +141,6 @@
                         (catch Throwable e (println (str "Query syntax error: " (.getMessage e)))))]
 
     (when (not (nil? predicates))
-
       ;; Run a query against the db using generated predicates
       (set-new-query-result! globals/query-state
                              (query/query (dbu/db) predicates)
