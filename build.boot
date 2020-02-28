@@ -52,7 +52,7 @@
         com.dropbox.core.v2.files.WriteMode)
 
 (def jvm-opt
-  #{"-Xms128m" "-Xmx1024m" "-Djna.nosys=true"})
+  #{"-Xms128m" "-Xmx2048m" "-Djna.nosys=true"})
 
 (task-options!
  aot {:namespace   #{'gd-edit.core}}
