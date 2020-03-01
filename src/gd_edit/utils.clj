@@ -60,6 +60,10 @@
      (catch Exception e#
        ~or-body)))
 
+(defmacro swallow-exceptions
+  [& body]
+  `(try ~@body (catch Exception e#)))
+
 (defn file-magic
   "Returns a long with lower 32 bits suitable for use as a file magic header."
   [s]
@@ -90,6 +94,14 @@
        (newline)
 
        (t/info e#))))
+
+(defmacro log-exceptions-with
+  [log-fn & body]
+
+  `(try
+     ~@body
+     (catch Exception e#
+       (~log-fn e#))))
 
 (defmacro print-stack []
   `(doseq [s# (.getStackTrace (Thread/currentThread))]

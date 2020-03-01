@@ -3,8 +3,8 @@
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
             [gd-edit.vdf-parser :as vdf]
-            [com.rpl.specter :as specter])
-
+            [com.rpl.specter :as specter]
+            [taoensso.timbre :as t])
   (:import [com.sun.jna.platform.win32 WinReg Advapi32Util]))
 
 (declare looks-like-game-dir)
@@ -19,10 +19,10 @@
   "Get steam installation path"
   []
 
-  (u/log-exceptions
-    (Advapi32Util/registryGetStringValue WinReg/HKEY_CURRENT_USER
-                                         "SOFTWARE\\Valve\\Steam"
-                                         "SteamPath")))
+  (u/log-exceptions-with t/debug
+   (Advapi32Util/registryGetStringValue WinReg/HKEY_CURRENT_USER
+                                        "SOFTWARE\\Valve\\Steam"
+                                        "SteamPath")))
 
 (defn get-steam-library-folders
   "Retrieves the library folders as defined in steamapps/libraryfolders.vdf"
@@ -53,7 +53,8 @@
     [""]
 
     :else
-    (->> (into [(get-steam-path)] (get-steam-library-folders))
+    (->> (concat [(get-steam-path)] (get-steam-library-folders))
+         (remove nil?)
          (map #(str % "\\steamapps\\common\\Grim Dawn")))))
 
 (defn- clean-list
