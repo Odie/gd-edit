@@ -487,18 +487,18 @@
 (defn initialize
   []
 
+  (setup-log)
+
   ;; Try to load the settings file if it exists
   (handlers/load-settings-file)
+
+  (t/set-level! (or (@globals/settings :log-level) :info))
 
   ;; Settings should autosave when it is changed
   (add-watch globals/settings ::settings-autosave
              (fn [key settings old-state new-state]
                (if (not= old-state new-state)
                  (u/write-settings @globals/settings))))
-
-  ;; Setup logs
-  (setup-log (or (@globals/settings :log-level) :info))
-
 
   (print-build-info)
   (println)
