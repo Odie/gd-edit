@@ -541,7 +541,7 @@
               (println "Item placed in" (yellow (printer/displayable-path placed-path)))
               (println)
               (printer/show-item item))
-            (println "Sorry, there is no room to fit the item.")))))))
+            (println "Sorry, there is" (red "no room") "to fit the item.")))))))
 
 
 
