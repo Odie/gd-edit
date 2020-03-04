@@ -152,6 +152,8 @@
 
   (cmd "mod")
 
+  (u/timed-readable
+   (cmd "set inv/1/items \"Hydra bow\""))
 
 
   (let [loot-masters (->> (db)
@@ -163,10 +165,6 @@
          ;; count
          )
     )
-
-  "LevelTable"
-  "LootItemTable_DynWeight"
-  "OneShot_Food"
 
   (->> (reachable-records [((db-index) "records/items/loottables/mastertables/mt_crafting_blueprints_runes_c201.dbr")])
        ;; (map #(get % "Class"))
@@ -188,7 +186,5 @@
 
   (referenced-records
    "records/items/autopickup/materia/compa_markofillusions.dbr")
-
-
 
 )

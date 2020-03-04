@@ -8,7 +8,6 @@
              [structure-walk :as sw]
              [utils :as u]]
             [gd-edit.commands.help :as help]
-            [gd-edit.commands.diag :as diag]
             [clojure.string :as str]
             [jansi-clj.core :refer :all]))
 
@@ -117,24 +116,28 @@
     (swap-first-two coll)
     coll))
 
+(def filter-db-records-for-items-with-display-name
+  (filter #(let [class (dbu/record-class %)]
+             (and
+              (or (u/ci-match class "item")
+                  (u/ci-match class "armor")
+                  (u/ci-match class "weapon")
+                  (u/ci-match class "oneshot")
+                  (u/ci-match class "formula")
+                  (u/ci-match class "relic"))
+              (not
+               (or (u/ci-match class "FixedItem")
+                   (u/ci-match class "Table")))
+              (dbu/record-has-display-name? %)))))
+
+
 (defn build-item-name-idx
   [db]
-  (let [item-records (filter (fn [record]
-                               (and
-                                (some #(str/starts-with? (:recordname record) %1)
-                                      #{"records/items/"
-                                        "records/storyelements/questitems"
-                                        "records/storyelements/signs"})
-                                (not (str/starts-with? (:recordname record) "records/items/lootaffixes"))
-                                (dbu/record-has-display-name? record)
-                                ))
-
-                             db)
+  (let [item-records (into [] filter-db-records-for-items-with-display-name db)
 
         item-name-idx (->> (group-by #(dbu/item-base-record-get-name %1) item-records)
                            (map (fn [[k v]] [k (prefer-material-over-blueprint v)]))
-                           (into {})
-                           )]
+                           (into {}))]
     item-name-idx))
 
 
@@ -195,8 +198,7 @@
         prefix-best-match (idx-best-match prefix-name-idx tokens-cursor)
         prefix-record (if (nil? prefix-best-match)
                         nil
-                        (do
-                          (get-in prefix-best-match [3 0])))
+                        (get-in prefix-best-match [3 0]))
 
         ;; Advance the tokens cursor if possible
         tokens-cursor (if (not (nil? prefix-best-match))
@@ -207,8 +209,7 @@
         base-best-match (idx-best-match item-name-idx tokens-cursor)
         base-record (if (nil? base-best-match)
                       nil
-                      (do
-                        (get-in base-best-match [3 0])))
+                      (get-in base-best-match [3 0]))
 
         ;; Advance the tokens cursor if possible
         tokens-cursor (if (not (nil? base-best-match))
@@ -220,8 +221,7 @@
         suffix-best-match (idx-best-match suffix-name-idx tokens-cursor)
         suffix-record (if (nil? suffix-best-match)
                       nil
-                      (do
-                        (get-in suffix-best-match [3 0])))
+                      (get-in suffix-best-match [3 0]))
 
         ;; Advance the tokens cursor if possible
         tokens-cursor (if (not (nil? suffix-best-match))
@@ -323,6 +323,26 @@
       (update :prefix group-by-loot-name)
       (update :suffix group-by-loot-name)))
 
+(defn filter-for-record-of-class
+  [class-name]
+  (filter #(= (dbu/record-class %) class-name)))
+
+(def filter-for-affixes
+  (filter-for-record-of-class "LootRandomizer"))
+
+(defn categorize-prefix-or-suffix
+  [record]
+
+  (let [recordname (:recordname record)]
+    (cond
+      (u/ci-match recordname "prefix")
+      :prefix
+
+      (u/ci-match recordname "suffix")
+      :suffix
+
+      :else
+      :unknown)))
 
 (defn reshape-records-as-affixes
   "Given some records, return a {:prefix [...] :suffix [...]} map, where
@@ -330,23 +350,10 @@
     and
   all suffix records are stored under :suffix"
   [records]
-  (->> records
-       (reduce (fn [result item]
-                 (cond
-                   (and (str/starts-with? (:recordname item) "records/items/lootaffixes/prefix/")
-                        (= 5 (path-component-count (:recordname item))))
-                   (update result :prefix conj item)
-
-                   (and (str/starts-with? (:recordname item) "records/items/lootaffixes/suffix/")
-                        (= 5 (path-component-count (:recordname item))))
-                   (update result :suffix conj item)
-
-                   :else
-                   result
-                   ))
-               {:prefix []
-                :suffix []})))
-
+  (select-keys (->> records
+                    (into #{} (filter-for-record-of-class "LootRandomizer"))
+                    (group-by categorize-prefix-or-suffix))
+               [:prefix :suffix]))
 
 (defn- analysis->item
   [analysis db item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} level-cap]
@@ -357,23 +364,23 @@
         ;; We choose highest level one that is less or equal to the level cap
         results (->> (select-keys analysis [:base :prefix :suffix])
 
-                  (map (fn [[key record]]
-                         [key
+                     (map (fn [[key record]]
+                            [key
 
-                          (if (nil? record)
-                            nil
-                            (name-idx-highest-level-by-name
-                             (cond
-                               (= key :base)
-                               item-name-idx
-                               (= key :prefix)
-                               prefix-name-idx
-                               (= key :suffix)
-                               suffix-name-idx)
-                             (item-or-affix-get-name record)
-                             level-cap))]))
+                             (if (nil? record)
+                               nil
+                               (name-idx-highest-level-by-name
+                                (cond
+                                  (= key :base)
+                                  item-name-idx
+                                  (= key :prefix)
+                                  prefix-name-idx
+                                  (= key :suffix)
+                                  suffix-name-idx)
+                                (item-or-affix-get-name record)
+                                level-cap))]))
 
-                  (into {}))]
+                     (into {}))]
 
     ;; An item must have a basename, which should refer to a item record
     ;; If we could not find one that satisfies the target-name, then return nothing.
@@ -388,10 +395,10 @@
   [m]
 
   (reduce-kv (fn [accum k v]
-                   (if-not (nil? v)
-                     (+ accum 1)
-                     accum
-                     ))
+               (if-not (nil? v)
+                 (+ accum 1)
+                 accum
+                 ))
              0
              m))
 

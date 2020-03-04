@@ -132,6 +132,52 @@
       (println ~msg "in" (nanotime->secs duration#) "seconds")
       result#))
 
+(defn readable-time
+  ([time]
+   (readable-time time :msec))
+  ([time unit]
+
+   ;; The conversion table tells us when a unit should be promoted to the next larger unit.
+   (let [conversion-table {:ns [1000 :us]
+                           :us [1000 :msec]
+                           :msec [1000 :sec]
+                           :sec [60 :min]
+                           :min [60 :hour]
+                           :hour [24 :day]
+                           :day nil}
+         result (loop [accum (list)
+                       time time
+                       unit unit]
+
+                  ;; Should we promote this to the next unit?
+                  ;; What is the max this particular unit can hold?
+                  (let [[unit-max next-unit] (get conversion-table unit nil)]
+                    (cond
+                      ;; If there are no more promotion possible, we're done...
+                      ;; Append the pending time left over,
+                      ;; and return the result
+                      (nil? unit-max)
+                      (conj accum [time unit])
+
+                      (> time unit-max)
+                      (recur
+                       (conj accum [(mod time unit-max) unit])
+                       (/ time unit-max)
+                       next-unit)
+
+                      :else
+                      (conj accum [time unit]))))]
+     (map (fn[[time unit]] [(int time) unit]) result))))
+
+(defmacro timed-readable
+  "Times the execution time of the given expression. Returns a vector of [elapsed-time sexp-result]"
+  [sexp]
+
+  `(let [start# (System/nanoTime)
+         result# ~sexp
+         end# (System/nanoTime)]
+     [(readable-time (- end# start#) :ns) result#]))
+
 ;;------------------------------------------------------------------------------
 ;; String comparison
 ;;------------------------------------------------------------------------------

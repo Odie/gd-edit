@@ -5,6 +5,10 @@
             [clojure.java.io :as io]
             [clojure.set :as set]))
 
+(defn record-class
+  [record]
+  (get record "Class"))
+
 (defn deref-or-exception
   "Check if `r` satisfies `pred`. If so, return dereferenced `r`, otherwise, throw an exception."
   [r pred error-msg error-map]
