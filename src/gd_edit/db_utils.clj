@@ -255,7 +255,7 @@
 (defn db-get-sibling-records
   [db path]
 
-  (db-get-subset (db)
+  (db-get-subset db
                  (-> path
                      (u/filepath->components)
                      (drop-last)
@@ -271,7 +271,7 @@
 (defn record-variants
   [db record-path]
 
-  (let [siblings (db-get-sibling-records (db) record-path)
+  (let [siblings (db-get-sibling-records db record-path)
         target-name (item-affix-or-base-display-name (record-by-name record-path))]
 
     (filter #(= target-name (item-affix-or-base-display-name %)) siblings)))
