@@ -1,13 +1,13 @@
 (ns repl
   (:require [clojure.java.io :as io]
-            [gd-edit.command-handlers :as gec]
             [gd-edit.core :as ge]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.io.gdc :as gdc]
             [gd-edit.printer]
             [gd-edit.db-utils :as dbu]
-            [gd-edit.utils :as u])
+            [gd-edit.utils :as u]
+            [gd-edit.app-util :as au])
   (:import [java.io BufferedReader StringReader]))
 
 (defn init
@@ -36,7 +36,7 @@
   [f]
 
   (if-let [target-file (resolve-save-file f)]
-    (gec/load-character-file target-file)
+    (au/load-character-file target-file)
     (println "File not found: " f)))
 
 (defn write-character-file [character f]
@@ -101,9 +101,7 @@
   (related-db-records (if (string? record)
                         ((db-index) record)
                         record)
-                      @globals/db-and-index)
-
-  )
+                      @globals/db-and-index))
 
 (defn record-might-be-item
   [record]
@@ -186,5 +184,7 @@
 
   (referenced-records
    "records/items/autopickup/materia/compa_markofillusions.dbr")
+
+  (cmd "set inv/1/items \"Glyph of Seismic Strength\"")
 
 )

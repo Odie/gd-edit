@@ -5,8 +5,46 @@
              [utils :as u]
              [globals :as globals]]
             [clojure.string :as str]
+            [gd-edit.jline :as jline]
             [jansi-clj.core :refer :all]))
 
+(defn prompt-yes-no
+  "Prompts the user to answer Y or N, returns true or false depending on user input."
+  ([prompt]
+   (prompt-yes-no prompt nil))
+
+  ([prompt default]
+   (let [prompt (cond->> prompt
+                  (vector? prompt) (str/join "\n"))
+         print-yes-no (fn [default]
+                        (print (cond
+                                 (true? default) "(Y/n) "
+                                 (false? default) "(y/N) "
+                                 (nil? default) "(y/n) ")))]
+
+     ;; Show the prompt
+     (print prompt)
+     (print " ")
+     (print-yes-no default)
+     (flush)
+
+     ;; Read the user's answer
+     (let [line (str/lower-case (jline/readline))]
+       (cond
+         (str/starts-with? line "y") true
+         (str/starts-with? line "n") false
+
+         ;; If the user didn't supply an answer...
+         ;; and the caller has set the default value...
+         ;; Just return the default value
+         (and (empty? line)
+              (some? default)) default
+
+         ;; Otherwise, ask the user to choose from a valid answer.
+         :else (do
+                 (println)
+                 (println "Please enter 'Y' or 'N'.")
+                 (recur prompt default)))))))
 
 (declare show-item)
 

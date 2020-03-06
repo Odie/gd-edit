@@ -212,15 +212,23 @@
 ;;------------------------------------------------------------------------------
 ;; Path related functions
 ;;------------------------------------------------------------------------------
+(defn home-dir
+  []
+  (System/getProperty "user.home"))
+
 (defn expand-home [s]
   (if (.startsWith s "~")
-    (str/replace-first s "~" (System/getProperty "user.home"))
+    (str/replace-first s "~" (home-dir))
     s))
+
+(defn path-components
+  [path]
+  (str/split path #"[/\\]"))
 
 (defn filepath->components
   [path]
 
-  (str/split path #"[/\\]"))
+  (path-components path))
 
 (defn components->filepath
   [components]
@@ -234,8 +242,7 @@
 
 (defn last-path-component
   [path]
-
-  (last (str/split path #"[/\\]")))
+  (last (path-components path)))
 
 (defn path-exists?
   [path]
@@ -256,6 +263,14 @@
   (let [filename (str f)]
     (when-let [idx (str/last-index-of filename ".")]
       (subs filename (inc idx)))))
+
+(defn path-basename
+  [path]
+  (let [path (str path)
+        filename (last-path-component path)]
+    (when-let [idx (str/last-index-of filename ".")]
+      (subs filename 0 idx))))
+
 
 ;;------------------------------------------------------------------------------
 ;; Core lib extensions
@@ -342,11 +357,11 @@
 
 (defn collect-values-with-key-prefix
   [coll key-prefix]
-
   (->> coll
        (filter (fn [kv]
                  (str/starts-with? (key kv) key-prefix)))
-       (reduce #(conj %1 (val %2)) [])))
+       (map val)
+       (into [])))
 
 (defn slurp-bytes
   "Slurp the bytes from a slurpable thing"
@@ -480,3 +495,23 @@
 
      :else
      (throw (Throwable. (str "Unknown collect-walk type: " walk-type))))))
+
+
+(defn human-readable-byte-count
+  [byte-count]
+
+  (cond
+    (>= byte-count (* 1024 1024 1024 1024))
+    (str (quot byte-count (* 1024 1024 1024 1024)) " TB")
+
+    (>= byte-count (* 1024 1024 1024))
+    (str (quot byte-count (* 1024 1024 1024)) " GB")
+
+    (>= byte-count (* 1024 1024))
+    (str (quot byte-count (* 1024 1024)) " MB")
+
+    (>= byte-count 1024)
+    (str (quot byte-count 1024) " KB")
+
+    :else
+    (str byte-count " bytes")))

@@ -78,11 +78,7 @@
 (defn get-steam-cloud-save-dirs
   []
 
-  (cond
-    (u/running-nix?)
-    ""
-
-    :else
+  (when (u/running-windows?)
     (let [userdata-dir (io/file (get-steam-path) "userdata")]
       (->> (io/file userdata-dir)
            (.listFiles)
@@ -104,8 +100,7 @@
     ""
 
     :else
-    (let [user-dir (System/getProperty "user.home")]
-      (.getPath (io/file user-dir "Documents\\My Games\\Grim Dawn\\save\\main")))))
+    (.getPath (io/file (u/home-dir) "Documents\\My Games\\Grim Dawn\\save\\main"))))
 
 (defn get-save-dir-search-list
   "Returns all possible locations where the save dir might be found.
@@ -179,17 +174,28 @@
 
 (defn files-with-extension
   [directory ext]
-  (->> (io/file directory "database")
+  (->> (io/file directory)
        file-seq
        (filter #(and (.isFile %)
                      (u/case-insensitive= (u/file-extension %) ext)))))
+
+(defn get-mod-db-file
+  [mod-dir]
+
+  (when mod-dir
+    (let [components (u/path-components (str mod-dir))
+          mod-name (last components)]
+
+      (->> (file-seq (io/file mod-dir "database"))
+           (filter #(u/case-insensitive= (u/path-basename %) mod-name))
+           first))))
 
 (defn get-db-file-overrides
   []
   (->> (concat [(io/file (get-game-dir) database-file)
                 (io/file (get-gdx1-dir) "database/GDX1.arz")
                 (io/file (get-gdx2-dir) "database/GDX2.arz")]
-               (files-with-extension (get-mod-dir) "arz"))
+               (get-mod-db-file (get-mod-dir)))
        (filter u/path-exists?)
        (into [])))
 

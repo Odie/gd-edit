@@ -308,3 +308,112 @@
 
          ;; Turn the unique fields of each variant into a hashmap again
          (map #(into {} %)))))
+
+
+;;------------------------------------------------------------------------------
+;; Type coercion
+;;------------------------------------------------------------------------------
+(defn- parseBoolean
+  [val-str]
+
+  (let [true-aliases ["true" "t" "1"]
+        false-aliases ["false" "f" "0"]]
+    (cond
+      (contains? (into #{} true-aliases) val-str)
+      true
+
+      (contains? (into #{} false-aliases) val-str)
+      false
+
+      :else
+      (throw (Throwable.
+              (str/join "\n"
+                        [(format "Can't interpret \"%s\" as a boolean value" val-str)
+                         "Try any of the following: "
+                         (str "  true  - " (str/join ", " true-aliases))
+                         (str "  false - " (str/join ", " false-aliases))]))))))
+
+(defn coerce-str-to-type
+  "Given an value as a string, return the value after coercing it to the correct type."
+  [val-str type]
+
+  (cond
+    ;; If the caller asked to convert the value to a string,
+    ;; we don't have to do anything because the value should already be a string
+    (= java.lang.String type)
+    val-str
+
+    (= java.lang.Float type)
+    (Float/parseFloat val-str)
+
+    (= java.lang.Double type)
+    (Double/parseDouble val-str)
+
+    (= java.lang.Short type)
+    (Short/parseShort val-str)
+
+    (= java.lang.Integer type)
+    (Integer/parseInt val-str)
+
+    (= java.lang.Long type)
+    (Long/parseLong  val-str)
+
+    (= java.lang.Boolean type)
+    (parseBoolean val-str)))
+
+(defn coerce-number-to-type
+  [val-number to-type]
+
+  (cond
+    (= java.lang.String to-type)
+    (.toString val-number)
+
+    (= java.lang.Float to-type)
+    (float val-number)
+
+    (= java.lang.Double to-type)
+    (double val-number)
+
+    (= java.lang.Short type)
+    (Short. val-number)
+
+    (= java.lang.Integer to-type)
+    (int val-number)
+
+    (= java.lang.Long to-type)
+    (long val-number)
+
+    (= java.lang.Boolean to-type)
+    (if (= val-number 0)
+      false
+      true)
+
+    :else
+    (throw (Throwable. (format "Don't know how to coerce %s => %s"
+                               (str (type val))
+                               (str to-type))))))
+
+(defn coerce-to-type
+  [val to-type]
+  (cond
+    (string? val)
+    (coerce-str-to-type val to-type)
+
+    (number? val)
+    (coerce-number-to-type val to-type)
+
+    :else
+    (throw (Throwable. (format "Don't know how to coerce %s => %s"
+                               (str (type val))
+                               (str to-type))))))
+
+(defn coerce-map-numbers-using-reference
+  "Coerce all map values that are numbers to the same type as the field in the reference map."
+  [m reference]
+
+  (->> m
+       (map (fn [[k v]]
+              (if (number? v)
+                [k (coerce-to-type v (type (reference k)))]
+                [k v])))
+       (into (empty m))))

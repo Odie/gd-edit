@@ -5,22 +5,36 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.cli :refer [parse-opts]]
-            [gd-edit.command-handlers :as handlers]
-            gd-edit.commands.diag
-            gd-edit.commands.find
-            gd-edit.commands.help
-            gd-edit.commands.item
+            [gd-edit.commands
+             [choose-character :as commands.choose-character]
+             [class :as commands.class]
+             [db :as commands.db]
+             [diag :as commands.diag]
+             [find :as commands.find]
+             [gamedir :as commands.gamedir]
+             [help :as commands.help]
+             [item :as commands.item]
+             [level :as commands.level]
+             [log :as commands.log]
+             [mod :as commands.mod]
+             [query :as commands.query]
+             [respec :as commands.respec]
+             [savedir :as commands.savedir]
+             [set :as commands.set]
+             [show :as commands.show]
+             [update :as commands.update]
+             [write :as commands.write]]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
-            [gd-edit.io.arc :as arc-reader]
-            [gd-edit.io.arz :as arz-reader]
             [gd-edit.jline :as jl]
             [gd-edit.self-update :as su]
             [gd-edit.utils :as u]
-            [jansi-clj.core :refer :all]
-            [progress.file :as progress]
+            [jansi-clj.core :refer [red green yellow bold black]]
             [taoensso.timbre :as t]
-            [taoensso.timbre.appenders.core :as appenders])
+            [taoensso.timbre.appenders.core :as appenders]
+            [clojure.pprint :refer [pprint]]
+            [clojure.stacktrace :refer [print-stack-trace]]
+            [gd-edit.app-util :as au])
   (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
 
@@ -38,13 +52,10 @@
      (->> (into [] (re-seq #"\"[^\"]+\"|\S+" input))
           (map strip-quotes))]))
 
-
 (defn repl-read
   []
-
   ;; Read a line
   (tokenize-input (jl/readline (green "> "))))
-
 
 (defn split-at-space
   [str]
@@ -52,35 +63,35 @@
 
 (def command-map
   {["exit"]  (fn [input] (System/exit 0))
-   ["q"]     (fn [input] (handlers/query-command-handler input))
-   ["qshow"] (fn [input] (handlers/query-show-handler input))
-   ["qn"]    (fn [input] (handlers/query-show-handler input))
-   ["db"]    (fn [input] (handlers/db-show-handler input))
-   ["db" "show"] (fn [input] (handlers/db-show-handler input))
-   ["show"]  (fn [input] (handlers/show-handler input))
-   ["ls"]    (fn [input] (handlers/show-handler input))
-   ["set"]   (fn [input] (handlers/set-handler input))
-   ["find"]  (fn [input] (gd-edit.commands.find/find-handler input))
-   ["load"]  (fn [input] (handlers/choose-character-handler input))
-   ["write"] (fn [input] (handlers/write-handler input))
-   ["class"] (fn [input] (handlers/class-handler input))
-   ["class" "list"] (fn [input] (handlers/class-list-handler input))
-   ["class" "add"]  (fn [input] (handlers/class-add-handler input))
-   ["class" "remove"]  (fn [input] (handlers/class-remove-handler input))
-   ["gamedir"] (fn [input] (handlers/gamedir-handler input))
-   ["gamedir" "clear"] (fn [input] (handlers/gamedir-clear-handler input))
-   ["savedir"] (fn [input] (handlers/savedir-handler input))
-   ["savedir" "clear"] (fn [input] (handlers/savedir-clear-handler input))
-   ["mod"]     (fn [input] (handlers/mod-handler input))
-   ["mod" "pick"]  (fn [input] (handlers/mod-pick-handler input))
-   ["mod" "clear"] (fn [input] (handlers/mod-clear-handler input))
-   ["level"]   (fn [input] (handlers/level-handler input))
-   ["respec"]  (fn [input] (handlers/respec-handler input))
-   ["log"]     (fn [input] (handlers/log-handler input))
-   ["update"]  (fn [input] (handlers/update-handler input))
-   ["help"]    (fn [input] (gd-edit.commands.help/help-handler input))
-   ["diag"]    (fn [input] (gd-edit.commands.diag/diag-handler input))
-   ["swap-variant"] (fn [input] (gd-edit.commands.item/swap-variant-handler input))})
+   ["q"]     (fn [input] (commands.query/query-command-handler input))
+   ["qshow"] (fn [input] (commands.query/query-show-handler input))
+   ["qn"]    (fn [input] (commands.query/query-show-handler input))
+   ["db"]    (fn [input] (commands.db/db-show-handler input))
+   ["db" "show"] (fn [input] (commands.db/db-show-handler input))
+   ["show"]  (fn [input] (commands.show/show-handler input))
+   ["ls"]    (fn [input] (commands.show/show-handler input))
+   ["set"]   (fn [input] (commands.set/set-handler input))
+   ["find"]  (fn [input] (commands.find/find-handler input))
+   ["load"]  (fn [input] (commands.choose-character/choose-character-handler input))
+   ["write"] (fn [input] (commands.write/write-handler input))
+   ["class"] (fn [input] (commands.class/class-handler input))
+   ["class" "list"] (fn [input] (commands.class/class-list-handler input))
+   ["class" "add"]  (fn [input] (commands.class/class-add-handler input))
+   ["class" "remove"]  (fn [input] (commands.class/class-remove-handler input))
+   ["gamedir"] (fn [input] (commands.gamedir/gamedir-handler input))
+   ["gamedir" "clear"] (fn [input] (commands.gamedir/gamedir-clear-handler input))
+   ["savedir"] (fn [input] (commands.savedir/savedir-handler input))
+   ["savedir" "clear"] (fn [input] (commands.savedir/savedir-clear-handler input))
+   ["mod"]     (fn [input] (commands.mod/mod-handler input))
+   ["mod" "pick"]  (fn [input] (commands.mod/mod-pick-handler input))
+   ["mod" "clear"] (fn [input] (commands.mod/mod-clear-handler input))
+   ["level"]   (fn [input] (commands.level/level-handler input))
+   ["respec"]  (fn [input] (commands.respec/respec-handler input))
+   ["log"]     (fn [input] (commands.log/log-handler input))
+   ["update"]  (fn [input] (commands.update/update-handler input))
+   ["help"]    (fn [input] (commands.help/help-handler input))
+   ["diag"]    (fn [input] (commands.diag/diag-handler input))
+   ["swap-variant"] (fn [input] (commands.item/swap-variant-handler input))})
 
 (defn- find-command
   "Try to find the \"longest\" command match"
@@ -147,7 +158,7 @@
         (println)))))
 
 (defn repl-eval
-  [[input tokens :as input-vec] command-map]
+  [[input tokens] command-map]
 
   (t/debug "Evaluating command from user:")
   (u/log-exp input)
@@ -237,7 +248,7 @@
             :else
             (do
               (println "Caught exception:" (.getMessage e))
-              (clojure.stacktrace/print-stack-trace e)
+              (print-stack-trace e)
               (newline)
 
               (t/info e))))))))
@@ -363,7 +374,7 @@
       (swap! globals/settings assoc :last-version-check (Date.))
 
       ;; Notify the user there is a new version
-      (if (= status :new-version-available)
+      (when (= status :new-version-available)
         (>!! globals/notification-chan
              (green
               (str/join "\n"
@@ -391,24 +402,6 @@
 
   (format "%s: %s" prop-name (System/getProperty prop-name)))
 
-(defn human-readable-byte-count
-  [byte-count]
-
-  (cond
-    (>= byte-count (* 1024 1024 1024 1024))
-    (str (quot byte-count (* 1024 1024 1024 1024)) " TB")
-
-    (>= byte-count (* 1024 1024 1024))
-    (str (quot byte-count (* 1024 1024 1024)) " GB")
-
-    (>= byte-count (* 1024 1024))
-    (str (quot byte-count (* 1024 1024)) " MB")
-
-    (>= byte-count 1024)
-    (str (quot byte-count 1024) " KB")
-
-    :else
-    (str byte-count " bytes")))
 
 (defn get-system-info
   []
@@ -422,46 +415,45 @@
                             (map #(System/getProperty %) jvm-props))
 
                 (list
-
                  "Free System Memory"
                  (u/try-or
-                  (human-readable-byte-count
+                  (u/human-readable-byte-count
                    (.getFreePhysicalMemorySize os-info))
                   "Not available")
 
                  "Committed System Memory"
                  (u/try-or
-                  (human-readable-byte-count
+                  (u/human-readable-byte-count
                    (.getCommittedVirtualMemorySize os-info))
                   "Not available")
 
                  "Total System Memory"
                  (u/try-or
-                  (human-readable-byte-count
+                  (u/human-readable-byte-count
                    (.getTotalPhysicalMemorySize os-info))
                   "Not available")
 
                  "Free Swap Memory"
                  (u/try-or
-                  (human-readable-byte-count
+                  (u/human-readable-byte-count
                    (.getFreeSwapSpaceSize os-info))
                   "Not available")
 
                  "Total Swap Memory"
                  (u/try-or
-                  (human-readable-byte-count
+                  (u/human-readable-byte-count
                    (.getTotalSwapSpaceSize os-info))
                   "Not available")
 
                  "Current file handle"
                  (u/try-or
-                   (.getOpenFileDescriptorCount os-info)
-                   "Not available")
+                  (.getOpenFileDescriptorCount os-info)
+                  "Not available")
 
                  "Max file handle count"
                  (u/try-or
-                   (.getMaxFileDescriptorCount os-info)
-                   "Not available"))))))
+                  (.getMaxFileDescriptorCount os-info)
+                  "Not available"))))))
 
 (defn log-environment
   "Outputs some basic information regarding the running environment"
@@ -481,7 +473,7 @@
   []
 
   ;; Enable cross-platform ansi color handling
-  (alter-var-root #'gd-edit.jline/use-jline (fn[oldval] true))
+  (alter-var-root #'gd-edit.jline/use-jline (constantly true))
   (jansi-clj.core/install!))
 
 (defn initialize
@@ -490,7 +482,7 @@
   (setup-log)
 
   ;; Try to load the settings file if it exists
-  (handlers/load-settings-file)
+  (au/load-settings-file)
 
   (t/set-level! (or (@globals/settings :log-level) :info))
 
@@ -509,13 +501,13 @@
   (startup-sanity-checks)
 
   ;; Try to load the game db
-  (handlers/load-db-in-background)
+  (au/load-db-in-background)
 
   ;; Setup the first screen in the program
   ;; based on if a character has already been loaded
   (if (zero? (count @globals/character))
-    (handlers/character-selection-screen!)
-    (handlers/character-manipulation-screen!))
+    (commands.choose-character/character-selection-screen!)
+    (commands.choose-character/character-manipulation-screen!))
 
   ;; Remove any left over restart scripts from last time we ran "update"
   (su/cleanup-restart-script))
@@ -523,9 +515,9 @@
 (defn print-runtime-info
   []
 
-  (clojure.pprint/pprint (.getInputArguments (java.lang.management.ManagementFactory/getRuntimeMXBean)))
+  (pprint (.getInputArguments (java.lang.management.ManagementFactory/getRuntimeMXBean)))
   (newline)
-  (clojure.pprint/pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
+  (pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
   (newline))
 
 
@@ -561,7 +553,7 @@
                            (println "The valid options are:")
                            (println summary)
                            (System/exit 0))
-         (:file options) (gd-edit.command-handlers/load-character-file (:file options)))
+         (:file options) (au/load-character-file (:file options)))
 
        ;; Start the editor
        (start-editor)))))

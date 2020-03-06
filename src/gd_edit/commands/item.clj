@@ -58,27 +58,21 @@
   [db db-index baseitem-dbr-path]
 
   ;; Retrieve records for all loot tables for that type of item (armor, shoulders, etc)
-  (let [loottables (loottable-records-with-mentions (all-loottable-records db) baseitem-dbr-path)
-
-        prefix-tables (reduce concat
-                              '()
-                              (apply conj
-                                     (map #(u/collect-values-with-key-prefix % "prefixTableName") loottables)
-                                     (map #(u/collect-values-with-key-prefix % "rarePrefixTableName") loottables)))
-
-        suffix-tables (reduce concat
-                              '()
-                              (apply conj
-                                     (map #(u/collect-values-with-key-prefix % "suffixTableName") loottables)
-                                     (map #(u/collect-values-with-key-prefix % "rareSuffixTableName") loottables)))]
-
-    {:prefix (->> prefix-tables
-                  (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
-                  (reduce #(apply conj % %2) #{}))
-
-     :suffix (->> suffix-tables
-                  (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
-                  (reduce #(apply conj % %2) #{}))}))
+  (let [loottables (loottable-records-with-mentions (all-loottable-records db) baseitem-dbr-path)]
+    (let [prefix (->> (concat
+                       (mapcat #(u/collect-values-with-key-prefix % "prefixTableName") loottables)
+                       (mapcat #(u/collect-values-with-key-prefix % "rarePrefixTableName") loottables))
+                      (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
+                      (apply concat)
+                      (into #{}))
+          suffix (->> (concat
+                       (mapcat #(u/collect-values-with-key-prefix % "suffixTableName") loottables)
+                       (mapcat #(u/collect-values-with-key-prefix % "rareSuffixTableName") loottables))
+                      (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
+                      (apply concat)
+                      (into #{}))]
+            {:prefix prefix
+             :suffix suffix})))
 
 ;;------------------------------------------------------------------------------
 ;; Item generation
@@ -258,26 +252,23 @@
 (defn analyze-item-name
   [item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} target-name]
 
-  (let [tokens (str/split target-name #" ")
+  (let [tokens (str/split target-name #" ")]
+    (u/plet [;; Try to match against the whole name directly
+             whole-item-match {:base (get-in (idx-best-match item-name-idx tokens) [3 0])}
 
-        ;; Try to match against the whole name directly
-        whole-item-match {:base (get-in (idx-best-match item-name-idx tokens) [3 0])}
+             ;; Try to break down the item into multiple part components
+             multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)]
 
-        ;; Try to break down the item into multiple part components
-        multi-part-match (analyze-multipart-item-name item-name-idx prefix-name-idx suffix-name-idx target-name)
-
-        ;; Of the two results, figure out which one matches the input name more closely
-        ;; Return that item
-        match (->> [whole-item-match multi-part-match]
-                   (sort-by #(u/string-similarity
-                              (str/lower-case target-name)
-                              (str/lower-case (or
-                                               (dbu/item-name (item-def->item %1) (dbu/db-and-index))
-                                               "")))
-                            >)
-                   (first))]
-
-    match))
+            ;; Of the two results, figure out which one matches the input name more closely
+            ;; Return that item
+            (->> [whole-item-match multi-part-match]
+                 (sort-by #(u/string-similarity
+                            (str/lower-case target-name)
+                            (str/lower-case (or
+                                             (dbu/item-name (item-def->item %1) (dbu/db-and-index))
+                                             "")))
+                          >)
+                 (first)))))
 
 (defn name-idx-highest-level-by-name
   [idx name level-cap]
@@ -431,10 +422,12 @@
         ;; Now that we have a good idea of the basename of the item,
         ;; try to narrow down to "legal" prefixes only.
         legal-affixes (->> (:recordname (:base analysis-all))
-                           (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index))
+                           (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index) )
+
+
                            (map (fn [[k affix-set]]
                                   [k (->> affix-set
-                                          (map #(get db-index %))
+                                          (map #(db-index %))
                                           (filter some?))]))
                            (into {}))
 
@@ -629,7 +622,7 @@
 
   (gd-edit.core/repl-iter)
 
-  (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index) "records/items/gearshoulders/b020a_shoulder.dbr")
+  (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index)  "records/items/gearshoulders/b020a_shoulder.dbr")
 
   (count
    (all-loottable-records (dbu/db)))
@@ -677,13 +670,19 @@
   (time
    (construct-item "Lokarr's Gaze" (dbu/db) (dbu/db-and-index) nil))
 
-  (def item-name-idx
-    (build-item-name-idx (dbu/db)))
+  (u/timed-readable
+   (def item-name-idx
+     (build-item-name-idx (dbu/db))))
 
-  (def
-    affixes-all (->> (dbu/db)
-                     (reshape-records-as-affixes)
-                     (group-affixes-by-loot-name)))
+  (u/timed-readable (count item-name-idx))
+
+  (u/timed-readable
+   (def
+     affixes-all (->> (dbu/db)
+                      (reshape-records-as-affixes)
+                      (group-affixes-by-loot-name))))
+
+  (u/timed-readable (count affixes-all))
 
   (analyze-item-name item-name-idx affixes-all "stanching chain belt of caged souls")
 
@@ -691,5 +690,17 @@
 
   (time
    (construct-item "badge of mastery" (dbu/db) (dbu/db-and-index) nil))
+
+
+  (->> @globals/db
+       (filter #(u/ci-match (:recordname %) "/items/crafting/blueprints/") )
+       first
+       )
+
+  (->> @globals/db
+       all-loottable-records
+       (map dbu/record-class)
+       distinct
+       )
 
   )
