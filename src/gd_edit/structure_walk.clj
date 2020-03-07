@@ -41,7 +41,7 @@
   (let [haystack (filter dbu/without-meta-fields m)
 
         ;; Locate all partial matches
-        partial-matches (filter (fn [[key value]]
+        partial-matches (filter (fn [[key _]]
                                   (let [k-str (u/keyword->str key)]
                                     (or (u/ci-match k-str search-target)
                                         (u/ci-match (str-without-dash k-str) search-target))))
@@ -49,7 +49,7 @@
 
         ;; Are any of the partial matches actual exact matches?
         ;; If we don't look for
-        exact-match (filter (fn [[key value]]
+        exact-match (filter (fn [[key _]]
                               (let [k-str (u/keyword->str key)]
                                 (or (and (u/ci-match k-str search-target)
                                          (= (count k-str) (count search-target)))

@@ -1,11 +1,9 @@
 (ns gd-edit.io.gdc
   (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils]
-            [clojure.string :as str]
             [clojure.java.io :as io]
             [gd-edit.utils :as u]
-            [gd-edit.globals :as globals]
-            [clojure.inspector])
+            [clojure.inspector]
+            [clojure.pprint :refer [pprint]])
   (:import  [java.nio ByteBuffer ByteOrder]
             [java.io FileOutputStream]))
 
@@ -448,7 +446,7 @@
                             :length 5)
 
    :hotslots                (s/conditional
-                             (fn [data context]
+                             (fn [data _]
                                (cond
                                  (= (:version data) 4)
                                  (s/array HotSlot :length 36)
@@ -633,7 +631,7 @@
     transform-buffer))
 
 (defn- read-bytes-
-  [^ByteBuffer bb {:keys [enc-state enc-table] :as context} byte-count]
+  [^ByteBuffer bb context byte-count]
 
   (let [buffer (byte-array byte-count)]
     (.get bb buffer 0 byte-count)
@@ -641,7 +639,7 @@
     [buffer (decrypt-bytes! buffer context)]))
 
 (defn- write-bytes-
-  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb data context]
 
   (let [encrypted-data (byte-array data)
         next-enc-state (encrypt-bytes! encrypted-data context)]
@@ -663,7 +661,7 @@
    (read-string! bb context {:static-length -1 :encoding :ascii}))
 
   ([^ByteBuffer bb
-    {:keys [enc-state enc-table] :as context}
+    context
     {:keys [static-length encoding]
      :or {static-length -1
           encoding :ascii}}]
@@ -679,10 +677,7 @@
                       static-length
                       (read-int! bb context))
 
-         byte-count (buffer-size-for-string char-count encoding)
-
-         ;; Create a temp buffer to hold the bytes before turning it into a java string
-         buffer (byte-array byte-count)]
+         byte-count (buffer-size-for-string char-count encoding)]
 
      ;; Read the bytes and turn it into a string
      (String. ^bytes (read-bytes! bb context byte-count) ^String (valid-encodings encoding)))))
@@ -715,7 +710,7 @@
 
          ;; Write out the length of the string itself, unless it is of a static length,
          ;; in which case, we'll say the length is implicit.
-         _ (if (= static-length -1)
+         _ (when (= static-length -1)
              ;; What is the string length we're writing out to file?
              (let [claimed-str-length (count data)]
                (write-int! bb claimed-str-length context)))
@@ -729,13 +724,13 @@
 
 (defn- read-byte-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
-  [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb {:keys [enc-state enc-table]}]
 
   (let [enc-val (.get bb)]
     [(short (bit-and 0x00000000000000ff (bit-xor enc-val enc-state))) (enc-next-state enc-val enc-state enc-table)]))
 
 (defn- write-byte-
-  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb data {:keys [enc-state enc-table]}]
 
   ;; encrypt the value and write it
   (let [enc-val (byte (bit-and 0x00000000000000ff (bit-xor data enc-state)))
@@ -767,21 +762,20 @@
 
 (defn- read-int-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
-  [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb {:keys [enc-state enc-table]}]
 
   (let [enc-val (.getInt bb)
         byte-data (-> (ByteBuffer/allocate 4)
                       (.putInt enc-val)
                       (.array)
-                      (reverse)
-                      )]
+                      (reverse))]
 
     ;; Return [decrypted-value next-enc-state] pair
     [(decrypt-int enc-val enc-state) (enc-next-state byte-data enc-state enc-table)]))
 
 
 (defn- write-int-
-  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb data {:keys [enc-state enc-table]}]
 
   ;; encrypt the value and write it
   (let [enc-val (encrypt-int data enc-state)
@@ -798,20 +792,20 @@
     next-enc-state))
 
 (defn- read-bool-
-  [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb context]
 
   (let [[val next-enc-state] (read-byte- bb context)]
     [(= val 1) next-enc-state]))
 
 (defn- write-bool-
-  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb data context]
 
   (assert (or (= data true) (= data false)))
   (write-byte- bb (if data 1 0) context))
 
 (defn- read-float-
   "Retrieve the next byte, decrypt the value, then return the value and the next enc state"
-  [^ByteBuffer bb {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb {:keys [enc-state enc-table]}]
 
   ;; Java doesn't allow bit-wise manipulation for floats
   ;; We'll have to read a 4 byte quantity, decrypt it, then reinterpret it as a float
@@ -820,8 +814,7 @@
                       (.putInt enc-val)
                       (.array)
                       (reverse))
-        reinterpreter (ByteBuffer/allocate 8)
-        ]
+        reinterpreter (ByteBuffer/allocate 8)]
 
     [(-> reinterpreter
          ;; Decrypt the bit pattern
@@ -834,7 +827,7 @@
      (enc-next-state byte-data enc-state enc-table)]))
 
 (defn- write-float-
-  [^ByteBuffer bb data {:keys [enc-state enc-table] :as context}]
+  [^ByteBuffer bb data context]
 
   (write-int- bb
               (-> (ByteBuffer/allocate 4)
@@ -930,7 +923,7 @@
 (defn validate-preamble
   [preamble]
 
-  (if (or (not= (:magic preamble) (u/file-magic "GDCX"))
+  (when (or (not= (:magic preamble) (u/file-magic "GDCX"))
           ;; (not= (:version preamble) 2)
           ;; (not= (:minor-version preamble) 4)
           )
@@ -1029,7 +1022,7 @@
 
          _ (when *debug*
              (println "block-data")
-             (clojure.pprint/pprint block-data))
+             (pprint block-data))
 
          ;; Verify we've reached the expected position
          _ (assert (= expected-end-position (.position bb)))
@@ -1053,7 +1046,7 @@
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to write this block
-         _ (if (nil? block-spec)
+         _ (when (nil? block-spec)
              (throw (Throwable. (str "Don't know how to write block: " meta-block-id))))
 
          ;; Write the id of the block
@@ -1083,14 +1076,14 @@
   [block]
 
   (->> block
-       (filter (fn [[key value]]
+       (filter (fn [[key _]]
                  (not (contains? #{:version :meta-block-id} key))))
        (into {})))
 
 (defn load-character-file
   [filepath]
 
-  (let [bb ^ByteBuffer (utils/file-contents filepath)
+  (let [bb ^ByteBuffer (u/file-contents filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) 1431655765)
@@ -1101,7 +1094,7 @@
             (println "\n---------------------- Preamble ----------------------"))
         preamble (s/read-struct FilePreamble bb enc-context)
         _ (when *debug*
-            (clojure.pprint/pprint preamble))
+            (pprint preamble))
 
         _ (validate-preamble preamble)
 
@@ -1109,13 +1102,13 @@
             (println "\n---------------------- Header ----------------------"))
         header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
         _ (when *debug*
-            (clojure.pprint/pprint header))
+            (pprint header))
 
         header-checksum (Integer/toUnsignedLong (.getInt bb))
         _ (assert (= header-checksum (:enc-state @enc-context)))
 
         data-version (read-int! bb enc-context)
-        _ (if (not (contains? #{6 7 8} data-version))
+        _ (when (not (contains? #{6 7 8} data-version))
             (throw (Throwable. "I can't read this gdc format!")))
 
         mystery-field (read-bytes! bb enc-context 16)
@@ -1181,10 +1174,10 @@
   (map (fn [block]
          ;; Map over every kv in the blocks
          (->> block
-              (map (fn [[key value :as kv-pair]]
+              (map (fn [[k _ :as kv-pair]]
                      ;; Look up the updated value in the character sheet
-                     (if (contains? merged-map key)
-                       [key (merged-map key)]
+                     (if (contains? merged-map k)
+                       [k (merged-map k)]
                        kv-pair)))
               ;; Put the pairs back into a map
               (into {})))

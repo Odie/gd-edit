@@ -9,7 +9,7 @@
              [utils :as u]]
             [gd-edit.commands.help :as help]
             [clojure.string :as str]
-            [jansi-clj.core :refer :all]))
+            [jansi-clj.core :refer [red green yellow]]))
 
 ;;------------------------------------------------------------------------------
 ;; Item utils
@@ -58,21 +58,21 @@
   [db db-index baseitem-dbr-path]
 
   ;; Retrieve records for all loot tables for that type of item (armor, shoulders, etc)
-  (let [loottables (loottable-records-with-mentions (all-loottable-records db) baseitem-dbr-path)]
-    (let [prefix (->> (concat
-                       (mapcat #(u/collect-values-with-key-prefix % "prefixTableName") loottables)
-                       (mapcat #(u/collect-values-with-key-prefix % "rarePrefixTableName") loottables))
-                      (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
-                      (apply concat)
-                      (into #{}))
-          suffix (->> (concat
-                       (mapcat #(u/collect-values-with-key-prefix % "suffixTableName") loottables)
-                       (mapcat #(u/collect-values-with-key-prefix % "rareSuffixTableName") loottables))
-                      (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
-                      (apply concat)
-                      (into #{}))]
-            {:prefix prefix
-             :suffix suffix})))
+  (let [loottables (loottable-records-with-mentions (all-loottable-records db) baseitem-dbr-path)
+        prefix (->> (concat
+                     (mapcat #(u/collect-values-with-key-prefix % "prefixTableName") loottables)
+                     (mapcat #(u/collect-values-with-key-prefix % "rarePrefixTableName") loottables))
+                    (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
+                    (apply concat)
+                    (into #{}))
+        suffix (->> (concat
+                     (mapcat #(u/collect-values-with-key-prefix % "suffixTableName") loottables)
+                     (mapcat #(u/collect-values-with-key-prefix % "rareSuffixTableName") loottables))
+                    (map #(u/collect-values-with-key-prefix (get db-index %) "randomizerName"))
+                    (apply concat)
+                    (into #{}))]
+    {:prefix prefix
+     :suffix suffix}))
 
 ;;------------------------------------------------------------------------------
 ;; Item generation
@@ -347,7 +347,7 @@
                [:prefix :suffix]))
 
 (defn- analysis->item
-  [analysis db item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} level-cap]
+  [analysis item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} level-cap]
 
   (let [;; Now that we know what the item is composed of, try to bring up the strength/level of each part
         ;; as the level cap allows
@@ -385,7 +385,7 @@
 (defn- non-nil-value-count
   [m]
 
-  (reduce-kv (fn [accum k v]
+  (reduce-kv (fn [accum _ v]
                (if-not (nil? v)
                  (+ accum 1)
                  accum
@@ -440,7 +440,8 @@
         affixes-final (if (= analysis-final analysis-legal)
                         affixes-legal
                         affixes-all)]
-    (analysis->item analysis-final db item-name-idx
+    (analysis->item analysis-final
+                    item-name-idx
                     affixes-final
                     level-cap)))
 
@@ -450,7 +451,7 @@
   (contains? (get-in @character path) :basename))
 
 (defn- path-is-inventory?
-  [character path]
+  [path]
 
   (and (= (count path) 3)
        (= (first path) :inventory-sacks)
@@ -469,7 +470,7 @@
       val-path)
 
     ;; Did the call ask to have an item added to an inventory/sack?
-    (path-is-inventory? character val-path)
+    (path-is-inventory? val-path)
     (if-let [coord (inventory/fit-new-item (second val-path)
                                            item)]
       (do
@@ -510,31 +511,32 @@
   ;; Do some sanity checks before we try creating and placing an item
   (if-let [result (->> (item-at-fuzzy-path @globals/character path)
                        (item-located-or-print-error))]
-    (let [{:keys [status found-item actual-path]} result
+    (let [{:keys [actual-path]} result
           level-cap (when (some? level-cap-str)
-                      (Integer/parseInt level-cap-str))]
+                      (Integer/parseInt level-cap-str))
 
-      ;; Try to construct the requested item
-      (let [item (construct-item target-name (dbu/db) (dbu/db-recordname-index) level-cap)]
-        ;; If construction was not successful, inform the user and abort
-        (cond
-          (nil? item)
-          (println "Sorry, the item could not be constructed")
+          ;; Try to construct the requested item
+          item (construct-item target-name (dbu/db) (dbu/db-recordname-index) level-cap)]
 
-          (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
+      ;; If construction was not successful, inform the user and abort
+      (cond
+        (nil? item)
+        (println "Sorry, the item could not be constructed")
+
+        (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
+        (do
+          (printer/show-item item)
+          (println "Sorry, the item generated doesn't look like the item you asked for.")
+          (println (red "Item not altered")))
+
+        ;; Otherwise, put the item into the character sheet
+        :else
+        (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
           (do
-            (printer/show-item item)
-            (println "Sorry, the item generated doesn't look like the item you asked for.")
-            (println (red "Item not altered")))
-
-          ;; Otherwise, put the item into the character sheet
-          :else
-          (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
-            (do
-              (println "Item placed in" (yellow (printer/displayable-path placed-path)))
-              (println)
-              (printer/show-item item))
-            (println "Sorry, there is" (red "no room") "to fit the item.")))))))
+            (println "Item placed in" (yellow (printer/displayable-path placed-path)))
+            (println)
+            (printer/show-item item))
+          (println "Sorry, there is" (red "no room") "to fit the item."))))))
 
 
 
@@ -595,7 +597,7 @@
 
     (if-let [result (->> (item-at-fuzzy-path @globals/character path)
                          (item-located-or-print-error))]
-      (let [{:keys [status found-item actual-path]} result
+      (let [{:keys [found-item actual-path]} result
             target-field-name (or target-field-name
                                   "basename")
             target-field (get {"basename" :basename
@@ -619,8 +621,6 @@
 (comment
 
   (swap-variant-handler [nil ["weapon-sets/1/items/0" "suffix"]])
-
-  (gd-edit.core/repl-iter)
 
   (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index)  "records/items/gearshoulders/b020a_shoulder.dbr")
 

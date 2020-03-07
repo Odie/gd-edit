@@ -1,11 +1,9 @@
 (ns gd-edit.self-update
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.core.async :as async :refer [thread >!!]]
             [progress.file :as progress]
             [gd-edit
              [utils :as utils]]
-            [me.raynes.fs :as fs]
             [clj-http.client :as client])
   (:import java.io.IOException
            [java.nio.file Files]

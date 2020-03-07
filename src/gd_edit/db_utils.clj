@@ -2,7 +2,6 @@
   (:require [clojure.string :as str]
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
-            [clojure.java.io :as io]
             [clojure.set :as set]))
 
 (defn record-class
@@ -58,7 +57,7 @@
 
   (let [;; Collect all values in the record that look like a db record
         related-recordnames (->> record
-                                 (reduce (fn [coll [key value]]
+                                 (reduce (fn [coll [_ value]]
                                            (if (and (string? value) (.startsWith value "records/"))
                                              (conj coll value)
                                              coll
@@ -120,7 +119,7 @@
 
       ;; If we can't find a base name for the item, this is not a valid item
       ;; We can't generate a name for an invalid item
-      (if (not (nil? base-name))
+      (when-not (nil? base-name)
 
         ;; If we've found an item with a unique name, just return the name without any
         ;; prefix or suffix
@@ -195,7 +194,7 @@
   [loc-table faction-index]
 
   (when (>= faction-index 6)
-    (when-let [faction-str ((localization-table) (str "tagFactionUser" (- faction-index 6)))]
+    (when-let [faction-str (loc-table (str "tagFactionUser" (- faction-index 6)))]
       (when-not (str/starts-with? faction-str "User")
         faction-str))))
 

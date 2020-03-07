@@ -228,11 +228,11 @@
 
   ;; (if-not (valid-target? target)
   ;;   (throw (Throwable. (format "\"%s\" is not a valid target" target))))
-  (if (nil? op)
+  (when (nil? op)
     (throw (Throwable. "No op supplied")))
-  (if-not (valid-op? op)
+  (when-not (valid-op? op)
     (throw (Throwable. (format "\"%s\" is not a valid op" op))))
-  (if (nil? query-val)
+  (when (nil? query-val)
     (throw (Throwable. "Missing query value")))
 
   (let [coerced-val (coerce-query-val query-val)]
@@ -307,7 +307,7 @@
         (do
           ;; We should be left with a single constructed ast node
           ;; If this didn't happen, then there is an un-closed paren in the query string somewhere
-          (if (not= (count ast-stack) 1)
+          (when (not= (count ast-stack) 1)
             (throw (Throwable. "unmatched parentheses")))
           (first ast-stack))
 

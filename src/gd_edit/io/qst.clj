@@ -1,14 +1,10 @@
 (ns gd-edit.io.qst
   (:require clojure.inspector
-            [clojure.java.io :as io]
             [clojure.string :as str]
             [com.rpl.specter :as specter]
-            [gd-edit.globals :as globals]
-            [gd-edit.io.gdc :as gdc]
             [gd-edit.structure :as s]
             [gd-edit.utils :as u])
-  (:import java.io.FileOutputStream
-           [java.nio ByteBuffer ByteOrder]))
+  (:import [java.nio ByteBuffer]))
 
 ;;------------------------------------------------------------------------------
 ;; Quest File format defs
@@ -253,10 +249,9 @@
     (if (zero? cond-count)
       {}
 
-      (do
-        {:oper (.getInt bb)
-         :conditions (doall (for [idx (range cond-count)]
-                             (read-condition bb context)))}))))
+      {:oper (.getInt bb)
+       :conditions (doall (for [_ (range cond-count)]
+                            (read-condition bb context)))})))
 
 (def Action-Header
   (s/struct-def
@@ -632,8 +627,7 @@
 
     (-> {:quest quest}
         (merge string-tables)
-        (quest-bind-strings "enUS"))
-    ))
+        (quest-bind-strings "enUS"))))
 
 
 (defn load-quest-file

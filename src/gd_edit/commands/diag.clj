@@ -1,9 +1,8 @@
 (ns gd-edit.commands.diag
   (:require [clojure.string :as str]
-            [jansi-clj.core :refer :all]
             [gd-edit.game-dirs :as dirs]
             [clojure.java.io :as io]
-            ))
+            [jansi-clj.core :refer [red green yellow]]))
 
 (defn- print-test-header
   [result-bool text]

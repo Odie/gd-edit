@@ -13,7 +13,7 @@
   "Try to parse the given string as an int. Returns Integer or nil."
   [s]
   (try (Integer/parseInt s)
-       (catch Exception e nil)))
+       (catch Exception _ nil)))
 
 (defn get-steam-path
   "Get steam installation path"
@@ -150,13 +150,13 @@
         (first))))
 
 (defn get-gdx1-dir
-  []
   "Returns the directory for Ashes of Malmouth dlc."
+  []
   (io/file (get-game-dir) "gdx1"))
 
 (defn get-gdx2-dir
-  []
   "Returns the directory for Forgotten Gods dlc."
+  []
   (io/file (get-game-dir) "gdx2"))
 
 (defn get-mod-dir

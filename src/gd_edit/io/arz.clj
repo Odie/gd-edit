@@ -1,16 +1,13 @@
 (ns gd-edit.io.arz
   (:require [gd-edit.structure :as s]
-            [gd-edit.utils :as utils]
             [clojure.string :as str]
             [clojure.java.io :as io]
-            [gd-edit.utils :as u]
             [clojure.pprint :as pp]
-            [taoensso.timbre :as t]
+            [taoensso.timbre :as log]
+            [gd-edit.utils :as u]
             ;; [clj-async-profiler.core :as prof]
             )
   (:import  [java.nio ByteBuffer]
-            [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel]
             [net.jpountz.lz4 LZ4Factory])
   (:gen-class))
 
@@ -67,16 +64,15 @@
         string-table
 
         ;; Retrieve one more string
-        (do
-           (let [str-len (.getInt bb)
-                 str-buffer (byte-array str-len)]
+        (let [str-len (.getInt bb)
+              str-buffer (byte-array str-len)]
 
-             ;; Read the specified number of bytes and convert it to a string
-             (.get bb str-buffer 0 str-len)
+          ;; Read the specified number of bytes and convert it to a string
+          (.get bb str-buffer 0 str-len)
 
-             ;; Either continue on to the next loop or
-             ;; terminate by returning the string table
-             (recur (inc i) limit (conj string-table (String. str-buffer)))))))))
+          ;; Either continue on to the next loop or
+          ;; terminate by returning the string table
+          (recur (inc i) limit (conj string-table (String. str-buffer))))))))
 
 
 (def arz-record-header
@@ -98,7 +94,7 @@
   (.position bb (:record-table-start header))
 
   ;; Read all the header entries
-  (->> (for [idx (range (:record-table-entries header))]
+  (->> (for [_ (range (:record-table-entries header))]
          (s/read-struct arz-record-header bb))
 
        ;; Look up all the record file names in the string table
@@ -239,15 +235,14 @@
 
        (doall)))
 
-
 (defn load-game-db
   [filepath localization-table]
 
-  (t/debug "Entering load-game-db")
+  (log/debug "Entering load-game-db")
   (u/log-exp filepath)
 
   ;; Open the database file
-  (let [bb (utils/mmap filepath)
+  (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         ;; Read and parse the header
@@ -312,7 +307,7 @@
 
   ;; Make sure all loaded items are persistent collections
   (def t
-    (utils/collect-walk-entire-tree #(and (instance? clojure.lang.Seqable %)
+    (u/collect-walk-entire-tree #(and (instance? clojure.lang.Seqable %)
                                           (not (instance? clojure.lang.IPersistentCollection %))) db))
 
   ;; Dump each db record into a directory as individual files

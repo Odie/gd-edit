@@ -34,7 +34,8 @@
             [taoensso.timbre.appenders.core :as appenders]
             [clojure.pprint :refer [pprint]]
             [clojure.stacktrace :refer [print-stack-trace]]
-            [gd-edit.app-util :as au])
+            [gd-edit.app-util :as au]
+            [gd-edit.jline :as jline])
   (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
 
@@ -62,7 +63,7 @@
   (str/split str #"\s+"))
 
 (def command-map
-  {["exit"]  (fn [input] (System/exit 0))
+  {["exit"]  (fn [_] (System/exit 0))
    ["q"]     (fn [input] (commands.query/query-command-handler input))
    ["qshow"] (fn [input] (commands.query/query-show-handler input))
    ["qn"]    (fn [input] (commands.query/query-show-handler input))
@@ -473,7 +474,7 @@
   []
 
   ;; Enable cross-platform ansi color handling
-  (alter-var-root #'gd-edit.jline/use-jline (constantly true))
+  (jline/initialize)
   (jansi-clj.core/install!))
 
 (defn initialize
@@ -546,17 +547,16 @@
    (init-jansi)
 
    (let [{:keys [options summary]} (parse-opts args cli-options)]
-     (do
-       ;; Handle all the commandline params
-       (cond
-         (:help options) (do
-                           (println "The valid options are:")
-                           (println summary)
-                           (System/exit 0))
-         (:file options) (au/load-character-file (:file options)))
+     ;; Handle all the commandline params
+     (cond
+       (:help options) (do
+                         (println "The valid options are:")
+                         (println summary)
+                         (System/exit 0))
+       (:file options) (au/load-character-file (:file options)))
 
-       ;; Start the editor
-       (start-editor)))))
+     ;; Start the editor
+     (start-editor))))
 
 
 

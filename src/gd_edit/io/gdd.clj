@@ -1,13 +1,10 @@
 (ns gd-edit.io.gdd
   (:require clojure.inspector
             [clojure.java.io :as io]
-            [clojure.string :as str]
-            [gd-edit.globals :as globals]
             [gd-edit.io.gdc :as gdc]
             [gd-edit.structure :as s]
             [gd-edit.utils :as u])
-  (:import java.io.FileOutputStream
-           [java.nio ByteBuffer ByteOrder]))
+  (:import [java.nio ByteBuffer]))
 
 (declare read-block read-block-start read-and-verify-block-end)
 
@@ -131,7 +128,7 @@
 (defn- validate-preamble
   [preamble]
 
-  (if (or (not= (:magic preamble) (u/file-magic "QSTX"))
+  (when (or (not= (:magic preamble) (u/file-magic "QSTX"))
           (not= (:version preamble) 0))
     (throw (Throwable. "I don't understand this gdd format!"))))
 
@@ -177,7 +174,7 @@
 
          ;; If neither a block spec or a custom read function can be found...
          ;; We don't know how to read this block
-         _ (if (nil? block-spec)
+         _ (when (nil? block-spec)
              (throw (Throwable. (str"Don't know how to read block " id))))
 
          ;; Try to read the block
@@ -186,7 +183,7 @@
          block-data (s/read-struct block-spec bb context {})
 
          ;; Verify that this is a block version we understand
-         _ (if-let [known-versions (:known-versions (meta block-spec))]
+         _ (when-let [known-versions (:known-versions (meta block-spec))]
              (assert (contains? known-versions (:version block-data))))
          ]
 

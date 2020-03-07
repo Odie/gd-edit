@@ -1,11 +1,13 @@
 (ns gd-edit.vdf-parser
   "Provides the ability to parse steam vdf files into a clojure-friendly hashmap."
   (:require [instaparse.core :as insta]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [clojure.walk]))
 
 (defn- strip-quotes
   [s]
-  (clojure.string/replace s #"^\"|\"$" ""))
+  (str/replace s #"^\"|\"$" ""))
 
 (defn- file?
   [obj]

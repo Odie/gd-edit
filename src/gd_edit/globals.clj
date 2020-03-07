@@ -1,6 +1,5 @@
 (ns gd-edit.globals
-  (:require [clojure.core.async :as async]
-            [gd-edit.utils :as u]))
+  (:require [clojure.core.async :as async]))
 
 (def menu-stack (atom []))
 

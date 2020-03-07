@@ -2,14 +2,11 @@
   (:require [clojure
              [set :refer [intersection]]
              [string :as str]]
-            [jansi-clj.core :refer :all]
             [clojure.java.io :as io]
             [clojure.edn :as edn]
             [taoensso.timbre :as t]
             [clojure.walk :refer [postwalk-replace]])
   (:import java.nio.ByteBuffer
-           java.nio.channels.FileChannel
-           java.nio.file.Paths
            java.io.File
            [java.security MessageDigest]))
 
@@ -287,13 +284,12 @@
   (= byte-array-type (type obj)))
 
 (defmacro fmt
-  [^String string]
   "Like 'format' but with string interpolation"
+  [^String string]
   (let [-re #"#\{(.*?)\}"
         fstr (str/replace string -re "%s")
         fargs (map #(read-string (second %)) (re-seq -re string))]
-    `(format ~fstr ~@fargs)
-    ))
+    `(format ~fstr ~@fargs)))
 
 
 ;;------------------------------------------------------------------------------
@@ -333,7 +329,7 @@
   []
   (try
     (edn/read-string (slurp (settings-file-path)))
-    (catch Exception e)))
+    (catch Exception _)))
 
 (defn write-settings
   [settings]
@@ -352,7 +348,7 @@
 (defn print-indent
   [indent-level]
 
-  (dotimes [i indent-level]
+  (dotimes [_ indent-level]
     (print "    ")))
 
 (defn collect-values-with-key-prefix
@@ -482,7 +478,7 @@
   This allows the caller to find all nodes that matches a condition as well as
   perform updates into each of the locations later on."
   ([predicate tree]
-   (collect-walk predicate :entire-tree :entire-tree))
+   (collect-walk predicate :entire-tree tree))
 
   ([predicate walk-type tree]
 

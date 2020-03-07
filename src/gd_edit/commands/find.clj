@@ -1,17 +1,13 @@
 (ns gd-edit.commands.find
-  (:require [clj-fuzzy.metrics :as metrics]
-            [clojure.java.io :as io]
-            [clojure.pprint :refer [pprint]]
-            [clojure.string :as str]
+  (:require [clojure.java.io :as io]
             [gd-edit.commands.help :as help]
-            [gd-edit.db-query :as query]
             [gd-edit.db-utils :as dbu]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.io.gdc :as gdc]
             [gd-edit.printer :as printer]
             [gd-edit.utils :as utils]
-            [jansi-clj.core :refer :all]))
+            [jansi-clj.core :refer [red green yellow]]))
 
 (defn- print-usage
   []
@@ -25,7 +21,7 @@
 
   (try
     (gdc/load-character-file filepath)
-    (catch Error e
+    (catch Error _
       (println (str "Unable to read file: " filepath)))))
 
 (defn- load-all-characters
@@ -125,8 +121,3 @@
 
     :else
     (find-handler- (first tokens))))
-
-
-(comment
-
-  )

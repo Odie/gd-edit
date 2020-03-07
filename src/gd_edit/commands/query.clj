@@ -28,7 +28,7 @@
   (swap! query-state-atom update :page (fn [oldval] (paginate-next oldval @query-state-atom))))
 
 (defn get-pagination-size
-  [result {:keys [pagination-size] :as query-state}]
+  [result {:keys [pagination-size]}]
   (if (string? (first result))
     100
     pagination-size))
@@ -40,13 +40,14 @@
     (->> result
          (drop (* page pagination-size))
          (take pagination-size))))
+
 (defn set-new-query-result!
   [query-state-atom new-result query-string]
 
-  (reset! globals/query-state (assoc @globals/query-state
-                                     :query-string query-string
-                                     :result new-result
-                                     :page 0)))
+  (swap! query-state-atom assoc
+         :query-string query-string
+         :result new-result
+         :page 0))
 
 (defn print-paginated-result
   [query-state]

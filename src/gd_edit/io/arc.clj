@@ -5,8 +5,6 @@
             [taoensso.timbre :as t]
             [clojure.string :as str])
   (:import  [java.nio ByteBuffer]
-            [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel]
             [net.jpountz.lz4 LZ4Factory]))
 
 (def arc-header

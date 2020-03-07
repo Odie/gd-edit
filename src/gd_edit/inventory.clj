@@ -3,10 +3,8 @@
   At the moment, it mostly deals with calculating inventory layout.
 
   The fit-new-item function, in particular is useful for attempting to add a new item
-  into a sack.
-  "
-  (:require [clojure.java.io :as io]
-            [clojure.set :as set]
+  into a sack."
+  (:require [clojure.set :as set]
             [clojure.string :as str]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
@@ -80,9 +78,10 @@
   "
   []
 
-  (def texture-dim-fns
-    (->> (dirs/get-file-and-overrides dirs/texture-file)
-         (map make-dims-lookup-fn))))
+  (alter-var-root #'texture-dim-fns
+                  (constantly
+                   (->> (dirs/get-file-and-overrides dirs/texture-file)
+                        (map make-dims-lookup-fn)))))
 
 (defn lazy-load-texture-slot-dims
   []
@@ -98,8 +97,8 @@
 ;; The texture-slot-dims functions is bound/rebound whenever the :game-dir setting changes.
 (remove-watch globals/settings ::texture-slot-dims)
 (add-watch globals/settings ::texture-slot-dims
-           (fn [key settings old-state new-state]
-             (if (not= (old-state :game-dir) (new-state :game-dir))
+           (fn [_ _ old-state new-state]
+             (when (not= (old-state :game-dir) (new-state :game-dir))
                (bind-texture-slot-dims-fn))))
 
 (defn- coord->slot-id
@@ -219,7 +218,7 @@
                            required-slots (set (rect->slot-ids candidate-rect stride))]
 
                        ;; Are all slots required to place the item empty/available?
-                       (if (= (set/intersection required-slots empty-slots) required-slots)
+                       (when (= (set/intersection required-slots empty-slots) required-slots)
                          candidate-slot)))
                    (sort empty-slots))]
 

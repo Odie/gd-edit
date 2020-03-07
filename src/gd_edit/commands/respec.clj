@@ -3,7 +3,8 @@
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
             [gd-edit.printer :as printer]
-            [gd-edit.db-utils :as dbu]))
+            [gd-edit.db-utils :as dbu]
+            [clojure.data :refer [diff]]))
 
 (defn skill-is-devotion?
   [skill]
@@ -158,7 +159,7 @@
               :else
               (throw (Throwable. (str "Unknown respec mode: " mode))))
 
-            differences (clojure.data/diff @globals/character modified-character)]
+            differences (diff @globals/character modified-character)]
 
         ;; Print how we're going to update the character
         (println "Updating the following fields:")

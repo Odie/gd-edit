@@ -1,6 +1,5 @@
 (ns gd-edit.commands.gamedir
-  (:require [gd-edit.globals :as globals]
-            [taoensso.timbre :as log]
+  (:require [taoensso.timbre :as log]
             [gd-edit.utils :as u]
             [gd-edit.game-dirs :as dirs]
             [jansi-clj.core :refer [red green yellow]]

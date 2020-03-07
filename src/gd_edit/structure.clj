@@ -1,9 +1,7 @@
 (ns gd-edit.structure
   (:require [clojure.test]
             [clojure.pprint])
-  (:import  [java.nio ByteBuffer]
-            [java.nio.file Path Paths Files FileSystems StandardOpenOption]
-            [java.nio.channels FileChannel])
+  (:import  [java.nio ByteBuffer])
   (:gen-class))
 
 (def ^:dynamic *debug* false)
@@ -230,7 +228,7 @@
         _ (when *debug*
             (println "array:" length))]
 
-    (into [] (for [i (range length)]
+    (into [] (for [_ (range length)]
                (read-struct (first spec) bb context)))))
 
 (defn string
@@ -337,7 +335,7 @@
          skip-write-length :struct/skip-write-length} (meta spec)]
 
     ;; Write out the spec if we're not dealing with a sequence with a static/implied length
-    (if (and (= static-length -1)
+    (when (and (= static-length -1)
                (not skip-write-length))
 
         ;; Write out the length of the sequence first
@@ -380,7 +378,7 @@
 
         ;; Write out the length of the string itself, unless it is of a static length,
         ;; in which case, we'll say the length is implicit.
-        _ (if (= static-length -1)
+        _ (when (= static-length -1)
             ;; What is the string length we're writing out to file?
             (let [claimed-str-length (count data)
                   write-fn (prim-spec-get-write-fn (rw-fns context) length-prefix)]

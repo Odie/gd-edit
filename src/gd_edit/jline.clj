@@ -6,8 +6,8 @@
 
 (defn initialize
   []
-
-  (def reader (ConsoleReader.)))
+  (alter-var-root #'use-jline (constantly true))
+  (alter-var-root #'reader (constantly (ConsoleReader.))))
 
 (defn readline
   ([]
@@ -21,8 +21,4 @@
       (print prompt)
       (clojure.core/read-line))
 
-    (do
-      (if (nil? reader)
-        (initialize))
-
-      (.readLine reader prompt)))))
+    (.readLine reader prompt))))

@@ -5,10 +5,9 @@
             [gd-edit.globals :as globals]
             [gd-edit.io.gdc :as gdc]
             [gd-edit.printer]
-            [gd-edit.db-utils :as dbu]
             [gd-edit.utils :as u]
             [gd-edit.app-util :as au])
-  (:import [java.io BufferedReader StringReader]))
+  (:import [java.io StringReader]))
 
 (defn init
   "Initialize various globals, such as db and db-index"
@@ -186,5 +185,9 @@
    "records/items/autopickup/materia/compa_markofillusions.dbr")
 
   (cmd "set inv/1/items \"Glyph of Seismic Strength\"")
+
+  (cmd "db")
+
+  (cmd "db records/items/autopickup/materia/")
 
 )

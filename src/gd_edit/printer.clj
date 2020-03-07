@@ -3,10 +3,9 @@
   (:require [gd-edit
              [db-utils :as dbu]
              [utils :as u]
-             [globals :as globals]]
+             [jline :as jline]]
             [clojure.string :as str]
-            [gd-edit.jline :as jline]
-            [jansi-clj.core :refer :all]))
+            [jansi-clj.core :refer [red green yellow]]))
 
 (defn prompt-yes-no
   "Prompts the user to answer Y or N, returns true or false depending on user input."
@@ -131,30 +130,29 @@
                              i))
 
                      ;; Print some representation of the object
-                     (let [item-type (type item)]
-                       (cond
-                         (dbu/is-primitive? item)
-                         (print-primitive item)
+                     (cond
+                       (dbu/is-primitive? item)
+                       (print-primitive item)
 
-                         (sequential? item)
-                         (println (format "collection of %d items" (count item)))
+                       (sequential? item)
+                       (println (format "collection of %d items" (count item)))
 
-                         (associative? item)
-                         (do
-                           ;; If a display name can be fetched...
-                           (when-let [display-name (dbu/get-name item (conj path i))]
-                             ;; Print annotation on the same line as the index
-                             (println (yellow display-name)))
+                       (associative? item)
+                       (do
+                         ;; If a display name can be fetched...
+                         (when-let [display-name (dbu/get-name item (conj path i))]
+                           ;; Print annotation on the same line as the index
+                           (println (yellow display-name)))
 
-                           ;; Close the index + display-name line
-                           (newline)
+                         ;; Close the index + display-name line
+                         (newline)
 
-                           (print-map item :skip-item-count true)
-                           (if-not (= i (dec (count obj)))
-                             (newline)))
+                         (print-map item :skip-item-count true)
+                         (if-not (= i (dec (count obj)))
+                           (newline)))
 
-                         :else
-                         (println item))))))
+                       :else
+                       (println item)))))
 
 
 (defn- print-object-name
@@ -242,9 +240,7 @@
                                                          (count)))
 
            :else
-           (do
-             ;; (println (format "%s => %s" (yellow (type value)) (yellow (type (only-in-b key)))))
-             (format "%s => %s" (yellow value) (yellow (only-in-b key)))))))
+           (format "%s => %s" (yellow value) (yellow (only-in-b key))))))
 
       (newline)
       (println (format (format "%%%dd" (+ max-key-length 2)) (count changed-keys)) "fields changed"))))
