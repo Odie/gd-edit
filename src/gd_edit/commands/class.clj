@@ -64,23 +64,28 @@
   (->> (db-class-ui-records)
        (map db-class-ui-record->class-record)))
 
+(defn- class-display-name-map
+  "Returns a mapping from class record recordname => class name"
+  []
+  (->> (db-class-ui-records)
+       (map (fn [ui-record]
+              [(:recordname (db-class-ui-record->class-record ui-record))
+               (db-class-ui-record->class-name ui-record)]))
+       (into {})))
+
 (defn- print-character-classes
   [character db]
 
   ;; Find all character "skills" that represents a class mastery
 
   (let [;; Generate a mapping from class record recordname => class name
-        class-display-name-map (->> (db-class-ui-records)
-                                    (map (fn [ui-record]
-                                           [(:recordname (db-class-ui-record->class-record ui-record))
-                                            (db-class-ui-record->class-name ui-record)]))
-                                    (into {}))
+        class-display-names (class-display-name-map)
 
         classes (->> (character-classes-with-index character)
                      (map (fn [[idx record]]
                             {:idx idx
                              :skill record
-                             :skill-display-name (class-display-name-map (:skill-name record))
+                             :skill-display-name (class-display-names (:skill-name record))
                              })))]
 
     ;; Print the display names
@@ -115,13 +120,7 @@
 (defn class-remove-by-name
   [character class-name]
 
-  (let [class-display-name-map (->> (db-class-ui-records)
-                                    (map (fn [ui-record]
-                                           [(db-class-ui-record->class-name ui-record)
-                                            (:recordname (db-class-ui-record->class-record ui-record))]))
-                                    (into {}))
-
-        skill-name-to-remove (class-display-name-map class-name)
+  (let [skill-name-to-remove ((class-display-name-map) class-name)
 
         skill-to-remove (first (filter
                                 (fn [skill]

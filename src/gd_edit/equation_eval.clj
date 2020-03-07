@@ -137,19 +137,18 @@
      (cond
        ;; If we're looking at an expression, evaluate it now
        (coll? item)
-       (do
-         (if (= 1 (count item))
-           (first item)
+       (if (= 1 (count item))
+         (first item)
 
-           (do
-             (assert (or (= (count item) 3)))
+         (do
+           (assert (or (= (count item) 3)))
 
-             (let [[term1 op term2] item
-                   term1 (resolve-operand params term1)
-                   term2 (resolve-operand params term2)
-                   op (resolve-operator basic-ops-table op)]
+           (let [[term1 op term2] item
+                 term1 (resolve-operand params term1)
+                 term2 (resolve-operand params term2)
+                 op (resolve-operator basic-ops-table op)]
 
-               (op term1 term2)))))
+             (op term1 term2))))
 
 
        ;; Ignore all items that are not expressions

@@ -39,10 +39,10 @@
         sorted-matches
         (->> matches
 
-             ;; Consolidate the search so we only have n+1 path components
-             (filter #(<= (- (count (u/path-components %)) (count components)) 1))
+             ;; We want a list of paths that is target-path-length + 1
+             (map #(string-first-n-path-components (inc (count components)) %))
+             distinct
 
-             ;; Sort the matches
              (sort))]
 
     ;; It's possible for the user to target a single record using "db show".

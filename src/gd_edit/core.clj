@@ -489,7 +489,7 @@
   ;; Settings should autosave when it is changed
   (add-watch globals/settings ::settings-autosave
              (fn [key settings old-state new-state]
-               (if (not= old-state new-state)
+               (when (not= old-state new-state)
                  (u/write-settings @globals/settings))))
 
   (print-build-info)

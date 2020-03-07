@@ -10,31 +10,26 @@
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
-        level (dec level)]
-
-    (* level (data-record "characterModifierPoints"))))
+  (* (dec level) (-> (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
+                     (get "characterModifierPoints"))))
 
 (defn skill-points-total-at-level
   "Return the total number of skill points a character should have at the give level."
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
-        level (dec level)]
-
-    (apply + (take level (data-record "skillModifierPoints")))))
+  (apply + (take (dec level) (-> (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
+                                 (get "skillModifierPoints")))))
 
 (defn xp-total-at-level
   "Returns the number of exp points a character should have at the given level."
   [level]
   {:pre [(>= level 1)]}
 
-  (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")]
-
-    (if (= level 1)
-      0
-      (int (eq/evaluate (data-record "experienceLevelEquation") {"playerLevel" (dec level)})))))
+  (-> (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
+      (get "experienceLevelEquation")
+      (eq/evaluate {"playerLevel" (dec level)})
+      int))
 
 (defn fields-for--modify-character-level
   [character new-level]
@@ -62,8 +57,8 @@
 
 (defn modify-character-level
   [character new-level]
-
   (merge character (fields-for--modify-character-level character new-level)))
+
 (defn level-handler
   [[input tokens]]
 
@@ -73,9 +68,9 @@
      "usage: level <new-level>")
 
     :else
-    (let [data-record (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
-          level (dbu/coerce-str-to-type (first tokens) java.lang.Integer)
-          level-limit (data-record "maxPlayerLevel")]
+    (let [level (dbu/coerce-str-to-type (first tokens) java.lang.Integer)
+          level-limit (-> (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
+                          (get "maxPlayerLevel"))]
       (cond
         (< level 1)
         (println "Please enter a level value that is 1 or greater")

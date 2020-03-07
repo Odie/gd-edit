@@ -195,7 +195,7 @@
   (->> (concat [(io/file (get-game-dir) database-file)
                 (io/file (get-gdx1-dir) "database/GDX1.arz")
                 (io/file (get-gdx2-dir) "database/GDX2.arz")]
-               (get-mod-db-file (get-mod-dir)))
+               [(get-mod-db-file (get-mod-dir))])
        (filter u/path-exists?)
        (into [])))
 
