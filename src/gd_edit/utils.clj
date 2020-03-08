@@ -272,11 +272,6 @@
 ;;------------------------------------------------------------------------------
 ;; Core lib extensions
 ;;------------------------------------------------------------------------------
-(defmacro doseq-indexed [index-sym [item-sym coll] & body]
-  `(doseq [[~item-sym ~index-sym]
-           (map vector ~coll (range))]
-     ~@body))
-
 (def byte-array-type (Class/forName "[B"))
 
 (defn byte-array?
@@ -511,3 +506,8 @@
 
     :else
     (str byte-count " bytes")))
+
+
+(defn with-idx
+  [items]
+  (map vector (range) items))

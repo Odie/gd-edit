@@ -119,40 +119,40 @@
     (do
       (u/print-indent 1)
       (println (yellow "Empty")))
-    (u/doseq-indexed i [item obj]
-                     ;; Print the index of the object
-                     (print (format
-                             (format "%%%dd: " (-> (count obj)
-                                                   (Math/log10)
-                                                   (Math/ceil)
-                                                   (max 1)
-                                                   (int)))
-                             i))
+    (doseq [[i item] (u/with-idx obj)]
+      ;; Print the index of the object
+      (print (format
+              (format "%%%dd: " (-> (count obj)
+                                    (Math/log10)
+                                    (Math/ceil)
+                                    (max 1)
+                                    (int)))
+              i))
 
-                     ;; Print some representation of the object
-                     (cond
-                       (dbu/is-primitive? item)
-                       (print-primitive item)
+      ;; Print some representation of the object
+      (cond
+        (dbu/is-primitive? item)
+        (print-primitive item)
 
-                       (sequential? item)
-                       (println (format "collection of %d items" (count item)))
+        (sequential? item)
+        (println (format "collection of %d items" (count item)))
 
-                       (associative? item)
-                       (do
-                         ;; If a display name can be fetched...
-                         (when-let [display-name (dbu/get-name item (conj path i))]
-                           ;; Print annotation on the same line as the index
-                           (println (yellow display-name)))
+        (associative? item)
+        (do
+          ;; If a display name can be fetched...
+          (when-let [display-name (dbu/get-name item (conj path i))]
+            ;; Print annotation on the same line as the index
+            (println (yellow display-name)))
 
-                         ;; Close the index + display-name line
-                         (newline)
+          ;; Close the index + display-name line
+          (newline)
 
-                         (print-map item :skip-item-count true)
-                         (if-not (= i (dec (count obj)))
-                           (newline)))
+          (print-map item :skip-item-count true)
+          (if-not (= i (dec (count obj)))
+            (newline)))
 
-                       :else
-                       (println item)))))
+        :else
+        (println item)))))
 
 
 (defn- print-object-name
