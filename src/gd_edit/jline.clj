@@ -1,13 +1,18 @@
 (ns gd-edit.jline
+  (:require [gd-edit.utils :as u])
   (:import [jline.console ConsoleReader]))
 
-(def use-jline false)
-(def reader nil)
+(def ^:redef use-jline false)
+(def ^:redef reader nil)
 
 (defn initialize
   []
   (alter-var-root #'use-jline (constantly true))
   (alter-var-root #'reader (constantly (ConsoleReader.))))
+
+(defn set-input
+  [input-stream]
+  (u/call-method reader "setInput" input-stream))
 
 (defn readline
   ([]

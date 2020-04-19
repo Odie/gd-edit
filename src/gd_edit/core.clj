@@ -473,6 +473,8 @@
 (defn- init-jansi
   []
 
+  (System/setProperty "jline.WindowsTerminal.directConsole" "false")
+
   ;; Enable cross-platform ansi color handling
   (jline/initialize)
   (jansi-clj.core/install!))
@@ -537,10 +539,15 @@
     :parse-fn #(str/trim %)
     :validate [#(.exists (io/as-file %))
                "The specified save file doesn't exist."]]
+   ["-b" "--batch BATCH_FILE_PATH" "Batch file to run"
+    :parse-fn #(str/trim %)
+    :validate [#(.exists (io/as-file %))
+               "The specified batch file doesn't exist."]]
    ["-h" "--help" "Show this help text"]])
 
 (defn -main
   [& args]
+
 
   (u/log-exceptions
 
@@ -555,8 +562,17 @@
                          (System/exit 0))
        (:file options) (au/load-character-file (:file options)))
 
-     ;; Start the editor
-     (start-editor))))
+     ;; If the user asked to start the editor in batch mode...
+     (if (:batch options)
+
+       ;; Open the file as a stream and replace stdin with it
+       (with-open [is (io/input-stream (:batch options))]
+         (jl/set-input is)
+         (println (red "Starting in batch mode!"))
+         (start-editor))
+
+       ;; Otherwise, start the editor in interactive mode
+       (start-editor)))))
 
 
 

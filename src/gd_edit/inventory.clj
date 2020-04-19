@@ -60,7 +60,7 @@
                              (arc/texture-dimensions)
                              (pixel-dims->slot-dims))))
 
-(def texture-dim-fns nil)
+(def ^:redef texture-dim-fns nil)
 
 (defn texture-slot-dims-data-loaded?
   []

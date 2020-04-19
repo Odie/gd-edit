@@ -72,6 +72,13 @@
      (bit-shift-left (nth bytes 1) 8)
      (nth bytes 0))))
 
+(defn call-method
+  [obj method-name & args]
+  (let [m (first (filter (fn [x] (.. x getName (equals method-name)))
+                         (.. obj getClass getDeclaredMethods)))]
+    (. m (setAccessible true))
+    (. m (invoke obj (into-array Object args)))))
+
 ;;------------------------------------------------------------------------------
 ;; Logging related functions
 ;;------------------------------------------------------------------------------
