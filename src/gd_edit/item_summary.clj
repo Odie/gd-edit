@@ -5,7 +5,6 @@
             [gd-edit.level :as level]
             [com.rpl.specter :as s]
             [gd-edit.utils :as u]
-            [clojure.edn :as edn]
             [gd-edit.globals :as globals]
             [taoensso.timbre :as log]
             [clojure.pprint :refer [pprint]]
@@ -54,7 +53,8 @@
 (defn record-class-subtype
   [base-record]
   (let [class (base-record "Class")]
-    (str/lower-case (subs class (inc (str/last-index-of class "_"))))))
+    (u/swallow-exceptions
+      (str/lower-case (subs class (inc (str/last-index-of class "_")))))))
 
 (defn record-class-display-name
   [class]
@@ -67,8 +67,8 @@
         "ArmorProtective_Hands" "Gloves"
         "ArmorProtective_Head" "Helm"
         "ArmorProtective_Legs" "Pants"
-        "ArmorProtective_Shoulders" "Shoulders"
-        "ArmorProtective_Waist" "Belts"
+        "ArmorProtective_Shoulders" "Shoulder"
+        "ArmorProtective_Waist" "Belt"
         "WeaponArmor_Offhand" "Offhand"
         "WeaponArmor_Shield" "Shield"
         "WeaponHunting_Ranged1h" "One-Handed Ranged"
@@ -80,34 +80,37 @@
         "WeaponMelee_Mace2h" "Two-Handed Mace"
         "WeaponMelee_Scepter" "One-Handed Scepter"
         "WeaponMelee_Sword" "One-Handed Sword"
-        "WeaponMelee_Sword2h" "Two-Handed Sword"}
+        "WeaponMelee_Sword2h" "Two-Handed Sword"
+        "OneShot_PotionHealth" "Potion"
+        "QuestItem" "Item"
+        }
        class
        "Unknown"))
 
 (defn record-cost
   [record]
   (letfn [(cost [record cost-record]
-            (let [subtype (record-class-subtype record)
-                  requirements (->> cost-record
-                                    (filter #(str/starts-with? (key %) subtype))
-                                    (map (fn [[k equation]]
-                                           [(str/lower-case (subs k
-                                                                  (count subtype)
-                                                                  (- (count k) (count "Equation"))))
-                                            (Math/round (eq/evaluate equation {"itemLevel" (record "itemLevel")
-                                                                               ;; "totalAttCount" 0
-                                                                               "totalAttCount" (level/attribute-points-total-at-level (record "levelRequirement"))
-                                                                               "itemPrefixCost" 0
-                                                                               "itemSuffixCost" 0
-                                                                               }))]))
-                                    (into {}))]
+            (when-let [subtype (record-class-subtype record)]
+              (let [requirements (->> cost-record
+                                      (filter #(str/starts-with? (key %) subtype))
+                                      (map (fn [[k equation]]
+                                             [(str/lower-case (subs k
+                                                                    (count subtype)
+                                                                    (- (count k) (count "Equation"))))
+                                              (Math/round (eq/evaluate equation {"itemLevel" (record "itemLevel")
+                                                                                 ;; "totalAttCount" 0
+                                                                                 "totalAttCount" (level/attribute-points-total-at-level (get record "levelRequirement" 1))
+                                                                                 "itemPrefixCost" 0
+                                                                                 "itemSuffixCost" 0
+                                                                                 }))]))
+                                      (into {}))]
 
-              [(when-let [strength-req (requirements "strength")]
-                 (format "Required Physique: %s" (number strength-req)))
-               (when-let [dexterity-req (requirements "dexterity")]
-                 (format "Required Cunning: %s" (number dexterity-req)))
-               (when-let [spirit-req (requirements "intelligence")]
-                 (format "Required Spirit: %s" (number spirit-req)))]))]
+                [(when-let [strength-req (requirements "strength")]
+                   (format "Required Physique: %s" (number strength-req)))
+                 (when-let [dexterity-req (requirements "dexterity")]
+                   (format "Required Cunning: %s" (number dexterity-req)))
+                 (when-let [spirit-req (requirements "intelligence")]
+                   (format "Required Spirit: %s" (number spirit-req)))])))]
 
     (->> (let [cost-record (or (dbu/record-by-name (record "itemCostName"))
                                (dbu/record-by-name "records/game/itemcostformulas.dbr"))]
@@ -189,7 +192,8 @@
 
 (defn range-str
   [range]
-  (str/join "-" range))
+  (yellow
+   (str/join "-" range)))
 
 (def effect-types
   [{:name "Physical", :type :immediate, :record-ref "Physical"}
@@ -729,9 +733,12 @@
    (let [record (cond-> record
                   (and (not (record "itemSkillLevel"))
                        (record "itemSkillLevelEq")
-                       (record "itemLevel"))
+                       (or
+                        (record "levelRequirement")
+                        (record "itemLevel")))
                   (assoc "itemSkillLevel" (dec (int (eq/evaluate (record "itemSkillLevelEq")
-                                                                 {"itemLevel" (record "itemLevel")})))))
+                                                                 {"itemLevel" (or (record "itemLevel")
+                                                                                  (record "levelRequirement"))})))))
 
          sub-records (split-subrecords record)
          record (sub-records :main)
@@ -892,6 +899,11 @@
                                      (not (str/starts-with? k "offensiveBase"))))
                            (into {})))
 
+      (when-let [prefix (dbu/record-by-name (:prefix-name item))]
+        (effect-summary prefix))
+
+      (when-let [suffix (dbu/record-by-name (:suffix-name item))]
+        (effect-summary suffix))
 
       ;; Requirements section
       ""
@@ -902,7 +914,8 @@
 
       (format "Item Level: %s" (number (base-record "itemLevel")))]
      flatten
-     (remove nil?))))
+     (remove nil?)
+     dedupe)))
 
 (defn interesting-fields
   [record]
@@ -913,7 +926,8 @@
 (comment
   (do
     (require 'repl
-             [gd-edit.commands.item :as item])
+             '[gd-edit.commands.item :as item]
+             '[gd-edit.printer :as printer])
 
     (repl/init)
     (repl/load-character "Odie"))
@@ -978,5 +992,20 @@
                     (u/ci-match % "armor")))
        sort
        )
+
+
+  ;; Test individual items in the inventory
+  (doseq [line (item-summary (repl/get-at-path @globals/character "inv/1/items/4"))]
+    (println line))
+
+
+  ;; Batch test for items that completely fail
+  (printer/show-item (repl/get-at-path @globals/character "inv/0/items/80"))
+  (for [[idx item] (u/with-idx (repl/get-at-path @globals/character "inv/0/items"))]
+    (try
+      (if (empty? (item-summary item))
+        (str idx " has no summary")
+        )
+      (catch Exception e (str idx " threw an exception"))))
 
   )
