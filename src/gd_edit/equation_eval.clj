@@ -15,6 +15,7 @@
    (evaluate equation-string {}))
 
   ([equation-string variables]
+   ;; (println "Evaluating:" equation-string)
    (->> (parser equation-string)
         (insta/transform
          {:add +

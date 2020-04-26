@@ -3,9 +3,11 @@
   (:require [gd-edit
              [db-utils :as dbu]
              [utils :as u]
-             [jline :as jline]]
+             [jline :as jline]
+             [item-summary :as item-summary]]
             [clojure.string :as str]
-            [jansi-clj.core :refer [red green yellow]]))
+            [jansi-clj.core :refer [red green yellow]]
+            [gd-edit.printer :as printer]))
 
 (defn prompt-yes-no
   "Prompts the user to answer Y or N, returns true or false depending on user input."
@@ -268,7 +270,15 @@
         (newline))
       (print-map item :skip-item-count true)
       (newline)
-      (print-result-records related-records))))
+      (print-result-records related-records)
+
+      (try
+        (let [summary (item-summary/item-summary item)]
+          (println (first summary))
+          (doseq [line (rest summary)]
+            (u/print-indent 1)
+            (println line)))
+        (catch Exception e)))))
 
 
 (defn displayable-path

@@ -10,7 +10,8 @@
             [gd-edit.db-utils :as dbu]
             [clojure.string :as str]
             [gd-edit.structure-walk :as sw]
-            [gd-edit.equation-eval :as eq])
+            [gd-edit.equation-eval :as eq]
+            [gd-edit.printer :as printer])
   (:import [java.io StringReader]))
 
 (defn init
@@ -212,5 +213,9 @@
   (cmd "db")
 
   (cmd "db records/items/autopickup/materia/")
+
+  (require '[gd-edit.printer :as printer])
+
+  (printer/show-item (get-at-path @globals/character "equipment/0"))
 
 )

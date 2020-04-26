@@ -1,15 +1,17 @@
-(ns item-summary
+(ns gd-edit.item-summary
   (:require [gd-edit.db-utils :as dbu]
             [clojure.string :as str]
             [gd-edit.equation-eval :as eq]
+            [gd-edit.level :as level]
             [com.rpl.specter :as s]
             [gd-edit.utils :as u]
             [clojure.edn :as edn]
-            [gd-edit.commands.item :as item]
             [gd-edit.globals :as globals]
-            [gd-edit.commands.level :as level]
+            [taoensso.timbre :as log]
+            [clojure.pprint :refer [pprint]]
+            [clojure.set :as set]
+            [jansi-clj.core :refer [red green yellow bold black]]))
 
-            [taoensso.timbre :as log]))
 
 (defn maybe-int
   [x]
@@ -22,20 +24,32 @@
 
 (defn sign
   [number]
-  (if (> number 0)
-    "+"))
+  (when number
+    (if (> number 0)
+      "+")))
+
+(defn number
+  [number]
+  (when number
+    (yellow (str number))))
 
 (defn signed-number
   [number]
-  (str (sign number) number))
+  (when number
+    (yellow
+     (str (sign number) number))))
 
 (defn signed-percentage
   [number]
-  (str (sign number) number "%"))
+  (when number
+    (yellow
+     (str (sign number) number "%"))))
 
 (defn percentage
   [number]
-  (str number "%"))
+  (when number
+    (yellow
+     (str number "%"))))
 
 (defn record-class-subtype
   [base-record]
@@ -83,15 +97,17 @@
                                             (Math/round (eq/evaluate equation {"itemLevel" (record "itemLevel")
                                                                                ;; "totalAttCount" 0
                                                                                "totalAttCount" (level/attribute-points-total-at-level (record "levelRequirement"))
+                                                                               "itemPrefixCost" 0
+                                                                               "itemSuffixCost" 0
                                                                                }))]))
                                     (into {}))]
 
               [(when-let [strength-req (requirements "strength")]
-                 (format "Required Physique: %d" strength-req))
+                 (format "Required Physique: %s" (number strength-req)))
                (when-let [dexterity-req (requirements "dexterity")]
-                 (format "Required Cunning: %d" dexterity-req))
+                 (format "Required Cunning: %s" (number dexterity-req)))
                (when-let [spirit-req (requirements "intelligence")]
-                 (format "Required Spirit: %d" spirit-req))]))]
+                 (format "Required Spirit: %s" (number spirit-req)))]))]
 
     (->> (let [cost-record (or (dbu/record-by-name (record "itemCostName"))
                                (dbu/record-by-name "records/game/itemcostformulas.dbr"))]
@@ -143,10 +159,29 @@
        (s/transform [s/ALL :name] #(dbu/skill-name-from-record (dbu/record-by-name %)))
        (s/transform [s/ALL :modifier] #(dbu/record-by-name %))))
 
+(defn maybe-choose-by-skill-level
+  "A record field's value may be an array. In that case, a specific value needs to be chosen."
+  [record v]
+  (if (vector? v)
+    (or
+     (when-let [skill-level (record "itemSkillLevel")]
+       (nth v skill-level))
+     (throw (ex-info "Cannot select a value from an array" (u/collect-as-map record v))))
+    v))
+
+(defn maybe-resolve-v
+  [record v]
+  (maybe-choose-by-skill-level record v))
+
+(defn collect-val-range-
+  [record val-name]
+  (->> (vals (select-keys record [(str val-name "Min") (str val-name "Max")]))
+       (map #(maybe-resolve-v record %))))
+
 (defn collect-val-range
   [record val-name]
-  (let [v (->> (vals (select-keys record [(str val-name "Min") (str val-name "Max")]))
-               (map #(maybe-resolve-v record %)))]
+  (let [v (->> (collect-val-range- record val-name)
+             (map maybe-int))]
     (if (and (= (count v) 2)
              (= (first v) (second v)))
       (first v)
@@ -195,7 +230,8 @@
 
 (def effect-components
   (sort-by #(count (:components %)) >
-           [{:name "Physical", :components #{:physical}}
+           [{:name "Poison & Acid", :components #{:defensive :poison}}
+            {:name "Physical", :components #{:physical}}
             {:name "Internal Trauma", :components #{:slow :physical}}
             {:name "Fire", :components #{:fire}}
             {:name "Burn" , :components #{:slow :fire}}
@@ -214,18 +250,9 @@
             {:name "Life Leech", :components #{:life :leech}}
             {:name "Life Leech", :components #{:life :leach}}
             {:name "Mana Leech", :components #{:mana :leach}}
-            {:name "Block", :components #{:block}}]))
-
-(def damage-types
-  #{:physical
-    :fire
-    :cold
-    :lightning
-    :acid
-    :pierce
-    :bleeding
-    :aether
-    :chaos})
+            {:name "Block", :components #{:block}}
+            {:name "Elemental", :components #{:elemental}}
+            ]))
 
 (defn effect-by-components
   [components]
@@ -243,12 +270,13 @@
     (when (or (#{"skillCooldownTime"
                  "petBonusName"
                  "weaponDamagePct"
-                 "conversionInType"
-                 "conversionOutType"
-                 "conversionPercentage"
                  "petLimit"
                  "petBurstSpawn"
                  "augmentAllLevel"
+                 "waveDistance"
+                 "spawnObjectsTimeToLive"
+                 "lifeMonitorPercent"
+                 "damageAbsorptionPercent"
                  }
                keyname)
               (contains? #{:character :defensive :offensive :skill :retaliation :projectile :spark :conversion} (first components))
@@ -271,8 +299,11 @@
 (defn val->string-
   [v & opts]
   (let [signed? (contains?+ opts :signed)
-        percentage? (contains?+ opts :percentage)]
-    (cond->> (maybe-int v)
+        percentage? (contains?+ opts :percentage)
+        negative? (contains?+ opts :negative)]
+    (cond->> v
+      negative?
+      (-)
       (and signed? percentage?)
       (signed-percentage)
       (and (not signed?) percentage?)
@@ -280,7 +311,7 @@
       (and signed? (not percentage?))
       (signed-number)
       :else
-      (str))))
+      (number))))
 
 (defn val-or-range->string
   [v & opts]
@@ -292,24 +323,29 @@
       (apply val->string- (first v) opts))
     (apply val->string- v opts)))
 
-(defn maybe-choose-by-skill-level
-  "A record field's value may be an array. In that case, a specific value needs to be chosen."
-  [record v]
-  (if (vector? v)
-    (or
-     (when-let [skill-level (record "itemSkillLevel")]
-       (nth v skill-level))
-     (throw (ex-info "Cannot select a value from an array" (u/collect-as-map record v))))
-    v))
+(defn lookup-and-resolve-
+  [record fieldname]
+  (maybe-resolve-v record (record fieldname)))
 
-(defn maybe-resolve-v
-  [record v]
-  (maybe-choose-by-skill-level record v))
+(defn lookup-and-resolve
+  [record fieldname]
+  (maybe-int (lookup-and-resolve- record fieldname)))
+
+(defn effect-name
+  [record [k v] components effect]
+
+  (cond
+    (= k "defensivePoisonDuration")
+    "Poison"
+    :else
+    (:name effect)))
 
 (defn generic-effect-kv->string-
-  [record [k v]]
+  [record [k v :as kv]]
 
-  (when (not (str/ends-with? k "Max"))
+  ;; (println "generic-effect:" k)
+  (when-not (or (str/ends-with? k "Max")
+                (str/ends-with? k "Chance"))
     (let [components (camelcase->keywords k)]
       ;; Does this actually look like an effect?
       (if-let [effect (effect-by-components components)]
@@ -328,6 +364,14 @@
                                            (= (first components) :offensive)
                                            ["%s %s Damage"]
 
+                                           (and (= (first components) :defensive)
+                                                (= (take-last 2 components) [:max :resist]))
+                                           ["%s Maximum %s Resistance" [:signed :percentage]]
+
+                                           (and (= (first components) :defensive)
+                                                (= (last components) :duration))
+                                           ["%s Reduction in %s Duration"  [:signed :percentage]]
+
                                            ;; Things marked as "defensive" describe resistance
                                            (= (first components) :defensive)
                                            ["%s %s Resistance" [:percentage]]
@@ -338,256 +382,298 @@
                                            :else
                                            (log/debug "Unrecognized effect" (u/collect-as-map k v)))]
           (when message
-            (format message
-                    (cond (some #{:modifier} components)
-                          (val-or-range->string v :signed :percentage)
-                          :else
-                          (apply val-or-range->string v val-display-type))
-                    (:name effect))))))))
+            (let [key-base (cond-> components
+                             (= (last components) :min)
+                             drop-last)
 
+                  chance (->> (str (keywords->camelcase key-base) "Chance")
+                              (lookup-and-resolve record)
+                              percentage)
 
-(defn lookup-and-resolve
-  [record fieldname]
-  (maybe-resolve-v record (record fieldname)))
+                  val-display-type (if (contains?+ components :modifier)
+                                     [:signed :percentage]
+                                     val-display-type)
+                  params (list (apply val-or-range->string v val-display-type) (effect-name record kv components effect))
+                  [message params] (if chance
+                                     [(str "%s Chance of " message) (conj params chance)]
+                                     [message params])
+                  ]
+
+              ;; (pprint  message)
+              ;; (pprint  params)
+              (apply format message params))))))))
 
 (defn slow-effect-kv->string-
   [record [k v :as kv]]
 
+  ;; (println "slow effect:" k)
   (let [components (camelcase->keywords k)
         effect (effect-by-components components)]
     (cond
       (= [:duration :min] (take-last 2 components))
       (let [key-base (keywords->camelcase (drop-last 2 components))
-            duration (maybe-resolve-v record v)
-            total-dmg (->> components
-                           (drop-last 2)
-                           keywords->camelcase
+            duration v ;(maybe-resolve-v record v)
+            total-dmg (->> key-base
                            (collect-val-range record)
-                           (map #(maybe-resolve-v record %))
                            (map #(* % duration)))]
 
-        (if (contains?+ components :retaliation)
-          (if-let [chance (record (str key-base "Chance"))]
-            (format "%s Chance of %s %s Retaliation Damage over %s seconds"
-                    (percentage (maybe-int chance)) (range-str (map int total-dmg)) (:name effect) (int duration))
-            (format "%s %s Retaliation Damage over %s seconds"
-                    (range-str (map int total-dmg)) (:name effect) (int duration)))))
+        (when-not (empty? total-dmg)
+          (if (contains?+ components :retaliation)
+            (if-let [chance (lookup-and-resolve record (str key-base "Chance"))]
+              (format "%s Chance of %s %s Retaliation Damage over %s seconds"
+                      (percentage chance)
+                      (range-str total-dmg)
+                      (:name effect)
+                      duration)
+              (format "%s %s Retaliation Damage over %s seconds"
+                      (range-str total-dmg)
+                      (:name effect)
+                      duration))
+            (format "%s %s Damage over %s seconds"
+                    (range-str total-dmg)
+                    (:name effect)
+                    duration))))
 
       (= [:duration :modifier] (take-last 2 components))
-      (format "%s %s Duration" (signed-percentage (maybe-int (maybe-resolve-v record v))) (:name effect))
+      (format "%s %s Duration" (signed-percentage v) (:name effect))
 
       (str/ends-with? k "Modifier")
       (generic-effect-kv->string- record kv))))
 
+(defn organize-map
+  [m]
+  (->> (sort-by key m)
+       (into (sorted-map))))
+
+(def effect-string-map
+  {"augmentAllLevel" ["%s to all Skills" [:signed]]
+   "characterAttackSpeedModifier" ["%s Attack Speed" [:signed :percentage]]
+   "characterConstitutionModifier" ["%s Constitution" [:percentage]]
+   "characterDefensiveAbility" ["%s Defense Ability" [:signed]]
+   "characterDefensiveAbilityModifier" ["%s Defensive Ability" [:signed :percentage]]
+   "characterDeflectProjectile" ["%s Chance to Avoid Projectiles" [:percentage]]
+   "characterDodgePercent" ["%s Chance to Avoid Melee Attacks" [:percentage]]
+   "characterDexterity" ["%s Cunning" [:signed]]
+   "characterEnergyAbsorptionPercent" ["%s Energy Absorbed from Enemy Spells" [:signed :percentage]]
+   "characterHuntingDexterityReqReduction" ["%s Cunning Requirement for Ranged Weapons" [:percentage :negative]]
+   "characterIncreasedExperience" ["%s Experience Gained" [:signed :percentage]]
+   "characterIntelligence" ["%s Spirit" [:signed]]
+   "characterLife" ["%s Health" [:signed]]
+   "characterLifeModifier" ["%s Health" [:signed :percentage]]
+   "characterLifeRegen" ["%s Health Regenerated per second" [:signed]]
+   "characterLifeRegenModifier" ["Increases Health Regeneration by %s" [:percentage]]
+   "characterMana" ["%s Energy"]
+   "characterManaRegen" ["%s Energy Regenerated per second" [:signed]]
+   "characterManaRegenModifier" ["Increases Energy Regeneration by %s" [:percentage]]
+   "characterManaLimitReserve" ["%s Energy Reserved"]
+   "characterOffensiveAbility" ["%s Offensive Ability" [:signed]]
+   "characterSpellCastSpeedModifier" ["%s Casting Speed" [:signed :percentage]]
+   "characterStrength" ["%s Physique" [:signed]]
+   "characterStrengthModifier" ["%s Physique" [:signed :percentage]]
+   "characterTotalSpeedModifier" ["%s Total Speed" [:signed :percentage]]
+   "damageAbsorptionPercent" ["%s Damage Absorption" [:percentage]]
+   "defensiveBleedingDuration" ["%s Reduction in Bleeding Duration" [:percentage]]
+   "defensiveBlockAmountModifier" ["%s Shield Damage Blocked" [:signed :percentage]]
+   "defensiveElementalResistance" ["%s Elemental Resistance" [:percentage]]
+   "defensiveFreeze" ["%s Reduced Freeze Duration" [:percentage]]
+   "defensivePetrify" ["%s Reduced Petrify Duration" [:percentage]]
+   "defensiveProtection" ["%s Armor"]
+   "defensiveProtectionModifier" ["Increases Armor by %s" [:percentage]]
+   "defensiveSleep" ["%s Sleep Resistance" [:percentage]]
+   "defensiveStun" ["%s Reduced Stun Duration" [:percentage]]
+   "defensiveTotalSpeedResistance" ["%s Slow Resistance" [:percentage]]
+   "defensiveTrap" ["%s Reduced Entrapment Duration" [:percentage]]
+   "lifeMonitorPercent" ["Activates when Health drops below %s" [:percentage]]
+   "offensiveCritDamageModifier" ["%s Crit Damage" [:signed :percentage]]
+   "offensiveFearMin" ["Terrify target for %s Seconds"]
+   "offensiveLifeLeechMin" ["%s of Attack Damage converted to Health" [:percentage]]
+   "offensivePierceRatioMin" ["%s Armor Piercing" [:percentage]]
+   "offensiveStunMin" ["Stun target for %s Second"]
+   "offensiveTotalDamageModifier" ["%s to All Damage" [:signed :percentage]]
+   "petBurstSpawn" ["%s Summon" [:signed]]
+   "petLimit" ["%s Summon Limit"]
+   "projectileExplosionRadius" ["%s Meter Radius"]
+   "projectileLaunchNumber" ["%s Projectile(s)"]
+   "projectilePiercingChance" ["%s Chance to passthrough Enemies" [:percentage]]
+   "retaliationDamagePct" ["%s of Retaliation Damage added to Attack" [:percentage]]
+   "retaliationTotalDamageModifier" ["%s to All Retaliation Damage" [:signed :percentage]]
+   "skillActiveDuration" ["%s Second Duration"]
+   "skillCooldownReduction" ["%s Skill Cooldown Reduction" [:signed :percentage]]
+   "skillCooldownTime" ["%s Second Skill Recharge"]
+   "skillActiveManaCost" ["%s Active Energy Cost per Second" ]
+   "skillChargeDuration" ["%s Second Charge Level Duration"]
+   "skillManaCost" ["%s Energy Cost"]
+   "skillManaCostReduction" ["%s Skill Energy Cost" [:signed :percentage :negative]]
+   "skillTargetRadius" ["%s Meter Target Area"]
+   "spawnObjectsTimeToLive" ["Lives for %s seconds"]
+   "waveDistance" ["%s Meter Range"]
+   "weaponDamagePct" ["%s Weapon Damage" [:percentage]]
+   })
+
+(def effect-ignore-fields
+  #{"skillChargeAura"
+    "skillChargeMultipliers"
+    })
 
 (defn effect-kv->string
   [record [k v :as kv]]
 
-  ;; (println k)
+  ;; (println "effect-kv->string:" k)
+  (let [v (lookup-and-resolve record k)
+        kv [k v]]
+    (when-not (effect-ignore-fields k)
+      ;; Many effects only depends on a single own `kv` pair.
+      ;; If a `k` can be located in the effect-string-map, we can easily turn this
+      ;; `kv` pair into a string
+      (if-let [msg (effect-string-map k)]
+        (format (first msg) (apply val-or-range->string v (second msg)))
 
-  (let [v (cond-> v
-            (and (vector? v)
-                 (record "itemSkillLevel"))
-            (nth  (record "itemSkillLevel"))
-
-            :then
-            maybe-int)]
-    (cond
-
-      (= k "defensiveProtection")
-      (format "%s Armor" v)
-
-      (= k "defensiveBlockAmountModifier")
-      (format "%s Shield Damage Blocked" (signed-percentage v))
-
-      (= k "skillCooldownTime")
-      (format "%s Second Skill Recharge" (signed-number v))
-
-      (= k "characterAttackSpeedModifier")
-      (format "%s Attack Speed" (signed-percentage v))
-
-      (= k "defensiveProtectionModifier")
-      (format "Increases Armor by %s" (percentage v))
-
-      (= k "offensiveCritDamageModifier")
-      (format "%s Crit Damage" (signed-percentage v))
-
-      (= k "skillManaCostReduction")
-      (format "%s Skill Energy Cost" (signed-percentage (- v)))
-
-      (= k "characterDefensiveAbility")
-      (format "%s Defense Ability" (signed-number v))
-
-      (= k "characterOffensiveAbility")
-      (format "%s Offensive Ability" (signed-number v))
-
-      (= k "skillActiveDuration")
-      (format "%s Second Duration" v)
-
-      (= k "characterLifeRegen")
-      (format "%s Health Regenerated per second" (signed-number v))
-      (= k "characterLifeRegenModifier")
-      (format "Increases Health Regeneration by %s" (percentage v))
-      (= k "characterManaRegen")
-      (format "%s Energy Regenerated per second" (signed-number v))
-
-      (= k "characterEnergyAbsorptionPercent")
-      (format "%s Energy Absorbed from Enemy Spells" (signed-percentage v))
-
-      (= k "characterTotalSpeedModifier")
-      (format "%s Total Speed" (signed-percentage v))
-
-      (= k "offensiveElementalResistanceReductionAbsoluteMin")
-      (format "%s Reduced target's Elemental Resistances for %s Seconds"
-              v (maybe-int (lookup-and-resolve record "offensiveElementalResistanceReductionAbsoluteDurationMin")))
-      (= k "offensiveElementalResistanceReductionAbsoluteDurationMin")
-      nil
-
-      (= k "characterLife")
-      (format "%s Health" (signed-number v))
-      (= k "characterLifeModifier")
-      (format "%s Health" (signed-percentage v))
-
-      (= k "characterIntelligence")
-      (format "%s Spirit" (signed-number v))
-
-      (= k "offensiveElementalMin")
-      (format "%s Elemental Damage" v)
-
-      (= k "defensiveElementalResistance")
-      (format "%s Elemental Resistance" (percentage v))
-
-      (= k "weaponDamagePct")
-      (format "%s Weapon Damage" (percentage v))
-
-      (= k "skillTargetRadius")
-      (format "%s Meter Radius" v)
-
-      (= k "skillCooldownReduction")
-      (format "%s Skill Cooldown Reduction" (signed-percentage v))
-
-      (= k "offensiveLifeLeechMin")
-      (format "%s of Attack Damage converted to Health" (percentage v))
-
-      (= k "offensiveElementalModifier")
-      (format "%s Elemental Damage" (signed-percentage v))
-
-      (= k "projectileExplosionRadius")
-      (format "%s Meter Radius" v)
-
-      (= k "defensiveTotalSpeedResistance")
-      (format "%s Slow Resistance" (percentage v))
-
-      (str/starts-with? k "conversionInType")
-      (let [idx (subs k (count "conversionInType"))]
-        (format "%s %s Damage converted to %s Damage"
-                (percentage (maybe-int (lookup-and-resolve record "conversionPercentage")))
-                (record (str "conversionInType" idx))
-                (record (str "conversionOutType" idx))))
-      (str/starts-with? k "conversionOutType") nil
-      (str/starts-with? k "conversionPercentage") nil
-
-      (= k "defensiveStun")
-      (format "%s Reduced Stun Duration" (percentage v))
-      (= k "defensiveFreeze")
-      (format "%s Reduced Freeze Duration" (percentage v))
-
-      (= k "petLimit")
-      (format "%s Summon Limit" v)
+        ;; Some effects require more than 1 `kv` pair to specify
+        ;; We can handle this with a bit of custom code
+        (cond
+          (= k "offensiveElementalResistanceReductionAbsoluteMin")
+          (format "%s Reduced target's Elemental Resistances for %s Seconds"
+                  v (lookup-and-resolve record "offensiveElementalResistanceReductionAbsoluteDurationMin"))
+          (= k "offensiveElementalResistanceReductionAbsoluteDurationMin")
+          nil
 
 
-      (= k "offensiveFumbleMin")
-      (format "%s Chance for target to Fumble attacks for %s Seconds"
-              (percentage v)
-              (maybe-int (lookup-and-resolve record "offensiveFumbleDurationMin")))
-      (= k "offensiveFumbleDurationMin") nil
+          (str/starts-with? k "conversionInType")
+          (let [idx (subs k (count "conversionInType"))]
+            (format "%s %s Damage converted to %s Damage"
+                    (percentage (lookup-and-resolve record "conversionPercentage"))
+                    (record (str "conversionInType" idx))
+                    (record (str "conversionOutType" idx))))
+          (str/starts-with? k "conversionOutType") nil
+          (str/starts-with? k "conversionPercentage") nil
 
-      (= k "offensiveProjectileFumbleMin")
-      (format "%s Chance of Impaired Aim to target for %s Seconds"
-              (percentage v)
-              (maybe-int (lookup-and-resolve record "offensiveProjectileFumbleDurationMin")))
-      (= k "offensiveProjectileFumbleDurationMin") nil
 
-      (= k "offensiveTotalDamageModifier")
-      (format "%s to All Damage" (signed-percentage v))
 
-      (= k "defensivePoison")
-      (format "%s Poison & Acid Resistance" (percentage v))
+          (= k "offensiveFumbleMin")
+          (format "%s Chance for target to Fumble attacks for %s Seconds"
+                  (percentage v)
+                  (lookup-and-resolve record "offensiveFumbleDurationMin"))
+          (= k "offensiveFumbleDurationMin") nil
 
-      (= k "retaliationTotalDamageModifier")
-      (format "%s to All Retaliation Damage" (percentage v))
+          (= k "offensiveProjectileFumbleMin")
+          (format "%s Chance of Impaired Aim to target for %s Seconds"
+                  (percentage v)
+                  (lookup-and-resolve record "offensiveProjectileFumbleDurationMin"))
+          (= k "offensiveProjectileFumbleDurationMin") nil
 
-      (= k "characterDeflectProjectile")
-      (format "%s Chance to Avoid Projectiles" (percentage v))
 
-      (= k "petBurstSpawn")
-      (format "%s Summon" (signed-number v))
+          (= k "offensiveSlowOffensiveAbilityMin")
+          (format "%s Reduced target's Offensive Ability for %s seconds"
+                  v
+                  (lookup-and-resolve record "offensiveSlowOffensiveAbilityDurationMin"))
+          (= k "offensiveSlowOffensiveAbilityDurationMin") nil
 
-      (= k "skillManaCost")
-      (format "%s Energy Cost" v)
 
-      (= k "characterSpellCastSpeedModifier")
-      (format "%s Casting Speed" (signed-percentage v))
+          (= k "sparkChance")
+          (if (== v 100)
+            (format "Affects up to %s targets"
+                    (lookup-and-resolve record "sparkMaxNumber"))
+            (format "%s Chance of affecting up to %s targets"
+                    (percentage v)
+                    (lookup-and-resolve record "sparkMaxNumber")))
+          (= k "sparkMaxNumber") nil
 
-      (= k "characterIncreasedExperience")
-      (format "%s Experience Gained" (signed-percentage v))
 
-      (= k "characterStrength")
-      (format "%s Physique" (signed-number v))
+          (= k "offensivePercentCurrentLifeMin")
+          (format "%s Reduction to Enemy's Health"
+                  (->> (collect-val-range record "offensivePercentCurrentLife")
+                       range-str
+                       percentage))
+          (= k "offensivePercentCurrentLifeMax") nil
 
-      (= k "characterDexterity")
-      (format "%s Cunning" (signed-number v))
+          (= k "retaliationSlowAttackSpeedDurationMin")
+          (format "%s Reduced Attack Speed Retaliation for %s seconds"
+                  (percentage (lookup-and-resolve record "retaliationSlowAttackSpeedMin"))
+                  v)
+          (= k "retaliationSlowAttackSpeedMin") nil
 
-      (= k "offensiveSlowOffensiveAbilityMin")
-      (format "%s Reduced target's Offensive Ability for %s seconds"
-              v
-              (maybe-int (lookup-and-resolve record "offensiveSlowOffensiveAbilityDurationMin")))
-      (= k "offensiveSlowOffensiveAbilityDurationMin") nil
+          (= k "skillChargeLevel")
+          (format "%s Charge Levels: %s"
+                  v
+                  (->> (lookup-and-resolve record "skillChargeMultipliers")
+                       (map #(percentage %))
+                       (str/join ", ")))
+          (= k "skillChargeMultipliers") nil
 
-      (= k "projectileLaunchNumber")
-      (format "%s Projectile(s)" v)
 
-      (= k "projectilePiercingChance")
-      (format "%s Chance to passthrough Enemies" (percentage v))
+          (= k "offensiveTotalDamageReductionPercentDurationMin")
+          (format "%s Reduced target's Damage for %s Seconds"
+                  (percentage (lookup-and-resolve record "offensiveTotalDamageReductionPercentMin"))
+                  v)
+          (= k"offensiveTotalDamageReductionPercentMin") nil
 
-      (= k "augmentAllLevel")
-      (format "%s to all Skills" (signed-number v))
+          (= k "offensiveSlowTotalSpeedDurationMin")
+          (format "%s Slow target for %s seconds"
+                  (percentage (lookup-and-resolve record "offensiveSlowTotalSpeedMin"))
+                  v)
+          (= k "offensiveSlowTotalSpeedMin") nil
 
-      (= k "offensivePierceRatioMin")
-      (format "%s Armor Piercing" (percentage v))
+          (= k "offensiveFreezeMin")
+          (format "%s Chance to Freeze target for %s Second"
+                  (percentage (lookup-and-resolve record "offensiveFreezeChance"))
+                  v)
+          (= k "offensiveSlowColdMin") nil
 
-      (= k "characterConstitutionModifier")
-      (format "%s Constitution" (percentage v))
 
-      (= k "sparkChance")
-      (if (== v 100)
-        (format "Affects up to %s targets"
-                (lookup-and-resolve record "sparkMaxNumber"))
-        (format "%s Chance of affecting up to %s targets"
-                (percentage v)
-                (lookup-and-resolve record "sparkMaxNumber")))
-      (= k "sparkMaxNumber") nil
+          (= k "offensiveTotalResistanceReductionAbsoluteDurationMin")
+          (format "%s Reduced target's Resistances for %s Seconds"
+                  (percentage (lookup-and-resolve record "offensiveTotalResistanceReductionAbsoluteMin"))
+                  v)
+          (= k "offensiveTotalResistanceReductionAbsoluteMin") nil
 
-      (= k "offensivePercentCurrentLifeMin")
-      (format "%s Reduction to Enemy's Health"
-              (->> (collect-val-range record "offensivePercentCurrentLife")
-                   (map maybe-int)
-                   (range-str)
-                   (percentage)))
-      (= k "offensivePercentCurrentLifeMax") nil
+          (= k "projectileFragmentsLaunchNumberMin")
+          (format "%s Fragments"
+                  (->> (collect-val-range record "projectileFragmentsLaunchNumber")
+                       range-str))
+          (= k "projectileFragmentsLaunchNumberMax") nil
 
-      (= k "defensivePetrify")
-      (format "%s Reduced Petrify Duration" (percentage v))
+          (= k "offensiveSlowRunSpeedDurationMin")
+          (format "%s Slower target Movement for %s Seconds"
+                  (percentage (lookup-and-resolve record "offensiveSlowRunSpeedMin"))
+                  v)
 
-      (= k "characterStrengthModifier")
-      (format "%s Physique" (signed-percentage v))
+          (= k "offensiveSlowRunSpeedMin") nil
 
-      :else
-      (cond
-        (str/includes? k "Slow")
-        (slow-effect-kv->string- record kv)
-        :else
-        (generic-effect-kv->string- record kv)))))
+          (= k "offensiveTrapMin")
+          (format "%s Chance to Immobilize target for %s Seconds"
+                  (percentage (lookup-and-resolve record "offensiveTrapChance"))
+                  (range-str (collect-val-range record "offensiveTrap")))
+
+          (= k "offensiveTrapChance") nil
+
+          ;;----------------------------------------------------------
+          ;; There are other large number of effects that deals with
+          ;; describing various kinds of damage.
+          ;; We'll try to handle them generically here
+          ;;
+          (str/includes? k "Slow")
+          (slow-effect-kv->string- record kv)
+
+          :else
+          (generic-effect-kv->string- record kv))))))
+
+(defn sub-record->string
+  [record]
+
+  (cond
+    (#{"skillLifeBonus" "skillLifePercent"} (key (first record)))
+    (let [fields (select-keys record ["skillLifeBonus" "skillLifePercent"])]
+      (if (= 2 (count fields))
+        (format "%s %s Health Restored"
+                (percentage (lookup-and-resolve record "skillLifePercent"))
+                (signed-number (lookup-and-resolve record "skillLifeBonus")))
+        (do
+          (when-let [v (lookup-and-resolve record "skillLifePercent")]
+            (format "%s Health Restored"
+                    (percentage v)))
+          (when-let [v (lookup-and-resolve record "skillLifeBonus")]
+            (format "%s Health Restored"
+                    v)))))))
 
 (declare skill-mods-summary effect-summary)
 
@@ -622,6 +708,14 @@
     (not (sequential? v)) [v]
     :else v))
 
+(defn split-subrecords
+  [record]
+  (-> (->> record
+           (group-by #(cond
+                        (str/starts-with? (key %) "skillLife") "skillLife"))
+           (s/transform [s/MAP-VALS] #(into {} %)))
+      (set/rename-keys {nil :main})))
+
 (defn effect-summary
   ([record]
    (effect-summary record #{}))
@@ -637,18 +731,26 @@
                        (record "itemSkillLevelEq")
                        (record "itemLevel"))
                   (assoc "itemSkillLevel" (dec (int (eq/evaluate (record "itemSkillLevelEq")
-                                                                 {"itemLevel" (record "itemLevel")})))))]
+                                                                 {"itemLevel" (record "itemLevel")})))))
+
+         sub-records (split-subrecords record)
+         record (sub-records :main)
+         sub-records (-> sub-records
+                         (dissoc :main)
+                         vals)
+         ]
+
      (->> (concat
 
            ;; Racial bonuses
            (flatten
             (for [race-tag (wrap-if-single (record "racialBonusRace"))]
               [(when-let [absolute-dmg (lookup-and-resolve record "racialBonusAbsoluteDamage")]
-                 (format "%s Damage to %s" (signed-number (maybe-int absolute-dmg) ) (dbu/race-name race-tag)))
+                 (format "%s Damage to %s" (signed-number absolute-dmg ) (dbu/race-name race-tag)))
                (when-let [percent-def (lookup-and-resolve record "racialBonusPercentDefense")]
-                 (format "%s Less Damage from %s" (percentage (maybe-int percent-def) ) (dbu/race-name race-tag)))
+                 (format "%s Less Damage from %s" (percentage percent-def ) (dbu/race-name race-tag)))
                (when-let [dmg-percent (record "racialBonusPercentDamage")]
-                 (format "%s Damage to %s" (signed-percentage (maybe-int dmg-percent)) (dbu/race-name race-tag)))]))
+                 (format "%s Damage to %s" (signed-percentage dmg-percent) (dbu/race-name race-tag)))]))
 
            ;; General effects
            (for [kv (->> record
@@ -656,6 +758,11 @@
                                        (looks-like-effect-keyname (key %))))
                          (sort-by key #(< (effect-display-order %) (effect-display-order %2))))]
              (effect-kv->string record kv))
+
+           (for [sub-record sub-records]
+             (sub-record->string (cond-> sub-record
+                                   (record "itemSkillLevel")
+                                   (assoc "itemSkillLevel" (record "itemSkillLevel")))))
 
            ;; Additional skills
            (for [skill (augment-skills record)]
@@ -764,7 +871,7 @@
 
     (->>
      [;; Name of item
-      (dbu/item-name item)
+      (yellow (dbu/item-name item))
       (when-let [item-text (base-record "itemText")]
         (u/wrap-line 80 item-text))
 
@@ -773,8 +880,6 @@
                                   (record-class-display-name (base-record "Class")))]
         (str/join " " classifications))
 
-      ;; (when-let [defensive-protection (base-record "defensiveProtection")]
-      ;;   (effect-kv->string base-record ["defensiveProtection" defensive-protection]))
       (record-primary-attributes base-record)
 
       ;; Item effects
@@ -791,18 +896,27 @@
       ;; Requirements section
       ""
       (when-let [level-req (base-record "levelRequirement")]
-        (format "Required Player Level: %d" level-req))
+        (format "Required Player Level: %s" (number level-req)))
 
       (record-cost base-record)
 
-      (format "Item Level: %d" (base-record "itemLevel"))]
+      (format "Item Level: %s" (number (base-record "itemLevel")))]
      flatten
      (remove nil?))))
 
-(comment
-  (require 'repl)
+(defn interesting-fields
+  [record]
+  (dissoc record "physicsFriction" "armorFemaleMesh" "baseTexture" "outlineThickness" "actorRadius" "dropSound3D"
+          "scale" "physicsMass" "maxTransparency" "dropSoundWater" "templateName" "mesh" "dropSound" "castsShadows"
+          "attributeScalePercent" "bitmap" "armorMaleMesh" "actorHeight" "glowTexture" "bumpTexture"))
 
-  (repl/init)
+(comment
+  (do
+    (require 'repl
+             [gd-edit.commands.item :as item])
+
+    (repl/init)
+    (repl/load-character "Odie"))
 
   (->> (seq @globals/db)
        (reduce (fn [interesting-keynames record]
@@ -820,196 +934,7 @@
                         (keys record))))
                #{}))
 
-  (repl/cmd "set inv/1/items/0 \"Putrid Necklace\" 8")
-
-  (repl/cmd "set inv/1/items/0 \"Sister's Amulet of Lifegiving\" 10")
-
-  (repl/cmd "set inv/1/items/0 \"Death-Watcher Pendant\" 30")
-
-  (repl/cmd "set inv/1/items/0 \"Putrid Necklace\" 32")
-
-  (repl/cmd "set inv/1/items/0 \"Ellena's Necklace\" 35")
-
-  (repl/cmd "set inv/1/items/0 \"Kaisan's Burning Eye\" 40")
-
-  (repl/cmd "set inv/1/items/0 \"Honed Longsword\" 15")
-
-  (repl/cmd "set inv/1/items/0 \"Boneblade\" 20")
-
-  (repl/cmd "set inv/1/items/0 \"Manticore Longsword\" 30")
-
-  (repl/cmd "set inv/1/items/0 \"Bonescythe\" 20")
-
-  (repl/cmd "set inv/1/items/0 \"Spectral Battle Axe\" 32")
-
-  (repl/cmd "set inv/1/items/0 \"Empowered Immaterial Edge\" 75")
-
-  (repl/cmd "set inv/1/items/0 \"Stormcaller's Spellblade\" 22")
-
-  (repl/cmd "set inv/1/items/0 \"Voidblade\" 22")
-
-  (repl/cmd "set inv/1/items/0 \"Plagueblood Carver\" 25")
-
-  (repl/cmd "set inv/1/items/0 \"Jaravuuk's Bite\" 45")
-
-  (repl/cmd "set inv/1/items/0 \"Empowered Twilight's Veil\" 50")
-
-  (repl/cmd "set inv/1/items/0 \"Putrid Necklace\" 8")
-
-  (repl/cmd "set inv/1/items/0 \"Titan Paldrons\" 8")
-
-
-  (item-summary
-   (repl/get-at-path @globals/character "inventory-sacks/1/inventory-items/0"))
-
-  (level/attribute-points-total-at-level 1)
-  (level/attribute-points-total-at-level 99)
-
-  (record-cost
-   (dbu/record-by-name
-    "records/items/gearaccessories/necklaces/b002a_necklace.dbr"))
-
-  (do
-    (repl/load-character "Odie")
-
-    (repl/cmd "set inv/1/items/0 \"Milton's Casque\" 15")
-
-    (= (with-out-str
-         (print-item-summary
-          (repl/get-at-path @globals/character "inventory-sacks/1/inventory-items/0"))
-
-         )
-
-       (u/strip-leading-indent
-        "Milton's Casque
-        \"A notch on the helm for every Taken he's killed.\"
-        Rare Heavy Helm
-        78.0 Armor
-
-        +10.0% Aetherial
-        +10.0% Aether Corruption
-        +12.0% Aether Resistance
-        +10.0% Shield Damage Blocked
-        +2 to Overguard
-        +2 to Blitz
-        -0.3 Second Skill Recharge to Blitz
-
-        Required Player Level: 12
-        Required Physique:  127
-        Item Level: 12
-        ")))
-
-  (do
-    (repl/load-character "Odie")
-    (repl/cmd "set inv/1/items/0 \"Ascended Casque\" 20")
-    (= (with-out-str
-         (print-item-summary
-          (repl/get-at-path @globals/character "inventory-sacks/1/inventory-items/0")))
-
-       (dbu/strip-leading-indent
-        "Ascended Casque
-        Rare Heavy Helm
-        126.0 Armor
-
-        2-5 Aether Damage
-        +8.0% Aether Damage
-        +16.0% Aether Resistance
-        +3 to Maiven's Sphere of Protection
-        +3 to Spectral Binding
-        +8.0% Attack Speed to Maiven's Sphere of Protection
-        Increases Armor by +12.0% to Maiven's Sphere of Protection
-
-        Required Player Level: 18
-        Required Physique:  202
-        Item Level: 20
-        ")))
-
-  (do
-    (repl/load-character "Odie")
-    (repl/cmd "set inv/1/items \"Incendiary Casque\" 20")
-    (= (with-out-str
-         (print-item-summary
-          (repl/get-at-path @globals/character "inventory-sacks/1/inventory-items/23")))
-
-       (dbu/strip-leading-indent
-        "Incendiary Casque
-        Rare Heavy Helm
-        126.0 Armor
-
-        2-5 Fire Damage
-        +8.0% Fire Damage
-        +8.0% Burn Damage
-        +16.0% Chaos Resistance
-        +2 to Flames of Ignaffar
-        +2 to Fire Strike
-        +15.0% Crit Damage to Flames of Ignaffar
-        -6.0% Skill Energy Cost to Flames of Ignaffar
-
-        Required Player Level: 18
-        Required Physique:  202
-        Item Level: 20
-        ")))
-
-  (do
-    (repl/load-character "Odie")
-    (repl/cmd "set inv/1/items \"Murderer's Cowl\" 20")
-    (= (with-out-str
-         (print-item-summary
-          (repl/get-at-path @globals/character "inventory-sacks/1/inventory-items/23")))
-
-       (dbu/strip-leading-indent
-        "Murderer's Cowl
-        Rare Light Helm
-        100.0 Armor
-
-        4 Bleeding Damage over 3 seconds
-        +10.0% Bleeding Damage
-        +15.0 Defensive Ability
-        +2 to Blade Trap
-        +2 to Ring of Steel
-        +2.0 Second Duration to Blade Trap
-        +90 Bleeding Damage over 3 seconds to Ring of Steel
-
-        Required Player Level: 18
-        Required Physique:  125
-        Item Level: 20
-        ")))
-
-
-  (do
-
-    (repl/load-character "Odie")
-
-    (repl/cmd "set inv/1/items/0 \"Milton's Casque\" 20")
-
-    (= (with-out-str
-         (print-item-summary
-          (repl/get-at-path @globals/character "inventory-sacks/1/inventory-items/0")))
-
-       (strip-leading-indent
-        "Murderer's Cowl
-        Rare Light Helm
-        100.0 Armor
-
-        4 Bleeding Damage over 3 seconds
-        +10.0% Bleeding Damage
-        +15.0 Defensive Ability
-        +2 to Blade Trap
-        +2 to Ring of Steel
-        +2.0 Second Duration to Blade Trap
-        +90 Bleeding Damage over 3 seconds to Ring of Steel
-
-        Required Player Level: 18
-        Required Physique:  125
-        Item Level: 20
-        ")))
-
-  (defn interesting-fields
-    [record]
-    (dissoc record "physicsFriction" "armorFemaleMesh" "baseTexture" "outlineThickness" "actorRadius" "dropSound3D"
-            "scale" "physicsMass" "maxTransparency" "dropSoundWater" "templateName" "mesh" "dropSound" "castsShadows"
-            "attributeScalePercent" "bitmap" "armorMaleMesh" "actorHeight" "glowTexture" "bumpTexture"))
-
+  ;; Manual testing rig
   (def test-target (atom {}))
 
   (let [item-to-test "Titan Pauldrons"
@@ -1017,70 +942,32 @@
     (when-let [x (item/construct-item item-to-test @globals/db @globals/db-index level-limit)]
       (reset! test-target (dbu/record-by-name (:basename x)))))
 
+  (effect-summary @test-target)
 
-  (let [item-to-test "Titan Pauldrons"
-        level-limit 71]
-    (when-let [x (item/construct-item item-to-test @globals/db @globals/db-index level-limit)]
+
+  (defn get-test-item
+    [item-name level-limit]
+    (when-let [x (item/construct-item item-name @globals/db @globals/db-index level-limit)]
       (reset! test-target x)))
+
+  (get-test-item "Chausses of Barbaros" 84)
+
 
   (sort-by (comp name key)
            (-> @test-target
                (record-field :basename)
-               (record-field "itemSkillName")
+               ;; (record-field "modifierSkillName3")
+               ;; (record-field "itemSetName")
+               ;; (record-field "petSkillName")
+               ;; (record-field "petBonusName")
+               ;; (record-field "itemSkillName") ;; granted skill
+               ;; (record-field "buffSkillName") ;; granted skill redirect
+               (record-field "itemSkillAutoController")
                (interesting-fields)
                ))
 
   (item-summary @test-target)
 
-  (interesting-fields @test-target)
-
-
-  (->> @test-target
-       (filter #(u/ci-match (key %) "skill"))
-       (sort-by key))
-
-  (effect-summary @test-target)
-
-  (augment-masteries @test-target)
-
-  (effect-summary
-   (dbu/record-by-name "records/skills/itemskillsgdx1/granted/noxiousfumes_01.dbr")
-   )
-
-  (-> (record-field @test-target "modifierSkillName1")
-      ;; (record-field "petSkillName")
-      )
-
-  (record-field @test-target "itemSkillName")
-
-  (record-field @test-target "modifiedSkillName1")
-
-  (-> (record-field @test-target "augmentSkillName1")
-      (record-field "petSkillName")
-      (record-field "buffSkillName")
-      )
-
-  (augment-skills @test-target)
-
-  (record-field @test-target "petBonusName")
-
-
-  (dbu/record-by-name
-   (@test-target "itemSkillName"))
-
-  (effect-summary
-   (dbu/record-by-name
-    "records/items/gearhead/b208a_head.dbr"))
-
-  (effect-summary
-   (dbu/record-by-name "records/items/gearhead/b202a_head.dbr"))
-
-  (effect-summary
-   (dbu/record-by-name "records/items/gearhead/b201a_head.dbr"))
-
-  (dbu/record-by-name
-
-   "records/skills/itemskillsgdx2/skillmodifiers/mi/head_b201_grenado.dbr")
 
   (->> @globals/db
        (map #(% "Class"))
