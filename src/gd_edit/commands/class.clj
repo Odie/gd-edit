@@ -120,7 +120,9 @@
 (defn class-remove-by-name
   [character class-name]
 
-  (let [skill-name-to-remove ((class-display-name-map) class-name)
+  (let [skill-name-to-remove (some #(when (u/case-insensitive= class-name (val %))
+                                      (key %))
+                                   (class-display-name-map))
 
         skill-to-remove (first (filter
                                 (fn [skill]
