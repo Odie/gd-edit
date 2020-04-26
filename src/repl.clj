@@ -6,7 +6,11 @@
             [gd-edit.io.gdc :as gdc]
             [gd-edit.printer]
             [gd-edit.utils :as u]
-            [gd-edit.app-util :as au])
+            [gd-edit.app-util :as au]
+            [gd-edit.db-utils :as dbu]
+            [clojure.string :as str]
+            [gd-edit.structure-walk :as sw]
+            [gd-edit.equation-eval :as eq])
   (:import [java.io StringReader]))
 
 (defn init
@@ -131,6 +135,25 @@
             related)
            (conj explored node)))))))
 
+(defn collect-record-effects
+  [record]
+
+  (select-keys record #{"itemNameTag"
+                        "itemText"
+                        "levelRequirement"
+                        "offensivePhysicalMin"
+                        "offensivePhysicalMax"
+                        "augmentSkillLevel1"
+                        })
+  )
+
+
+
+(defn get-at-path
+  [character path]
+  (->> (str/split path #"/")
+       (sw/walk character )
+       :found-item))
 
 (comment
   (init)

@@ -1,0 +1,12 @@
+expr = add-sub
+<add-sub> = mul-div | add | sub
+add = add-sub <'+'> mul-div
+sub = add-sub <'-'> mul-div
+<mul-div> = term |  mul | div
+mul = mul-div <'*'> term
+div = mul-div <'/'> term
+exp = mul-div <'^'> term
+<term> = identifier | float | integer | <'('> add-sub <')'> | exp
+identifier = #"\w+"
+float = #"-{0,1}\d+\.\d+"
+integer  = #"-{0,1}\d+"

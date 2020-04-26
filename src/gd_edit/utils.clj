@@ -10,6 +10,20 @@
            java.io.File
            [java.security MessageDigest]))
 
+(defmacro when-let*
+  "Multiple binding version of when-let"
+  [bindings & body]
+  (if (seq bindings)
+    `(when-let [~(first bindings) ~(second bindings)]
+       (when-let* ~(vec (drop 2 bindings)) ~@body))
+    `(do ~@body)))
+
+(defmacro collect-as-map
+  "foo = 1, bar = 2.  (to-map foo bar) ==> {:foo 1 :bar 2}"
+  [& vs]
+  `(let [ks# (map keyword '~vs)]
+     (zipmap ks# [~@vs])))
+
 (defmacro plet [bindings & body]
   (let [bents (partition 2 (destructure bindings))
         smap (into {} (map (fn [[b _]]
@@ -78,6 +92,32 @@
                          (.. obj getClass getDeclaredMethods)))]
     (. m (setAccessible true))
     (. m (invoke obj (into-array Object args)))))
+
+
+(defn strip-leading-indent
+  [text]
+
+  (let [t (str/split-lines text)
+        safe-subs (fn [s start]
+                    (if (<= (count s) start)
+                      ""
+                      (subs s start)))
+        indent-level (str/index-of (second t)
+                                   (re-find #"[^\s-]" (second t)))]
+    (str/join "\n" (concat (list (first t)) (map #(safe-subs % indent-level) (rest t))))))
+
+(defn subs+
+  "Like subs, but allows negative values to indicate `start` and `end`"
+  ([s start]
+   (subs+ s start (count s)))
+  ([s start end]
+   (let [start (if (neg? start)
+                 (+ (count s) start)
+                 start)
+         end (if (neg? end)
+               (+ (count s) end)
+               end)]
+     (subs s start end))))
 
 ;;------------------------------------------------------------------------------
 ;; Logging related functions
@@ -518,3 +558,10 @@
 (defn with-idx
   [items]
   (map vector (range) items))
+
+
+(defn wrap-line [size text]
+  (->> (re-seq
+        (re-pattern (format "(.{1,%d})( +|$\\n?)|(.{1,%d})" size size))
+        (clojure.string/replace text #"\n" " "))
+       (map second)))

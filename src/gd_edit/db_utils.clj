@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [gd-edit.db-utils :as dbu]))
 
 (defn record-class
   [record]
@@ -104,43 +105,45 @@
     true))
 
 (defn item-name
-  [item db-and-index]
+  ([item]
+   (item-name item @globals/db-and-index))
+  ([item db-and-index]
 
-  (if-not (is-valid-item? item)
-    nil
+   (if-not (is-valid-item? item)
+     nil
 
-    (let [related-records (related-db-records item db-and-index)
-          base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
-                          (first))
+     (let [related-records (related-db-records item db-and-index)
+           base-record (-> (filter #(= (:basename item) (:recordname %1)) related-records)
+                           (first))
 
-          base-name (item-base-record-get-base-name base-record)
+           base-name (item-base-record-get-base-name base-record)
 
-          is-set-item (some #(contains? %1 "itemSetName") related-records)]
+           is-set-item (some #(contains? %1 "itemSetName") related-records)]
 
-      ;; If we can't find a base name for the item, this is not a valid item
-      ;; We can't generate a name for an invalid item
-      (when-not (nil? base-name)
+       ;; If we can't find a base name for the item, this is not a valid item
+       ;; We can't generate a name for an invalid item
+       (when-not (nil? base-name)
 
-        ;; If we've found an item with a unique name, just return the name without any
-        ;; prefix or suffix
-        (if is-set-item
-          (->> [(item-base-record-get-quality-name base-record) base-name]
-               (filter some?)
-               (str/join " "))
+         ;; If we've found an item with a unique name, just return the name without any
+         ;; prefix or suffix
+         (if is-set-item
+           (->> [(item-base-record-get-quality-name base-record) base-name]
+                (filter some?)
+                (str/join " "))
 
-          ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
-          ;; of the item
-          (let [prefix-name (-> (filter #(str/includes? (:recordname %1) "/prefix/") related-records)
-                                (first)
-                                (get "lootRandomizerName"))
-                suffix-name (-> (filter #(str/includes? (:recordname %1) "/suffix/") related-records)
-                                (first)
-                                (get "lootRandomizerName"))
-                quality-name (item-base-record-get-quality-name base-record)]
+           ;; Otherwise, we should fetch the prefix and suffix name to construct the complete name
+           ;; of the item
+           (let [prefix-name (-> (filter #(str/includes? (:recordname %1) "/prefix/") related-records)
+                                 (first)
+                                 (get "lootRandomizerName"))
+                 suffix-name (-> (filter #(str/includes? (:recordname %1) "/suffix/") related-records)
+                                 (first)
+                                 (get "lootRandomizerName"))
+                 quality-name (item-base-record-get-quality-name base-record)]
 
-            (->> [prefix-name quality-name base-name suffix-name]
-                 (filter #(not (nil? %1)))
-                 (str/join " "))))))))
+             (->> [prefix-name quality-name base-name suffix-name]
+                  (filter #(not (nil? %1)))
+                  (str/join " ")))))))))
 
 
 ;;------------------------------------------------------------------------------
@@ -176,19 +179,42 @@
   (and (associative? coll)
        (contains? coll :faction-value)))
 
+(defn skill-name-from-record
+  [skill-record]
+
+  (let [record-display-name (fn [record]
+                              (or (record "skillDisplayName")
+                                  ;; (record "FileDescription")
+                                  ))]
+    (if-let [display-name (record-display-name skill-record)]
+      display-name
+
+      (or
+       (when-let [buff-skill (record-by-name (skill-record "buffSkillName"))]
+         (skill-name-from-record buff-skill))
+       (when-let [pet-skill (record-by-name (skill-record "petSkillName"))]
+         (skill-name-from-record pet-skill))))))
+
+(defn skill-description-from-record
+  [skill-record]
+
+  (let [skill-description (fn [record]
+                              (record "skillBaseDescription"))]
+    (if-let [description (skill-description skill-record)]
+      description
+
+      (or
+       (when-let [buff-skill (record-by-name (skill-record "buffSkillName"))]
+         (skill-description-from-record buff-skill))
+       (when-let [pet-skill (record-by-name (skill-record "petSkillName"))]
+         (skill-description-from-record pet-skill))))))
+
 (defn skill-name
   [skill]
 
   (let [record (-> (:skill-name skill)
-                   (record-by-name))
-        record-display-name (fn [record]
-                              (or (record "skillDisplayName")
-                                  (record "FileDescription")))]
-    (if-let [display-name (record-display-name record)]
-      display-name
-
-      (when (get record "buffSkillName")
-        (record-display-name (record-by-name (get record "buffSkillName")))))))
+                   (record-by-name))]
+    (skill-name-from-record record)))
 
 (defn- faction-name-from-loc-table
   [loc-table faction-index]
@@ -208,6 +234,25 @@
     (or
      (faction-names index)
      (faction-name-from-loc-table (localization-table) index))))
+
+(defn race-name
+  [race-tag]
+  (case race-tag
+    "Race001" "Undead"
+    "Race002" "Beastkin"
+    "Race003" "Aetherial"
+    "Race004" "Chthonic"
+    "Race005" "Aether Corruption"
+    "Race006" "Bloodsworn"
+    "Race007" "Eldritch"
+    "Race008" "Insectoid"
+    "Race009" "Human"
+    "Race010" "Construct"
+    "Race011" "Riftspawn"
+    "Race012" "Beast"
+    "Race013" "Magical"
+    "Race014" "Celestial"
+    "Race015" "Arachnid "))
 
 (defn item-is-materia?
   [item]
