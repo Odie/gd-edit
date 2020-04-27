@@ -83,6 +83,7 @@
         "WeaponMelee_Sword2h" "Two-Handed Sword"
         "OneShot_PotionHealth" "Potion"
         "QuestItem" "Item"
+        "ItemArtifact" "Relic"
         }
        class
        "Unknown"))
@@ -281,6 +282,7 @@
                  "spawnObjectsTimeToLive"
                  "lifeMonitorPercent"
                  "damageAbsorptionPercent"
+                 "damageAbsorptionReflectPercent"
                  }
                keyname)
               (contains? #{:character :defensive :offensive :skill :retaliation :projectile :spark :conversion} (first components))
@@ -476,10 +478,13 @@
    "characterStrengthModifier" ["%s Physique" [:signed :percentage]]
    "characterTotalSpeedModifier" ["%s Total Speed" [:signed :percentage]]
    "damageAbsorptionPercent" ["%s Damage Absorption" [:percentage]]
+   "damageAbsorptionReflectPercent" ["%s Damage Absorbed Reflected" [:percentage]]
    "defensiveBleedingDuration" ["%s Reduction in Bleeding Duration" [:percentage]]
    "defensiveBlockAmountModifier" ["%s Shield Damage Blocked" [:signed :percentage]]
    "defensiveElementalResistance" ["%s Elemental Resistance" [:percentage]]
    "defensiveFreeze" ["%s Reduced Freeze Duration" [:percentage]]
+   "defensivePercentCurrentLife" ["%s Resistance to Life Reduction" [:percentage]]
+   "defensivePercentReflectionResistance" ["%s Reflected Damage Reduction" [:percentage]]
    "defensivePetrify" ["%s Reduced Petrify Duration" [:percentage]]
    "defensiveProtection" ["%s Armor"]
    "defensiveProtectionModifier" ["Increases Armor by %s" [:percentage]]
@@ -668,9 +673,9 @@
     (#{"skillLifeBonus" "skillLifePercent"} (key (first record)))
     (let [fields (select-keys record ["skillLifeBonus" "skillLifePercent"])]
       (if (= 2 (count fields))
-        (format "%s %s Health Restored"
+        (format "%s + %s Health Restored"
                 (percentage (lookup-and-resolve record "skillLifePercent"))
-                (signed-number (lookup-and-resolve record "skillLifeBonus")))
+                (number (lookup-and-resolve record "skillLifeBonus")))
         (do
           (when-let [v (lookup-and-resolve record "skillLifePercent")]
             (format "%s Health Restored"
@@ -826,30 +831,6 @@
 
           (remove nil?)))))
 
-(comment
-  (effect-summary
-   (dbu/record-by-name
-    "records/items/gearhead/b016a_head.dbr"))
-
-  (effect-summary
-   (dbu/record-by-name "records/items/gearhead/b004_head.dbr"))
-
-  (effect-summary
-   (dbu/record-by-name "records/items/gearhead/b002_head.dbr"))
-
-  (effect-summary
-   (dbu/record-by-name "records/items/gearhead/b006_head.dbr"))
-
-
-  (effect-summary
-   (dbu/record-by-name
-    "records/items/gearhead/b205a_head.dbr"))
-
-  (dbu/record-by-name
-   "records/skills/itemskillsgdx1/skillmodifiers/monsterinfrequents/head_b004_sphereofprotection.dbr"
-   ))
-
-
 (defn record-field
   [record field-name]
   (let [v (record field-name)]
@@ -942,11 +923,21 @@
                            ;; (str/includes? keyname "defensive")
                            ;; (str/includes? keyname "character")
                            ;; (str/includes? keyname "character")
-                           (str/includes? keyname "AmountModifier")
+                           ;; (str/includes? keyname "AmountModifier")
                            ;; (str/includes? keyname "Slow")
+                           (u/ci-match keyname "reflect")
                            ))
                         (keys record))))
                #{}))
+
+  (->> (seq @globals/db)
+       (filter (fn [record]
+                 (some
+                  (fn [keyname]
+                    (u/ci-match keyname "damageAbsorptionReflectPercent"))
+                  (keys record))))
+       (map :recordname)
+       )
 
   ;; Manual testing rig
   (def test-target (atom {}))
@@ -993,6 +984,17 @@
        sort
        )
 
+  (defn printall
+    [x]
+    (doseq [line x]
+      (println line)))
+
+  (-> (dbu/record-by-name
+       "records/skills/playerclass08/soultransfer.dbr")
+      (assoc "itemSkillLevel" 0)
+      effect-summary
+      printall
+      )
 
   ;; Test individual items in the inventory
   (doseq [line (item-summary (repl/get-at-path @globals/character "inv/1/items/4"))]
