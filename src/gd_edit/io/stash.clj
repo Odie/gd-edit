@@ -15,11 +15,18 @@
   [bb data context]
   (.putInt bb (gdc/encrypt-int data (:enc-state @context))))
 
+
+(def TransferStashItem
+  (into gdc/Item
+        (s/struct-def
+         :X :float
+         :Y :float)))
+
 (def InventorySack
   (s/struct-def
    :width           :int32
    :height          :int32
-   :inventory-items (s/array gdc/InventoryItem)))
+   :inventory-items (s/array TransferStashItem)))
 
 (declare read-block18 write-block18)
 

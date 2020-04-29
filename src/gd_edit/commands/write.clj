@@ -181,7 +181,7 @@
     ;; did the user issue a "write stash"?
     (u/case-insensitive= (first tokens) "stash")
     ;; Check if the stash is actually different from the old known state
-    (let [new-state (@globals/character :transfer-stash)
+    (let [new-state (@globals/character :transfer-stashes)
           old-state (@globals/transfer-stash :stash)]
 
       ;; If so, tell the user we won't do anything

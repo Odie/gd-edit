@@ -23,24 +23,43 @@
          :width (/ (:width dims) 32)
          :height (/ (:height dims) 32)))
 
-(defn inv-slot-dims
-  "Return the expected dimensions of character/inventory-sacks/`num`"
-  [num]
-
-  (let [grid-info (if (= num 0)
-                    (dbu/record-by-name "records/ui/character/characterinventory/inventory_grid0.dbr")
-                    (dbu/record-by-name "records/ui/character/characterinventory/inventory_grid1.dbr"))]
-    (-> {:width (grid-info "inventoryXSize")
-         :height (grid-info "inventoryYSize")}
-        (pixel-dims->slot-dims))))
-
 (defn- strip-first-component
   [path]
 
   (when path
-      (->> (u/filepath->components path)
-           (drop 1)
-           (str/join "/"))))
+    (->> (u/filepath->components path)
+         (drop 1)
+         (str/join "/"))))
+
+(defn- strip-last-component
+  [path]
+
+  (when path
+    (->> (u/filepath->components path)
+         (drop-last)
+         (str/join "/"))))
+
+(defn inv-slot-dims
+  "Return the expected dimensions of the inventory/stash/transfer stash"
+  [path-to-items]
+
+  (cond
+    (= (first path-to-items) :inventory-sacks)
+    (let
+        [inv-info (if (= (second path-to-items) 0)
+                    (dbu/record-by-name "records/ui/character/characterinventory/inventory_grid0.dbr")
+                    (dbu/record-by-name "records/ui/character/characterinventory/inventory_grid1.dbr"))]
+      (pixel-dims->slot-dims
+       {:width (inv-info "inventoryXSize")
+        :height (inv-info "inventoryYSize")}))
+    (or
+     (= (first path-to-items) :stashes)
+     (= (first path-to-items) :transfer-stashes))
+    (-> (->> path-to-items
+             drop-last
+             (get-in @globals/character))
+        (select-keys [:width :height]))))
+
 
 (defn- stride
   [inv-idx]
@@ -172,12 +191,12 @@
   "Return a list of occupied slot ids.
   inv-idx: index of the inventory/sack in the character.
            This is used to determine the dimensions and the items in the inventory/sack."
-  [inv-idx]
+  [path-to-items]
 
-  (let [inv-items (character-inventory inv-idx)
+  (let [inv-items (get-in @globals/character path-to-items)
 
         ;; Determine the total size/dimensions of the inventory
-        inv-dims (inv-slot-dims inv-idx)
+        inv-dims (inv-slot-dims path-to-items)
 
         ;; The given inventory items should have X, Y in slot coordinates already.
         ;; Determine the width and height in terms of slots
@@ -185,19 +204,18 @@
 
     ;; Generate a list of slot ids that are occupied
     (->> item-rects
-         (mapcat #(rect->slot-ids % (:width inv-dims))))))
+         (mapcat #(rect->slot-ids % (:width inv-dims)))
+         (map u/maybe-int))))
 
 (defn empty-slots
-  "Return a list of empty slot ids.
-  inv-idx: index of the inventory/sack in the character
-           This is used to determine the dimensions and the items in the inventory/sack."
-  [inv-idx]
+  "Return a list of empty slot ids for the given inventory/stash."
+  [path-to-items]
 
   (let [;; Generate a list of slot ids that are occupied
-        occupied-slots (set (occupied-slots inv-idx))
+        occupied-slots (set (occupied-slots path-to-items))
 
         ;; Generate a list of number that represent all slots in the inventory/sack
-        inv-dims (inv-slot-dims inv-idx)
+        inv-dims (inv-slot-dims path-to-items)
         inv-slots (set (range (* (:width inv-dims) (:height inv-dims))))]
 
     (set/difference inv-slots occupied-slots)))
@@ -205,11 +223,11 @@
 (defn fit-new-item
   "Given an inventory and an new item, return the coordinate in the sack
   where the given item can be placed"
-  [inv-idx new-item]
+  [path-to-items new-item]
 
   (let [new-item-dims (item->dims new-item)
-        empty-slots (set (empty-slots inv-idx))
-        stride (stride inv-idx)]
+        empty-slots (set (empty-slots path-to-items))
+        stride (stride path-to-items)]
 
     ;; Look for some empty slot such that...
     (if-let [target-slot
@@ -223,3 +241,16 @@
                    (sort empty-slots))]
 
       (slot-id->coord target-slot stride))))
+
+(comment
+  (fit-new-item
+   [:transfer-stashes 4 :inventory-items]
+   {:var1 0, :stack-count 1, :basename "records/items/gearweapons/swords1h/d002_sword.dbr", :unknown 0, :relic-seed 0, :prefix-name "", :relic-completion-level 0, :seed 949214695, :augment-seed 0, :transmute-name "", :augment-name "", :modifier-name "", :relic-name "", :suffix-name "", :relic-bonus ""})
+
+  (require 'repl)
+
+  (repl/cmd "set tra/4/items 'crystallum'")
+
+  (repl/cmd "write stash")
+
+  )

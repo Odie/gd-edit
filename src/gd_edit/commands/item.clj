@@ -455,7 +455,7 @@
 
   (or (and (= (first path) :inventory-sacks)
            (= (last path) :inventory-items))
-      (and (= (first path) :transfer-stash)
+      (and (= (first path) :transfer-stashes)
            (= (last path) :inventory-items))))
 
 (defn place-item-in-inventory!
@@ -472,8 +472,7 @@
 
     ;; Did the call ask to have an item added to an inventory/sack?
     (path-is-inventory? val-path)
-    (if-let [coord (inventory/fit-new-item (second val-path)
-                                           item)]
+    (if-let [coord (inventory/fit-new-item val-path item)]
       (do
         (swap! character update-in val-path conj (merge item coord))
         (conj val-path (dec (count (get-in @character val-path)))))

@@ -10,22 +10,29 @@
   []
   (not-empty @transfer-stash-watcher))
 
-(defn tf-watcher-stop
+(defn tf-watcher-stop!
   []
   (swap! transfer-stash-watcher #(hawk/stop! %)))
 
-(defn load-and-watch-transfer-stash
+(defn load-transfer-stash!
+  []
+  (when-let [stash-file (dirs/get-transfer-stash)]
+    (reset! globals/transfer-stash (stash/load-stash-file stash-file))
+    (when @globals/character
+      (swap! globals/character assoc :transfer-stashes (@globals/transfer-stash :stash)))))
+
+(defn load-and-watch-transfer-stash!
   []
 
   (when-not (tf-watcher-started?)
     (when-let [stash-file (dirs/get-transfer-stash)]
-      (reset! globals/transfer-stash (stash/load-stash-file stash-file))
+      (load-transfer-stash!)
       (reset! transfer-stash-watcher
               (hawk/watch! [{:paths [(.getParentFile stash-file)]
                              :handler (fn [ctx e]
                                         (when (and (#{:create :modify} (:kind e))
                                                    (= stash-file (:file e)))
 
-                                          (println "reloading stash 2!")
-                                          (reset! globals/transfer-stash (stash/load-stash-file stash-file)))
+                                          (println "reloading transfer stash!")
+                                          (load-transfer-stash!))
                                         ctx)}])))))

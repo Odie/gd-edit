@@ -12,15 +12,6 @@
             [jansi-clj.core :refer [red green yellow bold black]]))
 
 
-(defn maybe-int
-  [x]
-  (if-not (number? x)
-    x
-    (let [int-x (int x)]
-      (if (== int-x x)
-        int-x
-        x))))
-
 (defn sign
   [number]
   (when number
@@ -185,7 +176,7 @@
 (defn collect-val-range
   [record val-name]
   (let [v (->> (collect-val-range- record val-name)
-             (map maybe-int))]
+             (map u/maybe-int))]
     (if (and (= (count v) 2)
              (= (first v) (second v)))
       (first v)
@@ -335,7 +326,7 @@
 
 (defn lookup-and-resolve
   [record fieldname]
-  (maybe-int (lookup-and-resolve- record fieldname)))
+  (u/maybe-int (lookup-and-resolve- record fieldname)))
 
 (defn effect-name
   [record [k v] components effect]

@@ -128,15 +128,12 @@
 (defn load-character-file
   [savepath]
 
-  (when-not (watcher/tf-watcher-started?)
-    (watcher/load-and-watch-transfer-stash))
-
   (reset! globals/character
           (gdc/load-character-file savepath))
   (reset! globals/last-loaded-character @globals/character)
 
-  (if (not-empty @globals/transfer-stash)
-    (swap! globals/character assoc :transfer-stash (@globals/transfer-stash :stash)))
+  (when-not (watcher/tf-watcher-started?)
+    (watcher/load-and-watch-transfer-stash!))
 
   (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
             (swap! globals/character assoc :quest quest-progress))))

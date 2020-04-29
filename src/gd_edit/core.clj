@@ -473,8 +473,6 @@
 (defn- init-jansi
   []
 
-  (System/setProperty "jline.WindowsTerminal.directConsole" "false")
-
   ;; Enable cross-platform ansi color handling
   (jline/initialize)
   (jansi-clj.core/install!))

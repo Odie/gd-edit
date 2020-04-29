@@ -565,3 +565,12 @@
         (re-pattern (format "(.{1,%d})( +|$\\n?)|(.{1,%d})" size size))
         (clojure.string/replace text #"\n" " "))
        (map second)))
+
+(defn maybe-int
+  [x]
+  (if-not (number? x)
+    x
+    (let [int-x (int x)]
+      (if (== int-x x)
+        int-x
+        x))))
