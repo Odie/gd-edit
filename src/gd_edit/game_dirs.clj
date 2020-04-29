@@ -116,7 +116,9 @@
 
 (defn get-transfer-stash
   []
-  (some #(let [path (io/file % "transfer.gst")]
+  (some #(let [path (-> (io/file %)
+                        (.getParent)
+                        (io/file "transfer.gst"))]
            (when (.exists path)
              path))
         (get-save-dir-search-list)))
