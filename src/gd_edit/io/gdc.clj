@@ -1012,8 +1012,7 @@
              (println "read-block--------------")
              (println "id" id)
              (println "length" length)
-             (println "expected-end-position" expected-end-position)
-             (println "actual-position" (.position bb)))
+             )
 
          ;; Try to read the block
          ;; If a custom read function was provided, use that
@@ -1025,6 +1024,9 @@
              (pprint block-data))
 
          ;; Verify we've reached the expected position
+         _ (when *debug*
+             (println "expected-end-position" expected-end-position)
+             (println "actual position" (.position bb)))
          _ (assert (= expected-end-position (.position bb)))
 
          ;; Verify we have the correct enc-state at this point
@@ -1065,12 +1067,11 @@
          block-end-pos (.position bb)
          block-length (- (.position bb) length-field-pos 4)
          _ (.position bb length-field-pos)
-         _ (.putInt bb (int (bit-and 0x00000000ffffffff (bit-xor block-length length-field-enc-state))))
+         _ (.putInt bb (.intValue (bit-and 0x00000000ffffffff (bit-xor block-length length-field-enc-state))))
          _ (.position bb block-end-pos)
 
          ;; Write the checksum to end the block
-         _ (.putInt bb (int (bit-and 0x00000000ffffffff (:enc-state @context))))]
-     )))
+         _ (.putInt bb (.intValue (bit-and 0x00000000ffffffff (:enc-state @context))))])))
 
 (defn block-strip-meta-info-fields
   [block]

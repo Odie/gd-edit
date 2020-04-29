@@ -17,7 +17,9 @@
          :page 0
          :pagination-size 10}))
 
-(def character (atom{}))
+(def character (atom {}))
 (def last-loaded-character (atom{}))
 
-(def settings (atom{}))
+(def settings (atom {}))
+
+(def transfer-stash (atom {}))

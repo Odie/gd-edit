@@ -8,7 +8,8 @@
             [gd-edit.io.arc :as arc-reader]
             [gd-edit.io.arz :as arz-reader]
             [gd-edit.io.gdc :as gdc]
-            [gd-edit.quest :as quest]))
+            [gd-edit.quest :as quest]
+            [gd-edit.watcher :as watcher]))
 
 (defn character-loaded?
   []
@@ -127,9 +128,15 @@
 (defn load-character-file
   [savepath]
 
+  (when-not (watcher/tf-watcher-started?)
+    (watcher/load-and-watch-transfer-stash))
+
   (reset! globals/character
           (gdc/load-character-file savepath))
   (reset! globals/last-loaded-character @globals/character)
+
+  (if (not-empty @globals/transfer-stash)
+    (swap! globals/character assoc :transfer-stash (@globals/transfer-stash :stash)))
 
   (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
             (swap! globals/character assoc :quest quest-progress))))

@@ -450,12 +450,13 @@
 
   (contains? (get-in @character path) :basename))
 
-(defn- path-is-inventory?
+(defn path-is-inventory?
   [path]
 
-  (and (= (count path) 3)
-       (= (first path) :inventory-sacks)
-       (= (last path) :inventory-items)))
+  (or (and (= (first path) :inventory-sacks)
+           (= (last path) :inventory-items))
+      (and (= (first path) :transfer-stash)
+           (= (last path) :inventory-items))))
 
 (defn place-item-in-inventory!
   [character val-path item]

@@ -136,20 +136,6 @@
             related)
            (conj explored node)))))))
 
-(defn collect-record-effects
-  [record]
-
-  (select-keys record #{"itemNameTag"
-                        "itemText"
-                        "levelRequirement"
-                        "offensivePhysicalMin"
-                        "offensivePhysicalMax"
-                        "augmentSkillLevel1"
-                        })
-  )
-
-
-
 (defn get-at-path
   [character path]
   (->> (str/split path #"/")

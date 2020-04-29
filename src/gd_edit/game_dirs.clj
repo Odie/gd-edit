@@ -114,6 +114,13 @@
     :else
     (clean-list (concat [(get @globals/settings :save-dir) (get-local-save-dir)] (get-steam-cloud-save-dirs)))))
 
+(defn get-transfer-stash
+  []
+  (some #(let [path (io/file % "transfer.gst")]
+           (when (.exists path)
+             path))
+        (get-save-dir-search-list)))
+
 (defn save-dir->mod-save-dir
   [save-dir]
   (-> (io/file save-dir)

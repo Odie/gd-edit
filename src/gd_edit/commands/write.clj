@@ -4,11 +4,11 @@
             [gd-edit.utils :as u]
             [clojure.java.io :as io]
             [jansi-clj.core :refer [red green yellow]]
-
             [clojure.string :as str]
             [gd-edit.globals :as globals]
             [me.raynes.fs :as fs]
-            [gd-edit.io.gdc :as gdc]))
+            [gd-edit.io.gdc :as gdc]
+            [gd-edit.io.stash :as stash]))
 
 
 (defn- get-loadpath
@@ -177,6 +177,22 @@
   (cond
     (not (au/character-loaded?))
     (println "Don't have a character loaded yet!")
+
+    ;; did the user issue a "write stash"?
+    (u/case-insensitive= (first tokens) "stash")
+    ;; Check if the stash is actually different from the old known state
+    (let [new-state (@globals/character :transfer-stash)
+          old-state (@globals/transfer-stash :stash)]
+
+      ;; If so, tell the user we won't do anything
+      (if (= new-state old-state)
+        (println "Transfer stash not saved. Nothing changed.")
+
+        ;; Otherwise, save the data back to where it was read from.
+        (-> @globals/transfer-stash
+            (assoc :stash new-state)
+            (stash/write-stash-file (@globals/transfer-stash :meta-stash-loaded-from)))))
+
 
     ;; Make sure GD isn't running
     (au/is-grim-dawn-running?)

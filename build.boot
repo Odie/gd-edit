@@ -31,7 +31,8 @@
                             [criterium "0.4.4" :scope "test"]
                             [com.rpl/specter "1.1.0"]
                             [instaparse "1.4.10"]
-                            [com.clojure-goes-fast/clj-async-profiler "0.1.0" :scope "test"]])
+                            [com.clojure-goes-fast/clj-async-profiler "0.1.0" :scope "test"]
+                            [hawk "0.2.11"]])
 
 
 

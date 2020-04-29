@@ -7,7 +7,8 @@
             [gd-edit.game-dirs :as dirs]
             [clojure.string :as str]
             [gd-edit.utils :as u]
-            [gd-edit.stack :as stack]))
+            [gd-edit.stack :as stack]
+            [gd-edit.io.stash :as stash]))
 
 (defn- character-manipulation-screen
   []

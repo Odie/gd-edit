@@ -121,8 +121,7 @@
             (commands.item/set-item-handler [input tokens])
 
             ;; Did the user specify the some inventory items collection?
-            (and (= (first val-path) :inventory-sacks)
-                 (= (last val-path) :inventory-items))
+            (commands.item/path-is-inventory? val-path)
             (commands.item/set-item-handler [input tokens])
 
 

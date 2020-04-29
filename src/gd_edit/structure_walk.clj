@@ -85,23 +85,31 @@
            ks ks-all
            actual-path []]
 
+      ;; (println "ks" ks)
+      ;; (println "actual-path" actual-path)
       ;; Which key are we trying to navigate to?
       (let [k (first ks)]
         (cond
-          ;; Did we try navigating into a location that doesn't exist?
-          (nil? cursor)
-          (return-result :not-found ks actual-path)
-
           ;; Did we exhaust all the keys?
           ;; If so, we're done navigating into the hierarchy.
           ;; The cursor should be pointing at the item the user wants
           (nil? k)
-          (return-result :found ks actual-path {:found-item cursor})
+          (do
+            ;; (println "nil k")
+            (return-result :found ks actual-path {:found-item cursor}))
+
+          ;; Did we try navigating into a location that doesn't exist?
+          (nil? cursor)
+          (do
+            ;; (println "nil cursor")
+            (return-result :not-found ks actual-path))
 
           ;; If we have a sequential collection, just try to navigate into
           ;; the collection with the key
           (sequential? cursor)
-          (recur (nav-into cursor k) (rest ks) (conj actual-path (coerce-to-int k)))
+          (do
+            ;; (println "br sequential")
+            (recur (nav-into cursor k) (rest ks) (conj actual-path (coerce-to-int k))))
 
           ;; If we're looking at an associative collection, then we want to
           ;; perform partial matching on the current key
@@ -110,16 +118,23 @@
             (cond
               ;; If we can't get a match at all, we cannot navigate to the key
               (= (count matches) 0)
-              (return-result :not-found (rest ks) actual-path)
+              (do
+                ;; (println "br1")
+                (return-result :not-found (rest ks) actual-path))
 
               ;; If we have more than one match, tell the caller we cannot
               ;; resolve this ambiguity.
               (> (count matches) 1)
-              (return-result :too-many-matches (rest ks) actual-path {:ambiguous-matches matches})
+              (do
+                ;; (println "br2")
+                (return-result :too-many-matches (rest ks) actual-path {:ambiguous-matches matches}))
 
               :else
-              (let [[matched-key matched-value] (first matches)]
-                (recur matched-value (rest ks) (conj actual-path matched-key)))))
+              (do
+                ;; (println "br3")
+                (let [[matched-key matched-value :as matches] (first matches)]
+                  ;; (println "matches" matches)
+                  (recur matched-value (rest ks) (conj actual-path matched-key))))))
 
           :else
           (return-result :cannot-traverse ks actual-path))))))
