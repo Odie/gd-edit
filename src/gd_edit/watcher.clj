@@ -2,7 +2,8 @@
   (:require [gd-edit.globals :as globals]
             [gd-edit.io.stash :as stash]
             [gd-edit.game-dirs :as dirs]
-            [hawk.core :as hawk]))
+            [hawk.core :as hawk]
+            [jansi-clj.core :refer [yellow]]))
 
 (def transfer-stash-watcher (atom {}))
 
@@ -33,6 +34,6 @@
                                         (when (and (#{:create :modify} (:kind e))
                                                    (= stash-file (:file e)))
 
-                                          (println "reloading transfer stash!")
+                                          (println (yellow "Reloading transfer stash contents!"))
                                           (load-transfer-stash!))
                                         ctx)}])))))

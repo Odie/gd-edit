@@ -72,6 +72,38 @@
       [(.renameTo f (io/file backup-path)) backup-path]
       [:nothing-to-backup backup-path])))
 
+(defn- cycle-backup-file
+  [filepath max-backup-count]
+
+  (let [regex #"\.bak([0-9]+)$"
+
+        sibling-files (-> (io/file filepath)
+                          (.getParentFile)
+                          (.listFiles))
+
+        filename (u/last-path-component (str filepath))
+
+        save-backups (->> sibling-files
+                          (filter #(.isFile %1))
+                          (filter #(str/starts-with? (.getName %1) filename))
+                          (filter #(second (re-matches regex (subs (.getName %) (count filename))))))
+
+        missing-backups (->> save-backups
+                             (map #(->> (re-matches regex (subs (.getName %) (count filename)))
+                                        second
+                                        (Integer/parseInt)))
+                             (into #{})
+                             (clojure.set/difference (into #{} (range 1 (inc max-backup-count))))
+                             (sort))
+
+        backup-path (if (not-empty missing-backups)
+                      (io/file (format "%s.bak%d" filepath (first missing-backups)))
+                      (first (sort-by #(.lastModified %) save-backups)))]
+
+    (when (.exists backup-path)
+      (.delete backup-path))
+    [(.renameTo (io/file filepath) (io/file backup-path)) backup-path]))
+
 (defn- write-character-file-after-backup
   [character]
 
@@ -178,24 +210,10 @@
     (not (au/character-loaded?))
     (println "Don't have a character loaded yet!")
 
-    ;; did the user issue a "write stash"?
-    (u/case-insensitive= (first tokens) "stash")
-    ;; Check if the stash is actually different from the old known state
-    (let [new-state (@globals/character :transfer-stashes)
-          old-state (@globals/transfer-stash :stash)]
-
-      ;; If so, tell the user we won't do anything
-      (if (= new-state old-state)
-        (println "Transfer stash not saved. Nothing changed.")
-
-        ;; Otherwise, save the data back to where it was read from.
-        (-> @globals/transfer-stash
-            (assoc :stash new-state)
-            (stash/write-stash-file (@globals/transfer-stash :meta-stash-loaded-from)))))
-
-
     ;; Make sure GD isn't running
-    (au/is-grim-dawn-running?)
+    (and
+     (au/is-character-from-cloud-save? @globals/character)
+     (au/is-grim-dawn-running?))
     (do
       (println "Please quit Grim Dawn before saving the file.")
       (println (red "File not saved!")))
@@ -219,6 +237,59 @@
         :else
         (do
           (println (green "Ok!"))
-          (newline)
-          (println "If you're running steam with cloud saves, please remember to restart steam.")
-          (println "Otherwise, your copied character will not show up in the character selection menu."))))))
+          (when (au/is-character-from-cloud-save? @globals/character)
+            (println "Looks like you're steam with cloud saves, please remember to restart steam.")
+            (println "Otherwise, your copied character will not show up in the character selection menu.")))))))
+
+(defn cycle-backup-and-save-transfer-stash
+  [stash]
+  (let [save-path (:meta-stash-loaded-from stash)
+        [backup-status backup-path] (cycle-backup-file save-path 3)]
+
+    (cond
+      (= backup-status true)
+      (do
+        (println "Save file backed up to:")
+        (u/print-indent 1)
+        (println (yellow backup-path)))
+
+      (= backup-status false)
+      (do
+        (println "Cannot backup file up to:")
+        (u/print-indent 1)
+        (println (yellow backup-path))))
+
+    (println "Saving transfer stash file:" )
+    (u/print-indent 1)
+    (println (yellow save-path))
+
+    (stash/write-stash-file stash (@globals/transfer-stash :meta-stash-loaded-from))))
+
+(defn write-stash-handler
+  [[_ _]]
+
+  (cond
+    (nil? (@globals/character :transfer-stashes))
+    (println "The transfer stash had not been loaded")
+
+    ;; Editing the transfer stash in cloud saves is not supported
+    (au/is-character-from-cloud-save? @globals/character)
+    (do
+      (println "Sorry, saving the transfer stash in cloud saves is not supported.")
+      (println (red "File not saved!")))
+
+    :else
+    ;; Check if the stash is actually different from the old known state
+    (let [new-state (@globals/character :transfer-stashes)
+          old-state (@globals/transfer-stash :stash)]
+
+      ;; If so, tell the user we won't do anything
+      (if (= new-state old-state)
+        (println "Transfer stash not saved. Nothing changed.")
+
+        (do
+          ;; Otherwise, save the data back to where it was read from.
+          (-> @globals/transfer-stash
+              (assoc :stash new-state)
+              (cycle-backup-and-save-transfer-stash))
+          (println (green "Ok!")))))))

@@ -19,26 +19,11 @@
    :choice-map [["r" "reload" (fn [] (au/load-character-file (@globals/character :meta-character-loaded-from)))]
                 ["w" "write" (fn[] (commands.write/write-handler [nil]))]]})
 
-(defn- is-cloud-save?
-  [dir]
-  (not (nil? (some #(str/starts-with? dir %)
-                   (map #(.getParent (io/file %)) (dirs/get-steam-cloud-save-dirs))))))
-
-(defn- is-mod-save?
-  [dir]
-
-  (let [components (u/path-components (str dir))
-        length (count components)]
-    (if (and (u/case-insensitive= (components (- length 3)) "save")
-             (u/case-insensitive= (components (- length 2)) "user"))
-      true
-      false)))
-
 (defn- save-dir-type
   [dir]
 
-  (let [cloud? (is-cloud-save? dir)
-        custom? (is-mod-save? dir)
+  (let [cloud? (au/is-cloud-save-dir? dir)
+        custom? (au/is-mod-save-dir? dir)
         builder (StringBuilder.)]
     (if cloud?
       (.append builder "cloud")

@@ -174,6 +174,8 @@
                "Syntax: write <new-character-name>"
                ""
                "Makes a copy of the currently loaded character."])]
+   ["write stash" "Writes out the transfer stash if it is loaded"]
+   ["ws" "Alias for \"write stash\""]
    ["class" "Displays the classes/masteries of the loaded character"]
    ["class list" "Display classes/masteries known ot the editor"]
    ["class add" "Add a class/mastery by name"]

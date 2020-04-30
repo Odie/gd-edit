@@ -75,6 +75,8 @@
    ["find"]  (fn [input] (commands.find/find-handler input))
    ["load"]  (fn [input] (commands.choose-character/choose-character-handler input))
    ["write"] (fn [input] (commands.write/write-handler input))
+   ["write" "stash"] (fn [input] (commands.write/write-stash-handler input))
+   ["ws"] (fn [input] (commands.write/write-stash-handler input))
    ["class"] (fn [input] (commands.class/class-handler input))
    ["class" "list"] (fn [input] (commands.class/class-list-handler input))
    ["class" "add"]  (fn [input] (commands.class/class-add-handler input))

@@ -2,7 +2,8 @@
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as u]
             [gd-edit.io.gdc :as gdc]
-            [gd-edit.game-dirs :as dirs])
+            [gd-edit.game-dirs :as dirs]
+            )
   (:import  [java.nio ByteBuffer ByteOrder]))
 
 (def ^:dynamic *debug* false)
@@ -15,6 +16,18 @@
   [bb data context]
   (.putInt bb (gdc/encrypt-int data (:enc-state @context))))
 
+(defn struct-block
+  [block-specs]
+  (with-meta block-specs
+    {:struct/type :block}))
+
+(defmethod s/read-spec :block
+  [spec bb _ context]
+  (gdc/read-block bb context spec))
+
+(defmethod s/write-spec :block
+  [spec bb data context]
+  (gdc/write-block bb data context spec))
 
 (def TransferStashItem
   (into gdc/Item
@@ -28,44 +41,22 @@
    :height          :int32
    :inventory-items (s/array TransferStashItem)))
 
-(declare read-block18 write-block18)
-
 (def Block18
   (s/struct-def
-   ;; :version   :int32
-   ;; :unknown   :int32
-   ;; :mod       (s/string :ascii)
-   ;; :stash     (s/array
-   ;;             (block-spec {0 InventorySack}))
-   {:struct/read #'read-block18
-    :struct/write #'write-block18}))
+   :version   :int32
+   :unknown   :int32-
+   :mod       (s/string :ascii)
+   :expansion-status :byte
+   :stash     (s/array
+               (struct-block {0 InventorySack}))))
 
-(defn read-block18
-  [^ByteBuffer bb context]
-
-  (let [version (gdc/read-int! bb context)
-        unknown (read-int-no-update bb context)
-        mod (gdc/read-string! bb context)
-        expansion-status (gdc/read-byte! bb context)
-        stash-count (gdc/read-int! bb context)
-        stash (->>
-               (for [idx (range stash-count)]
-
-                 (gdc/read-block bb context {0 InventorySack}))
-               (into []))]
-    (u/collect-as-map version unknown mod expansion-status stash)))
-
-(defn write-block18
-  [^ByteBuffer bb block context]
-
-  (gdc/write-int! bb (:version block) context)
-  (write-int-no-update bb 0 context)
-  (gdc/write-string! bb (:mod block) context)
-  (gdc/write-byte! bb (:expansion-status block) context)
-  (gdc/write-int! bb (count (:stash block)) context)
-  (doseq [sack (:stash block)]
-    (gdc/write-block bb sack context {0 InventorySack})))
-
+;; The transfer stash file seem to have a
+(defn make-enc-context
+  [& rest]
+  (let [context (apply gdc/make-enc-context rest)]
+    (swap! context update-in [:rw-fns] assoc
+           :int32- [:int32- 4 read-int-no-update write-int-no-update])
+    context))
 
 (defn load-stash-file
   [filepath]
@@ -75,7 +66,7 @@
 
         seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) 1431655765)
         enc-table (gdc/generate-encryption-table seed)
-        enc-context (gdc/make-enc-context seed enc-table)
+        enc-context (make-enc-context seed enc-table)
 
         magic-number (gdc/read-int! bb enc-context)]
     (when (not= magic-number 2)
@@ -93,19 +84,12 @@
 
         seed (:meta-stash-seed stash)
         enc-table (gdc/generate-encryption-table seed)
-        enc-context (gdc/make-enc-context seed enc-table {:direction :write})]
+        enc-context (make-enc-context seed enc-table {:direction :write})]
 
     (.putInt bb (bit-xor seed 1431655765))  ;; enc key
     (gdc/write-int! bb 2 enc-context)       ;; magic number
 
     (gdc/write-block bb stash enc-context {18 Block18})
-    ;; (gdc/write-int! bb 18 enc-context) ;; Block id
-    ;; (write-int-no-update bb 0 enc-context)  ;; Block length
-
-    ;; (s/write-struct Block18 bb stash enc-context) ;; content of the block
-
-    ;; Write the checksum
-    (.putInt bb (.intValue (bit-and 0x00000000ffffffff (:enc-state @enc-context))))
 
     ;; Dump everything to file
     (.flip bb)
@@ -114,9 +98,14 @@
 
 (comment
   (load-stash-file (dirs/get-transfer-stash))
-  (load-stash-file "/Users/Odie/tmp/gd-stash.gst")
+  (with-bindings {#'gd-edit.io.gdc/*debug* true
+                  #'gd-edit.structure/*debug* true}
+    (load-stash-file "/Users/Odie/tmp/gd-stash.gst")
+    )
 
-  (let [stash (load-stash-file "/Volumes/Untitled/Program Files (x86)/Steam/userdata/10000062/219990/remote/save/transfer.gst")]
+  (load-stash-file "/Volumes/Untitled/Users/Odie/Documents/my games/Grim Dawn/save/transfer.gst")
+
+  (let [stash (load-stash-file "/Volumes/Untitled/Users/Odie/Documents/my games/Grim Dawn/save/transfer.gst")]
     (write-stash-file stash "/Users/Odie/tmp/out.gst"))
 
   (load-stash-file "/Users/Odie/tmp/out.gst")
