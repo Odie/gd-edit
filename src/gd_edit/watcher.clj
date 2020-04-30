@@ -15,12 +15,16 @@
   []
   (swap! transfer-stash-watcher #(hawk/stop! %)))
 
+(defn attach-transfer-stash-to-character!
+  []
+  (swap! globals/character assoc :transfer-stashes (@globals/transfer-stash :stash)))
+
 (defn load-transfer-stash!
   []
   (when-let [stash-file (dirs/get-transfer-stash)]
     (reset! globals/transfer-stash (stash/load-stash-file stash-file))
     (when @globals/character
-      (swap! globals/character assoc :transfer-stashes (@globals/transfer-stash :stash)))))
+      (attach-transfer-stash-to-character!))))
 
 (defn load-and-watch-transfer-stash!
   []

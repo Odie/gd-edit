@@ -133,8 +133,9 @@
           (gdc/load-character-file savepath))
   (reset! globals/last-loaded-character @globals/character)
 
-  (when-not (watcher/tf-watcher-started?)
-    (watcher/load-and-watch-transfer-stash!))
+  (if-not (watcher/tf-watcher-started?)
+    (watcher/load-and-watch-transfer-stash!)
+    (watcher/attach-transfer-stash-to-character!))
 
   (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
             (swap! globals/character assoc :quest quest-progress))))
