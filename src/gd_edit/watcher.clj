@@ -37,7 +37,5 @@
                              :handler (fn [ctx e]
                                         (when (and (#{:create :modify} (:kind e))
                                                    (= stash-file (:file e)))
-
-                                          (println (yellow "Reloading transfer stash contents!"))
                                           (load-transfer-stash!))
                                         ctx)}])))))
