@@ -574,3 +574,20 @@
       (if (== int-x x)
         int-x
         x))))
+
+(defn wait-file-stopped-growing
+  [f]
+  (loop [last-length 0]
+    (let [cur-length (.length f)]
+
+      ;; If the current length is the same as the last observed length...
+      (if (and (> cur-length 0)
+               (= cur-length last-length))
+
+        ;; We'll say that the file has stopped growing...
+        :done
+
+        ;; Otherwise, wait a little longer and try again
+        (do
+          (Thread/sleep 100)
+          (recur cur-length))))))

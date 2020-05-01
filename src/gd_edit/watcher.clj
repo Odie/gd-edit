@@ -49,6 +49,7 @@
                                :handler (fn [ctx e]
                                           (when (and (#{:create :modify} (:kind e))
                                                      (= stash-file (:file e)))
+                                            (u/wait-file-stopped-growing stash-file)
                                             (load-transfer-stash! stash-file))
                                           ctx)}]))))))
 

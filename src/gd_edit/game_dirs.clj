@@ -213,8 +213,8 @@
     (get-db-file-overrides)
 
     (->> (get-file-override-dirs)
-         (filter u/path-exists?)
          (map #(io/file % relative-path))
+         (filter #(u/path-exists? %))
          (into []))))
 
 (defn looks-like-game-dir
