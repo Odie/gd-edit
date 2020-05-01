@@ -114,15 +114,6 @@
     :else
     (clean-list (concat [(get @globals/settings :save-dir) (get-local-save-dir)] (get-steam-cloud-save-dirs)))))
 
-(defn get-transfer-stash
-  []
-  (some #(let [path (-> (io/file %)
-                        (.getParent)
-                        (io/file "transfer.gst"))]
-           (when (.exists path)
-             path))
-        (get-save-dir-search-list)))
-
 (defn save-dir->mod-save-dir
   [save-dir]
   (-> (io/file save-dir)
@@ -233,3 +224,20 @@
            (u/path-exists? (io/file path localization-file)))
     true
     false))
+
+;;------------------------------------------------------------------------------
+;; Transfer stash
+;;------------------------------------------------------------------------------
+(defn get-transfer-stash
+  [character]
+
+  (let [hc? (:hardcore-mode character)
+        target-dir (or (get-mod-dir)
+                       (->> (get-save-dir-search-list)
+                            (map #(.getParentFile (io/file %)))
+                            (some (fn [path] (when (or (.exists (io/file path "transfer.gst"))
+                                                       (.exists (io/file path "transfer.gsh")))
+                                               path)))))]
+    (if hc?
+      (io/file target-dir "transfer.gsh")
+      (io/file target-dir "transfer.gst"))))

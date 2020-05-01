@@ -2,8 +2,7 @@
   (:require [gd-edit.structure :as s]
             [gd-edit.utils :as u]
             [gd-edit.io.gdc :as gdc]
-            [gd-edit.game-dirs :as dirs]
-            )
+            [gd-edit.game-dirs :as dirs])
   (:import  [java.nio ByteBuffer ByteOrder]))
 
 (def ^:dynamic *debug* false)

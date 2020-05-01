@@ -126,20 +126,6 @@
       ;; Reload game db using the new game directory.
       (load-db-in-background))))
 
-(defn load-character-file
-  [savepath]
-
-  (reset! globals/character
-          (gdc/load-character-file savepath))
-  (reset! globals/last-loaded-character @globals/character)
-
-  (if-not (watcher/tf-watcher-started?)
-    (watcher/load-and-watch-transfer-stash!)
-    (watcher/attach-transfer-stash-to-character!))
-
-  (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
-            (swap! globals/character assoc :quest quest-progress))))
-
 (defn is-cloud-save-dir?
   [dir]
   (not (nil? (some #(str/starts-with? dir %)
@@ -158,3 +144,21 @@
 (defn is-character-from-cloud-save?
   [character]
   (is-cloud-save-dir? (:meta-character-loaded-from character)))
+
+(defn load-character-file
+  [savepath]
+
+  (reset! globals/character
+          (gdc/load-character-file savepath))
+  (reset! globals/last-loaded-character @globals/character)
+
+  (when (not= (watcher/loaded-stash-filepath)
+              (dirs/get-transfer-stash @globals/character))
+    (watcher/tf-watcher-stop!))
+
+  (if-not (watcher/tf-watcher-started?)
+    (watcher/load-and-watch-transfer-stash!)
+    (watcher/attach-transfer-stash-to-character!))
+
+  (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
+            (swap! globals/character assoc :quest quest-progress))))
