@@ -3,7 +3,8 @@
             [gd-edit.io.stash :as stash]
             [gd-edit.game-dirs :as dirs]
             [hawk.core :as hawk]
-            [jansi-clj.core :refer [yellow]]))
+            [jansi-clj.core :refer [yellow]]
+            [gd-edit.utils :as u]))
 
 (def transfer-stash-watcher (atom {}))
 
@@ -17,7 +18,9 @@
 
 (defn tf-watcher-stop!
   []
-  (swap! transfer-stash-watcher #(hawk/stop! %)))
+  (when (tf-watcher-started?)
+    (swap! transfer-stash-watcher #(hawk/stop! %))))
+
 
 (defn attach-transfer-stash-to-character!
   []
@@ -34,11 +37,23 @@
 
   (when-not (tf-watcher-started?)
     (when-let [stash-file (dirs/get-transfer-stash @globals/character)]
-      (load-transfer-stash! stash-file)
-      (reset! transfer-stash-watcher
-              (hawk/watch! [{:paths [(.getParentFile stash-file)]
-                             :handler (fn [ctx e]
-                                        (when (and (#{:create :modify} (:kind e))
-                                                   (= stash-file (:file e)))
-                                          (load-transfer-stash! stash-file))
-                                        ctx)}])))))
+      ;; (println "stash-file" stash-file)
+      (when (.exists stash-file)
+        (println "Loading stash file:")
+        (u/print-indent 1)
+        (println (yellow (str stash-file)))
+        (load-transfer-stash! stash-file))
+      (when (.exists (.getParentFile stash-file))
+        (reset! transfer-stash-watcher
+                (hawk/watch! [{:paths [(.getParentFile stash-file)]
+                               :handler (fn [ctx e]
+                                          (when (and (#{:create :modify} (:kind e))
+                                                     (= stash-file (:file e)))
+                                            (load-transfer-stash! stash-file))
+                                          ctx)}]))))))
+
+(defn tf-watcher-restart!
+  []
+  (when (tf-watcher-started?)
+    (tf-watcher-stop!))
+  (load-and-watch-transfer-stash!))

@@ -4,7 +4,14 @@
             [gd-edit.stack :as stack]
             [gd-edit.app-util :as au]
             [gd-edit.game-dirs :as dirs]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [gd-edit.watcher :as watcher]))
+
+(defn- on-mod-change
+  []
+
+  (au/load-db-in-background)
+  (watcher/tf-watcher-restart!))
 
 (defn- mod-selection-screen
   []
@@ -28,8 +35,7 @@
                                  ;; Update the global state and save the settings file
                                  (swap! globals/settings assoc :moddir (str moddir))
 
-                                 ;; Reload the database
-                                 (au/load-db-in-background)
+                                 (on-mod-change)
 
                                  (stack/pop! globals/menu-stack)
                                  )])))
@@ -55,7 +61,6 @@
 
   (swap! globals/settings dissoc :moddir)
 
-  ;; Reload the database
-  (au/load-db-in-background)
+  (on-mod-change)
 
   (println "Ok!"))
