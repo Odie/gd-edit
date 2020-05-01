@@ -23,7 +23,8 @@
              [set :as commands.set]
              [show :as commands.show]
              [update :as commands.update]
-             [write :as commands.write]]
+             [write :as commands.write]
+             [batch :as commands.batch]]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.jline :as jl]
@@ -38,6 +39,8 @@
             [gd-edit.jline :as jline])
   (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
+
+(def ^:dynamic *commands* (atom (list)))
 
 (defn- strip-quotes
   "Strip quotes from a string"
@@ -56,7 +59,21 @@
 (defn repl-read
   []
   ;; Read a line
-  (tokenize-input (jl/readline (green "> "))))
+
+  (tokenize-input
+   (cond
+     ;; Grab a command from the *commands* list if available
+     (not-empty @*commands*)
+     (do
+       (print (green "> "))
+       (let [line (first @*commands*)]
+         (println line)
+         (swap! *commands* rest)
+         line))
+
+     ;; otherwise, try to get a command from the commandline
+     :else
+     (jl/readline (green "> ")))))
 
 (defn split-at-space
   [str]
@@ -94,6 +111,7 @@
    ["update"]  (fn [input] (commands.update/update-handler input))
    ["help"]    (fn [input] (commands.help/help-handler input))
    ["diag"]    (fn [input] (commands.diag/diag-handler input))
+   ["batch"]    (fn [input] (commands.batch/batch-handler input))
    ["swap-variant"] (fn [input] (commands.item/swap-variant-handler input))})
 
 (defn- find-command
@@ -225,7 +243,29 @@
   (repl-eval (repl-read) command-map)
   (println))
 
-(defn- repl
+(defn handle-repl-exceptions
+  [e]
+  (let [data (ex-data e)]
+    (cond
+      (= (:cause data) :db-not-loaded)
+      (do
+        (println (red "Oops!"))
+        (println "This command requires some game data to function correctly.")
+        (println "Please help the editor find the game installation directory using the 'gamedir' command.")
+        (println "See 'help gamedir' for more info.")
+        (newline))
+
+      ;; The exception has no additional data attached...
+      ;; Print out the stacktrace so it can be diagnosed by *somebody*
+      :else
+      (do
+        (println "Caught exception:" (.getMessage e))
+        (print-stack-trace e)
+        (newline)
+
+        (t/info e)))))
+
+(defn repl
   []
 
   (while true
@@ -236,25 +276,21 @@
 
       ;; Handle potential errors
       (catch Exception e
-        (let [data (ex-data e)]
-          (cond
-            (= (:cause data) :db-not-loaded)
-            (do
-              (println (red "Oops!"))
-              (println "This command requires some game data to function correctly.")
-              (println "Please help the editor find the game installation directory using the 'gamedir' command.")
-              (println "See 'help gamedir' for more info.")
-              (newline))
+        (handle-repl-exceptions e)))))
 
-            ;; The exception has no additional data attached...
-            ;; Print out the stacktrace so it can be diagnosed by *somebody*
-            :else
-            (do
-              (println "Caught exception:" (.getMessage e))
-              (print-stack-trace e)
-              (newline)
+(defn batch-repl
+  [commands]
 
-              (t/info e))))))))
+  (with-bindings {#'*commands* (atom commands)}
+    (while (not-empty @*commands*)
+        (try
+
+          ;; Run a repl iteration
+          (repl-iter)
+
+          ;; Handle potential errors
+          (catch Exception e
+            (handle-repl-exceptions e))))))
 
 (declare startup-sanity-checks print-build-info log-build-info)
 

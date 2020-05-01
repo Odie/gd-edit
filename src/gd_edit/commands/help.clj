@@ -222,7 +222,14 @@
                "\tbasename, prefix, suffix."
                "If a target type isn't specified, it's assumed that the user wants to"
                "change the basename of the item."])]
-   ])
+
+   ["batch" "Executes commands in a batch file"
+    (str/join "\n"
+              ["Syntax: batch <path-to-batch-file>"
+               ""
+               "The batch file can contain any command the editor is able to deal with."
+               "After running through the commands, control will return back to the"
+               "command-prompt."])]])
 
 (defn detail-help-text
   [help-item]
