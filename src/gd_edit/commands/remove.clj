@@ -9,14 +9,6 @@
             [gd-edit.utils :as u]
             [jansi-clj.core :refer [red yellow]]))
 
-(defn keywords->path
-  [ks]
-  (->> ks
-       (map #(if (keyword? %)
-               (name %)
-               %))
-       (str/join "/" )))
-
 (defn remove-handler
   [[_ [path :as tokens]]]
 
@@ -63,7 +55,7 @@
                (sequential? target))
           (do
             (swap! globals/character #(s/transform actual-path empty %))
-            (println (yellow (format "Removed %d items from \"%s\"" (count target) (keywords->path target-path)))))
+            (println (yellow (format "Removed %d items from \"%s\"" (count target) (u/keywords->path target-path)))))
 
           ;; Can't remove the array itself
           (sequential? target)
@@ -72,19 +64,19 @@
           (= kase :no-remove)
           (println (red "Sorry,")
                    (format "\"%s\" cannot be removed"
-                           (keywords->path actual-path)))
+                           (u/keywords->path actual-path)))
 
           (= kase :fixed-length)
           (println (red "Sorry,")
                    (format "\"%s\" needs to be fixed to length of %d"
-                           (keywords->path parent-path)
+                           (u/keywords->path parent-path)
                            (count parent)))
 
           ;; Want to remove a single item?
           (map? found-item)
           (do
             (swap! globals/character #(s/setval actual-path s/NONE %))
-            (println (yellow (format "Removed item at \"%s\"" (keywords->path target-path)))))
+            (println (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
 
 
           :else

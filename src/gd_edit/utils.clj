@@ -315,6 +315,13 @@
     (when-let [idx (str/last-index-of filename ".")]
       (subs filename 0 idx))))
 
+(defn keywords->path
+  [ks]
+  (->> ks
+       (map #(if (keyword? %)
+               (name %)
+               %))
+       (str/join "/" )))
 
 ;;------------------------------------------------------------------------------
 ;; Core lib extensions

@@ -248,7 +248,17 @@
                ""
                "The batch file can contain any command the editor is able to deal with."
                "After running through the commands, control will return back to the"
-               "command-prompt."])]])
+               "command-prompt."])]
+
+
+   ["batch item" "Batch creates several copies of the specified item"
+    (str/join "\n"
+              ["Syntax: batch item <path-to-place-items> <name of item> <optional max-item-level>"
+               ""
+               "If it is possible to create the specified item, this command will place as many"
+               "copies as it is possible to fit into specified container."
+               ""
+               "Note that the expected parameters are the same as the item creation variant of \"set\"."])]])
 
 (defn detail-help-text
   [help-item]

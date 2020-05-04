@@ -115,6 +115,7 @@
    ["help"]    (fn [input] (commands.help/help-handler input))
    ["diag"]    (fn [input] (commands.diag/diag-handler input))
    ["batch"]    (fn [input] (commands.batch/batch-handler input))
+   ["batch" "item"]    (fn [input] (commands.item/batch-item-handler input))
    ["swap-variant"] (fn [input] (commands.item/swap-variant-handler input))})
 
 (defn- find-command

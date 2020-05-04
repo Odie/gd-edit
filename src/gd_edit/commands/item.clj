@@ -538,6 +538,44 @@
             (printer/show-item item))
           (println "Sorry, there is" (red "no room") "to fit the item."))))))
 
+(defn batch-items!
+  [item inv-path]
+  (loop [item item]
+    (if-let [placed-item (place-item-in-inventory! globals/character inv-path item)]
+      (recur (assoc item :seed (rand-int Integer/MAX_VALUE))))))
+
+(defn batch-item-handler
+  [[input [path target-name level-cap-str]]]
+
+  ;; Do some sanity checks before we try creating and placing an item
+  (if-let [result (->> (item-at-fuzzy-path @globals/character path)
+                       (item-located-or-print-error))]
+    (let [{:keys [actual-path]} result
+          level-cap (when (some? level-cap-str)
+                      (Integer/parseInt level-cap-str))
+
+          ;; Try to construct the requested item
+          item (construct-item target-name (dbu/db) (dbu/db-recordname-index) level-cap)]
+
+      ;; If construction was not successful, inform the user and abort
+      (cond
+        (nil? item)
+        (println "Sorry, the item could not be constructed")
+
+        (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
+        (do
+          (printer/show-item item)
+          (println "Sorry, the item generated doesn't look like the item you asked for.")
+          (println (red "Item not altered")))
+
+        ;; Otherwise, put the item into the character sheet
+        :else
+        (let [before (get-in @globals/character actual-path)
+              _ (batch-items! item actual-path)
+              after (get-in @globals/character actual-path)]
+          (printer/show-item item)
+          (println)
+          (println "Placed" (yellow (- (count after) (count before))) "items into" (u/keywords->path actual-path)))))))
 
 
 (defn- swap-variant-screen
