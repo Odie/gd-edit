@@ -109,6 +109,8 @@
                " of the item as well as any related db records."
                ])]
 
+   ["ls"  "Alias for \"show\""]
+
    ["set"   "Set fields in the save file"
     (str/join "\n"
               ["Syntax: set <partially matched path to field> <new value>"
@@ -141,6 +143,23 @@
                " into consideration of the character that has currently been loaded."
                " "
                ])]
+
+   ["remove" "Removes an item from the specified collection"
+    (str/join "\n"
+              ["Syntax: remove <partially matched path to item>"
+               ""
+               "Example 1:"
+               " remove inv/0/items/0"
+               ""
+               " This removes the first listed item in the first inventory bag"
+               ""
+               "Example 2:"
+               " remove inv/0/items/*"
+               ""
+               " This removes all the items in the first inventory bag"
+               ])]
+
+   ["rm" "Alias for \"remove\""]
 
    ["find" "Find some character data by name"
     (str/join "\n"

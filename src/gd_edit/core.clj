@@ -24,7 +24,8 @@
              [show :as commands.show]
              [update :as commands.update]
              [write :as commands.write]
-             [batch :as commands.batch]]
+             [batch :as commands.batch]
+             [remove :as commands.remove]]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.jline :as jl]
@@ -89,6 +90,8 @@
    ["show"]  (fn [input] (commands.show/show-handler input))
    ["ls"]    (fn [input] (commands.show/show-handler input))
    ["set"]   (fn [input] (commands.set/set-handler input))
+   ["remove"] (fn [input] (commands.remove/remove-handler input))
+   ["rm"] (fn [input] (commands.remove/remove-handler input))
    ["find"]  (fn [input] (commands.find/find-handler input))
    ["load"]  (fn [input] (commands.choose-character/choose-character-handler input))
    ["write"] (fn [input] (commands.write/write-handler input))

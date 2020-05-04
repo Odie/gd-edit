@@ -31,6 +31,29 @@
                      (classname actual-path-item)
                      (str/join "/" (:longest-path result))))))
 
+(defn print-traverse-walk-error-or-true
+  [path-keys {:keys [status] :as result}]
+  (cond
+    (= status :not-found)
+    (println "No matches found")
+
+    (= status :too-many-matches)
+    (if ;; If we were able to match the entire path, but arrived at multiple entries
+        (= (count (:longest-path result)) (count path-keys))
+
+      ;; Show all matched entries
+      (printer/print-map (into {} (:ambiguous-matches result)))
+
+      ;; If we stopped before matching the entire path, that means
+      ;; we had trouble stepping into one of the given items
+      (sw/print-ambiguous-walk-result result))
+
+    (= status :cannot-traverse)
+    (print-cannot-traverse-walk-result result)
+
+    :else
+    true))
+
 (defn show-handler
   [[input tokens]]
 
@@ -53,29 +76,11 @@
           result (sw/walk @globals/character path-keys)
           {:keys [status found-item]} result]
 
-      (cond
-        (= status :not-found)
-        (println "No matches found")
-
-        (= status :too-many-matches)
-        (if ;; If we were able to match the entire path, but arrived at multiple entries
-            (= (count (:longest-path result)) (count path-keys))
-
-          ;; Show all matched entries
-          (printer/print-map (into {} (:ambiguous-matches result)))
-
-          ;; If we stopped before matching the entire path, that means
-          ;; we had trouble stepping into one of the given items
-          (sw/print-ambiguous-walk-result result))
-
-        (= status :cannot-traverse)
-        (print-cannot-traverse-walk-result result)
-
-        :else
-        (do
-          ;; Print the path to the entry being shown
-          ;; This helps the user verify what they're looking at is what is asked for.
-          (println (->> (:actual-path result)
-                        (map u/keyword->str)
-                        (str/join "/")))
-          (printer/print-object found-item (:actual-path result)))))))
+      (when
+        (print-traverse-walk-error-or-true path-keys result)
+        ;; Print the path to the entry being shown
+        ;; This helps the user verify what they're looking at is what is asked for.
+        (println (->> (:actual-path result)
+                      (map u/keyword->str)
+                      (str/join "/")))
+        (printer/print-object found-item (:actual-path result))))))

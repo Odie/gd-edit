@@ -5,6 +5,7 @@
           :source-paths   #{"test"}
           :dependencies   '[[org.clojure/clojure "1.9.0"]
                             [org.clojure/tools.namespace "0.2.11" :scope "test"]
+                            [org.clojure/core.match "1.0.0"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
                             [jline/jline "2.14.5"]
                             [org.fusesource.jansi/jansi "1.16"]
