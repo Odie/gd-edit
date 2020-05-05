@@ -126,24 +126,7 @@
       ;; Reload game db using the new game directory.
       (load-db-in-background))))
 
-(defn is-cloud-save-dir?
-  [dir]
-  (not (nil? (some #(str/starts-with? dir %)
-                   (map #(.getParent (io/file %)) (dirs/get-steam-cloud-save-dirs))))))
 
-(defn is-mod-save-dir?
-  [dir]
-
-  (let [components (u/path-components (str dir))
-        length (count components)]
-    (if (and (u/case-insensitive= (components (- length 3)) "save")
-             (u/case-insensitive= (components (- length 2)) "user"))
-      true
-      false)))
-
-(defn is-character-from-cloud-save?
-  [character]
-  (is-cloud-save-dir? (:meta-character-loaded-from character)))
 
 (defn load-character-file
   [savepath]

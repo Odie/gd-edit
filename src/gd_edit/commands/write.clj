@@ -8,7 +8,8 @@
             [gd-edit.globals :as globals]
             [me.raynes.fs :as fs]
             [gd-edit.io.gdc :as gdc]
-            [gd-edit.io.stash :as stash]))
+            [gd-edit.io.stash :as stash]
+            [gd-edit.game-dirs :as dirs]))
 
 
 (defn- get-loadpath
@@ -212,7 +213,7 @@
 
     ;; Make sure GD isn't running
     (and
-     (au/is-character-from-cloud-save? @globals/character)
+     (dirs/is-character-from-cloud-save? @globals/character)
      (au/is-grim-dawn-running?))
     (do
       (println "Please quit Grim Dawn before saving the file.")
@@ -237,7 +238,7 @@
         :else
         (do
           (println (green "Ok!"))
-          (when (au/is-character-from-cloud-save? @globals/character)
+          (when (dirs/is-character-from-cloud-save? @globals/character)
             (println "Looks like you're steam with cloud saves, please remember to restart steam.")
             (println "Otherwise, your copied character will not show up in the character selection menu.")))))))
 
@@ -273,7 +274,7 @@
     (println "The transfer stash had not been loaded")
 
     ;; Editing the transfer stash in cloud saves is not supported
-    (au/is-character-from-cloud-save? @globals/character)
+    (dirs/is-character-from-cloud-save? @globals/character)
     (do
       (println "Sorry, saving the transfer stash in cloud saves is not supported.")
       (println (red "File not saved!")))

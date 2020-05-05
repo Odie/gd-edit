@@ -22,8 +22,8 @@
 (defn- save-dir-type
   [dir]
 
-  (let [cloud? (au/is-cloud-save-dir? dir)
-        custom? (au/is-mod-save-dir? dir)
+  (let [cloud? (dirs/is-cloud-save-dir? dir)
+        custom? (dirs/is-mod-save-dir? dir)
         builder (StringBuilder.)]
     (if cloud?
       (.append builder "cloud")

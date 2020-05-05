@@ -4,7 +4,8 @@
             [gd-edit.globals :as globals]
             [gd-edit.vdf-parser :as vdf]
             [com.rpl.specter :as specter]
-            [taoensso.timbre :as t])
+            [taoensso.timbre :as t]
+            [clojure.string :as str])
   (:import [com.sun.jna.platform.win32 WinReg Advapi32Util]))
 
 (declare looks-like-game-dir)
@@ -225,6 +226,26 @@
     true
     false))
 
+(defn is-cloud-save-dir?
+  [dir]
+  (->> (get-steam-cloud-save-dirs)
+       (map #(.getParent (io/file %)))
+       (some #(str/starts-with? dir %))))
+
+(defn is-mod-save-dir?
+  [dir]
+  (->> (get-save-dir-search-list)
+       (map save-dir->mod-save-dir)
+       (some #(str/starts-with? dir %))))
+
+(defn is-character-from-cloud-save?
+  [character]
+  (is-cloud-save-dir? (:meta-character-loaded-from character)))
+
+(defn is-character-from-mod-save?
+  [character]
+  (is-mod-save-dir? (:meta-character-loaded-from character)))
+
 ;;------------------------------------------------------------------------------
 ;; Transfer stash
 ;;------------------------------------------------------------------------------
@@ -240,7 +261,8 @@
                             (map #(.getParentFile (io/file %))))
 
                      ;; If a mod is active, navigate to its directory
-                     (not-empty(get-mod-dir))
+                     (and (is-character-from-mod-save? character)
+                          (not-empty(get-mod-dir)))
                      (map #(io/file % (u/last-path-component (:moddir @globals/settings))))
 
                      ;; Grab the first item that has the stash file we're looking for
