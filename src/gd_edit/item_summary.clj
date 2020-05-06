@@ -274,6 +274,7 @@
                  "lifeMonitorPercent"
                  "damageAbsorptionPercent"
                  "damageAbsorptionReflectPercent"
+                 "piercingProjectile"
                  }
                keyname)
               (contains? #{:character :defensive :offensive :skill :retaliation :projectile :spark :conversion} (first components))
@@ -492,6 +493,7 @@
    "offensiveTotalDamageModifier" ["%s to All Damage" [:signed :percentage]]
    "petBurstSpawn" ["%s Summon" [:signed]]
    "petLimit" ["%s Summon Limit"]
+   "piercingProjectile" [(str "%s Chance to passthrough Enemies " (red "(Hidden)")) [:percentage]]
    "projectileExplosionRadius" ["%s Meter Radius"]
    "projectileLaunchNumber" ["%s Projectile(s)"]
    "projectilePiercingChance" ["%s Chance to passthrough Enemies" [:percentage]]
@@ -501,7 +503,7 @@
    "skillCooldownReduction" ["%s Skill Cooldown Reduction" [:signed :percentage]]
    "skillCooldownTime" ["%s Second Skill Recharge"]
    "skillActiveManaCost" ["%s Active Energy Cost per Second" ]
-   "skillChargeDuration" ["%s Second Charge Level Duration"]
+   "skillChargeDuration" [(str "%s Second Charge Level Duration " (red "(Hidden)"))]
    "skillManaCost" ["%s Energy Cost"]
    "skillManaCostReduction" ["%s Skill Energy Cost" [:signed :percentage :negative]]
    "skillTargetRadius" ["%s Meter Target Area"]
@@ -595,7 +597,7 @@
           (= k "skillChargeLevel")
           (format "%s Charge Levels: %s"
                   v
-                  (->> (lookup-and-resolve record "skillChargeMultipliers")
+                  (->> (record "skillChargeMultipliers")
                        (map #(percentage %))
                        (str/join ", ")))
           (= k "skillChargeMultipliers") nil
