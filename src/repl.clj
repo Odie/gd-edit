@@ -143,6 +143,8 @@
        :found-item))
 
 (comment
+  (require '[gd-edit.core :as core])
+
   (init)
 
   (load-character "Odie")

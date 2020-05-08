@@ -33,7 +33,7 @@
   (let [loadpath (get-loadpath character)
         savepath (get-savepath character)]
 
-    (if (= loadpath savepath)
+    (if (= (str loadpath) (str savepath))
       :rename-not-needed
 
       (if (.renameTo (-> (io/file loadpath)
@@ -178,16 +178,24 @@
   (reset! globals/character (write-character-file @globals/character)))
 
 (defn write-separate-copy
-  [character new-name]
+  [character new-name mod?]
 
   (let [from-char-dir-file (-> (get-savepath character)
                                (io/file)
                                (.getParentFile))
 
         modified-character (assoc character :character-name new-name)
-        to-char-dir-file (-> (get-savepath modified-character)
-                             (io/file)
-                             (.getParentFile))]
+
+        ;; Change the character file directory
+        to-char-dir-file (cond-> (get-savepath modified-character)
+                           mod?
+                           dirs/save-dir->mod-save-dir
+
+                           :then
+                           (io/file)
+
+                           :then
+                           (.getParentFile))]
 
     (if (.exists to-char-dir-file)
       [:new-path-already-exists (str to-char-dir-file)]
@@ -198,10 +206,7 @@
 
         ;; Write out the character to the new location
         (gd-edit.io.gdc/write-character-file modified-character
-                                                 (-> modified-character
-                                                     (get-savepath)
-                                                     (io/file)
-                                                     (.getCanonicalPath)))
+                                             (io/file to-char-dir-file "player.gdc"))
         [:done (str to-char-dir-file)]))))
 
 (defn write-handler
@@ -227,7 +232,20 @@
     ;; The user supplied some parameter with the command...
     ;; Try to write out a new copy of the character
     :else
-    (let [[status savepath] (write-separate-copy @globals/character (first tokens))]
+    (let [[new-character-name mod?] tokens
+
+          mod? (if (= "mod" mod?)
+                 true
+                 false)
+
+          ;; The user asked to copy a character as a mod character?
+          ;; We need to make some changes to the character for this to work...
+          _ (when mod?
+              ;; Always reset the in-main-quest flag.
+              ;; This appears to allow whatever carry quest progress into the mod.
+              (swap! globals/character #(update % :in-main-quest (constantly false))))
+
+          [status savepath] (write-separate-copy @globals/character new-character-name mod?)]
       (cond
         (= status :new-path-already-exists)
         (do

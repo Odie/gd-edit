@@ -117,10 +117,16 @@
 
 (defn save-dir->mod-save-dir
   [save-dir]
-  (-> (io/file save-dir)
-      (.getParentFile)
-      (io/file "user")
-      (.getAbsolutePath)))
+  (let [p (u/filepath->components (str save-dir))
+        target-idx (.lastIndexOf p "main")
+        p (if (not= target-idx -1)
+            (assoc p target-idx "user")
+            p)]
+    (cond-> (->> p
+                 u/components->filepath
+                 io/file)
+      (not= java.io.File (type save-dir))
+      (.getAbsolutePath))))
 
 (defn get-all-save-file-dirs
   []

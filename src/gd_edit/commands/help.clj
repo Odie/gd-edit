@@ -190,9 +190,11 @@
                ""
                "Writes out the currently loaded character."
                ""
-               "Syntax: write <new-character-name>"
+               "Syntax: write <new-character-name> <optional \"mod\">"
                ""
-               "Makes a copy of the currently loaded character."])]
+               "Makes a copy of the currently loaded character."
+               "If the the optional \"mod\" flag is added, the character will be saved as a"
+               "mod character"])]
    ["write stash" "Writes out the transfer stash if it is loaded"]
    ["ws" "Alias for \"write stash\""]
    ["class" "Displays the classes/masteries of the loaded character"]
