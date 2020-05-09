@@ -8,7 +8,8 @@
             [clojure.string :as str]
             [gd-edit.utils :as u]
             [gd-edit.stack :as stack]
-            [gd-edit.io.stash :as stash]))
+            [gd-edit.io.stash :as stash]
+            [gd-edit.printer :as printer]))
 
 (defn- character-manipulation-screen
   []
@@ -19,20 +20,16 @@
    :choice-map [["r" "reload" (fn [] (au/load-character-file (@globals/character :meta-character-loaded-from)))]
                 ["w" "write" (fn[] (commands.write/write-handler [nil]))]]})
 
-(defn- save-dir-type
-  [dir]
-
-  (let [cloud? (dirs/is-cloud-save-dir? dir)
-        custom? (dirs/is-mod-save-dir? dir)
-        builder (StringBuilder.)]
-    (if cloud?
-      (.append builder "cloud")
-      (.append builder "local"))
-    (when custom?
-      (.append builder " custom"))
-    (.toString builder)))
 
 (declare character-manipulation-screen!)
+
+(defn- load-character-file
+  [savepath]
+  (println "Loading from:")
+  (u/print-indent 1)
+  (println (yellow savepath))
+  (au/load-character-file savepath)
+  (character-manipulation-screen!))
 
 (defn- character-selection-screen
   []
@@ -59,15 +56,10 @@
                                        (if (= \_ (first char-name))
                                          (subs char-name 1)
                                          char-name))
-                                     (save-dir-type dir))         ; menu display string
+                                     (dirs/save-dir-type dir))         ; menu display string
                              (fn []                               ; function to run when selected
                                (let [savepath (.getPath (io/file dir "player.gdc"))]
-                                 (println "Loading from:")
-                                 (u/print-indent 1)
-                                 (println (yellow savepath))
-                                 (au/load-character-file savepath)
-                                 (character-manipulation-screen!))
-                               )])))
+                                 (load-character-file savepath)))])))
                   []
                   (map-indexed vector save-dirs))}))
 
@@ -75,7 +67,46 @@
 (defn character-manipulation-screen! [] (stack/replace-last! gd-edit.globals/menu-stack (character-manipulation-screen)))
 
 (defn choose-character-handler
-  [[input tokens]]
+  [[input [param]]]
 
-  (reset! globals/character (empty @globals/character))
-  (character-selection-screen!))
+  ;; Did the user provide a parameter?
+  (if param
+
+    (let [result
+          (or
+           ;; The param might be a filepath to the save file
+           (let [character-filepath param
+                 character-file (io/file character-filepath)]
+             (when (and (.exists character-file)
+                        (.isFile character-file))
+               (load-character-file character-file)))
+
+           ;; The param might be a character name
+           (let [character-name param
+                 characters (au/locate-character-files param)]
+             (cond
+               (zero? (count characters))
+               (println (red "Sorry,") (format "cannot find a character named \"%s\"" character-name))
+
+               (> (count characters) 1)
+               (do
+                 (println (red "Sorry,") "there is more than one character with that name at:")
+                 (doseq [f characters]
+                   (u/print-indent 1)
+                   (println (yellow f))))
+
+               :else
+               (load-character-file (first characters)))))])
+
+    ;; The user did not provide a name or a path
+    ;; Show a menu to let the user choose from
+    (do
+      (reset! globals/character (empty @globals/character))
+      (character-selection-screen!))))
+
+(defn choose-or-manipulate-character-screen!
+  []
+
+  (if (empty? @globals/character)
+    (character-selection-screen!)
+    (character-manipulation-screen!)))

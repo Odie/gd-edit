@@ -252,6 +252,19 @@
   [character]
   (is-mod-save-dir? (:meta-character-loaded-from character)))
 
+(defn save-dir-type
+  [dir]
+
+  (let [cloud? (is-cloud-save-dir? dir)
+        custom? (is-mod-save-dir? dir)
+        builder (StringBuilder.)]
+    (if cloud?
+      (.append builder "cloud")
+      (.append builder "local"))
+    (when custom?
+      (.append builder " custom"))
+    (.toString builder)))
+
 ;;------------------------------------------------------------------------------
 ;; Transfer stash
 ;;------------------------------------------------------------------------------

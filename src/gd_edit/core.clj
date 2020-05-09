@@ -25,7 +25,8 @@
              [update :as commands.update]
              [write :as commands.write]
              [batch :as commands.batch]
-             [remove :as commands.remove]]
+             [remove :as commands.remove]
+             [delete :as commands.delete]]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.jline :as jl]
@@ -36,8 +37,7 @@
             [taoensso.timbre.appenders.core :as appenders]
             [clojure.pprint :refer [pprint]]
             [clojure.stacktrace :refer [print-stack-trace]]
-            [gd-edit.app-util :as au]
-            [gd-edit.jline :as jline])
+            [gd-edit.app-util :as au])
   (:import [java.time Instant ZonedDateTime ZoneId]
            java.util.Date))
 
@@ -92,6 +92,7 @@
    ["set"]   (fn [input] (commands.set/set-handler input))
    ["remove"] (fn [input] (commands.remove/remove-handler input))
    ["rm"] (fn [input] (commands.remove/remove-handler input))
+   ["delete"] (fn [input] (commands.delete/delete-handler input))
    ["find"]  (fn [input] (commands.find/find-handler input))
    ["load"]  (fn [input] (commands.choose-character/choose-character-handler input))
    ["write"] (fn [input] (commands.write/write-handler input))
@@ -516,7 +517,7 @@
   []
 
   ;; Enable cross-platform ansi color handling
-  (jline/initialize)
+  (jl/initialize)
   (jansi-clj.core/install!))
 
 (defn initialize
@@ -548,9 +549,7 @@
 
   ;; Setup the first screen in the program
   ;; based on if a character has already been loaded
-  (if (zero? (count @globals/character))
-    (commands.choose-character/character-selection-screen!)
-    (commands.choose-character/character-manipulation-screen!))
+  (commands.choose-character/character-selection-screen!)
 
   ;; Remove any left over restart scripts from last time we ran "update"
   (su/cleanup-restart-script))

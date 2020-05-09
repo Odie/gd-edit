@@ -126,8 +126,6 @@
       ;; Reload game db using the new game directory.
       (load-db-in-background))))
 
-
-
 (defn load-character-file
   [savepath]
 
@@ -145,3 +143,9 @@
 
   (future (when-let [quest-progress (quest/load-annotated-quest-progress savepath)]
             (swap! globals/character assoc :quest quest-progress))))
+
+(defn locate-character-files
+  [character-name]
+  (->> (dirs/get-all-save-file-dirs)
+       (filter #(= (last (u/filepath->components (str %))) (str "_" character-name)))
+       (map #(io/file % "player.gdc"))))
