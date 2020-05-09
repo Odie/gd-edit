@@ -271,22 +271,23 @@
 (defn get-transfer-stash
   [character]
 
-  (let [target-file (if (:hardcore-mode character)
-                      "transfer.gsh"
-                      "transfer.gst")
-        target-dir (cond->>
-                       ;; Grab the "top" of the save directory
-                       (->> (get-save-dir-search-list)
-                            (map #(.getParentFile (io/file %))))
+  (when-not (empty? character)
+    (let [target-file (if (:hardcore-mode character)
+                        "transfer.gsh"
+                        "transfer.gst")
+          target-dir (cond->>
+                         ;; Grab the "top" of the save directory
+                         (->> (get-save-dir-search-list)
+                              (map #(.getParentFile (io/file %))))
 
-                     ;; If a mod is active, navigate to its directory
-                     (and (is-character-from-mod-save? character)
-                          (not-empty(get-mod-dir)))
-                     (map #(io/file % (u/last-path-component (:moddir @globals/settings))))
+                       ;; If a mod is active, navigate to its directory
+                       (and (is-character-from-mod-save? character)
+                            (not-empty(get-mod-dir)))
+                       (map #(io/file % (u/last-path-component (:moddir @globals/settings))))
 
-                     ;; Grab the first item that has the stash file we're looking for
-                     :then
-                     (some #(when (or (.exists (io/file % "transfer.gst"))
-                                      (.exists (io/file % "transfer.gsh")))
-                              %)))]
-    (io/file target-dir target-file)))
+                       ;; Grab the first item that has the stash file we're looking for
+                       :then
+                       (some #(when (or (.exists (io/file % "transfer.gst"))
+                                        (.exists (io/file % "transfer.gsh")))
+                                %)))]
+      (io/file target-dir target-file))))

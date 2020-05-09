@@ -17,18 +17,14 @@
 (defn init
   "Initialize various globals, such as db and db-index"
   []
-  (gd-edit.core/initialize))
+  (ge/initialize))
 
 (defn resolve-save-file [f]
   ;; If the given file exists, nothing needs to be done to resolve the path
   (if (.isFile (io/file f))
     f
 
-    (->> (dirs/get-save-dir-search-list)  ;; look in all save dirs
-         (mapcat #(vector (io/file % f)   ;; just `f`, full path to save file
-                          (io/file % (str "_" f) "player.gdc"))) ;; _`f`/player.gdc, `f` is just the character dir name
-         (filter #(.isFile %))
-         first)))
+    (first (au/locate-character-files f))))
 
 (defn load-character-file
   "Loads the returns the character at the file location"
@@ -143,11 +139,11 @@
        :found-item))
 
 (comment
-  (require '[gd-edit.core :as core])
-
   (init)
 
   (load-character "Odie")
+
+  (cmd "delete OdieTest")
 
   (write-character-file @globals/character "/tmp/player.gdc")
 

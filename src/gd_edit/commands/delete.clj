@@ -1,7 +1,7 @@
 (ns gd-edit.commands.delete
   (:require [clojure.java.io :as io]
             [gd-edit.utils :as u]
-            [jansi-clj.core :refer [red green yellow]]
+            [jansi-clj.core :refer [red yellow]]
             [gd-edit.app-util :as au]
             [gd-edit.globals :as globals]
             [gd-edit.stack :as stack]
@@ -20,8 +20,14 @@
     (u/print-indent 1)
     (println (yellow target))
 
-    (.moveToTrash (FileUtils/getInstance)
-                  (into-array [target]))
+    (try
+      (.moveToTrash (FileUtils/getInstance)
+                    (into-array [target]))
+      (catch Exception _ (println (red "Error!") "Could not move files to trash!")))
+
+    ;; If the loaded character was deleted, unload the character from memory
+    (when (= (:meta-character-loaded-from @globals/character) (io/file savepath))
+      (reset! globals/character {}))
 
     (commands.choose-character/choose-or-manipulate-character-screen!)))
 
@@ -55,7 +61,7 @@
 (defn character-selection-screen! [] (stack/replace-last! globals/menu-stack (character-selection-screen)))
 
 (defn delete-handler
-  [[input [param]]]
+  [[_ [param]]]
 
   ;; Did the user provide a parameter?
   (if param

@@ -1135,6 +1135,7 @@
                          :meta-fileinfo fileinfo
                          :meta-character-loaded-from filepath)
         ]
+
     character))
 
 (defn write-to-file
