@@ -81,9 +81,9 @@
 
   (let [bytes (map byte s)]
     (bit-or
-     (bit-shift-left (nth bytes 3) 24)
-     (bit-shift-left (nth bytes 2) 16)
-     (bit-shift-left (nth bytes 1) 8)
+     (bit-shift-left (nth bytes 3 0) 24)
+     (bit-shift-left (nth bytes 2 0) 16)
+     (bit-shift-left (nth bytes 1 0) 8)
      (nth bytes 0))))
 
 (defn call-method
@@ -126,6 +126,15 @@
   (indexed '(a b c d))  =>  ([0 a] [1 b] [2 c] [3 d])"
   [s]
   (map vector (iterate inc 0) s))
+
+(defn hashmap-with-keys
+  [keyfn coll]
+
+  (reduce (fn [m item]
+            (assoc m (keyfn item) item))
+          {}
+          coll))
+
 
 ;;------------------------------------------------------------------------------
 ;; Logging related functions

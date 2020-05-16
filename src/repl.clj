@@ -14,6 +14,33 @@
             [gd-edit.printer :as printer])
   (:import [java.io StringReader]))
 
+(defn class-compile [ns-name]
+
+  (let [tmp-dir *compile-path*
+        sanitized-ns-name (-> (str ns-name)
+                              (str/replace  "-" "_")
+                              (str/replace  "." "/"))
+        src-file (io/file "src" (str sanitized-ns-name ".clj"))
+        dst-file (io/file (str tmp-dir  "/" (clojure.string/join "/" (clojure.string/split sanitized-ns-name #"\.")) ".clj"))]
+
+    ;; Copy the file into the compile path
+    (clojure.java.io/make-parents dst-file)
+    (io/copy src-file dst-file)
+
+    (binding [*compile-path* (str tmp-dir)] ;; str here is important, the compile doesn't like something else
+      (try
+        (compile (symbol ns-name))
+        (catch java.io.FileNotFoundException e
+          ;; *compile-path* also needs to be on the classpath! (how can we check this?!
+          (throw (ex-info (str "*compile-path* : " (pr-str (str tmp-dir)) " isn't on the classpath")
+                          {:compile-path *compile-path*
+                           :clj-file dst-file}
+                          #_e ;; If we add the cause, the above error doesn't show directly
+                          )))))
+
+    {:clj-file dst-file
+     :ns-name ns-name}))
+
 (defn init
   "Initialize various globals, such as db and db-index"
   []

@@ -3,7 +3,7 @@
 
 (set-env! :resource-paths #{"resources" "src"}
           :source-paths   #{"test"}
-          :dependencies   '[[org.clojure/clojure "1.9.0"]
+          :dependencies   '[[org.clojure/clojure "1.10.1"]
                             [org.clojure/tools.namespace "0.2.11" :scope "test"]
                             [org.clojure/core.match "1.0.0"]
                             [net.jpountz.lz4/lz4 "1.3.0"]
@@ -32,7 +32,9 @@
                             [criterium "0.4.4" :scope "test"]
                             [com.rpl/specter "1.1.0"]
                             [instaparse "1.4.10"]
-                            [com.clojure-goes-fast/clj-async-profiler "0.1.0" :scope "test"]])
+                            [com.clojure-goes-fast/clj-async-profiler "0.1.0" :scope "test"]
+                            [kmp-search "0.1.2"]
+                            [expound "0.8.4"]])
 
 
 

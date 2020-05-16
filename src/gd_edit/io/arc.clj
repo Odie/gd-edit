@@ -62,7 +62,7 @@
    :mipmap-count :int32))
 
 
-(defn- load-header
+(defn load-header
   [^ByteBuffer bb]
 
   (.position bb 0)
@@ -82,7 +82,7 @@
    (.get bb buffer 0 count)
    buffer))
 
-(defn- load-record-filename
+(defn load-record-filename
   [^ByteBuffer bb header record-header]
 
   (.position bb (+ (:record-table-offset header)
@@ -97,8 +97,25 @@
   [^java.io.OutputStream stream bytes]
   (.write stream bytes 0 (count bytes)))
 
+(defn load-record-file-part-header
+  [^ByteBuffer bb header record-header i]
 
-(defn- load-record-file-part
+  ;; Magic number "12" is the size of the arc-file-part on disk
+  (.position bb (-> (:first-part-index record-header)
+                    (+ i)
+                    (* 12)
+                    (+ (:record-table-offset header))))
+
+  (s/read-struct arc-file-part-header bb))
+
+(defn load-record-file-part-headers
+  [^ByteBuffer bb header record-header]
+
+  (doall
+   (for [i (range (:file-parts record-header))]
+     (load-record-file-part-header bb header record-header i))))
+
+(defn load-record-file-part
   [^ByteBuffer bb header record-header i]
 
   ;; Magic number "12" is the size of the arc-file-part on disk
@@ -163,28 +180,32 @@
 
         ;; We've read and decompressed all the file parts now
         ;; Return the contents as a byte array
-        (.toByteArray output-stream)
-        ))))
+        (.toByteArray output-stream)))))
 
 
-(defn- load-record-headers
+(defn load-record-headers
   [^ByteBuffer bb header]
 
   (.position bb (+ (:record-table-offset header)
                    (:record-table-size header)
                    (:string-table-size header)))
 
-  (loop [i 0
-         limit (:file-entries header)
-         accum []]
+  (let [limit (:file-entries header)]
+    (loop [i 0
+           accum (transient [])]
 
-    (if (>= i limit)
-      accum
+      (if (>= i limit)
+        (persistent! accum)
 
-      (recur (inc i)
-             limit
-             (conj accum (s/read-struct arc-record-header bb))))))
+        (recur (inc i)
+               (conj! accum (s/read-struct arc-record-header bb)))))))
 
+(defn load-arc-headers
+  [bb]
+  (let [arc-header (load-header bb)
+        record-headers (->> (load-record-headers bb arc-header)
+                            (map #(assoc % :filename (load-record-filename bb arc-header %))))]
+    {:arc-header arc-header :record-headers record-headers}))
 
 (defn- localization-file->hashmap
   [bytes]
@@ -319,12 +340,13 @@
         (when-not (empty? recordname)
 
           ;; Grab the file contents...
-          (let [contents (String. (load-record bb header record-header))
+          (let [contents (load-record bb header record-header)
                 record-path (io/file outpath recordname)]
 
             ;; Write the contents to disk
             (.mkdirs (.getParentFile record-path))
-            (spit record-path contents)))))))
+            (with-open [w (io/output-stream record-path)]
+              (.write w contents))))))))
 
 ;; ARC format
 ;;
