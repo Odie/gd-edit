@@ -1,6 +1,8 @@
 (ns gd-edit.structure
   (:require [clojure.test]
-            [clojure.pprint])
+            [clojure.pprint]
+            [gd-edit.io.core :as io.core]
+            [clojure.java.io :as io])
   (:import  [java.nio ByteBuffer])
   (:gen-class))
 
@@ -12,7 +14,7 @@
 
 (defmulti read-spec spec-type)
 
-(def primitives-specs
+(def bytebuffer-reader-fns
   ;; name => primitives spec
   {:byte   [:byte    1 (fn[^ByteBuffer bb & prim-specs] (.get bb))      ]
    :bool   [:byte    1 (fn[^ByteBuffer bb & prim-specs] (.get bb))      ]
@@ -22,6 +24,14 @@
    :float  [:float   4 (fn[^ByteBuffer bb & prim-specs] (.getFloat bb)) ]
    :double [:double  4 (fn[^ByteBuffer bb & prim-specs] (.getDouble bb))]})
 
+(def data-reader-fns
+  {:byte   [:byte    1 (fn[reader & _] (io.core/get-byte reader))  ]
+   :bool   [:byte    1 (fn[reader & _] (io.core/get-byte reader))  ]
+   :int16  [:int16   2 (fn[reader & _] (io.core/get-int16 reader)) ]
+   :int32  [:int32   4 (fn[reader & _] (io.core/get-int32 reader)) ]
+   :int64  [:int64   8 (fn[reader & _] (io.core/get-int64 reader)) ]
+   :float  [:float   4 (fn[reader & _] (io.core/get-float reader)) ]
+   :double [:double  4 (fn[reader & _] (io.core/get-double reader))]})
 
 (defn atom?
   [x]
@@ -59,12 +69,17 @@
      :map))
 
 (defn- merge-default-rw-fns
-  [context]
+  [bb context]
   (letfn [(merge-default  [context]
             (assert (or (map? context) (nil? context)))
-            (merge-with merge
-                        {:rw-fns primitives-specs}
-                        (or context {})))]
+            (let [reader-fns
+                  (cond (satisfies? io.core/DataReader bb)
+                        data-reader-fns
+                        :else
+                        bytebuffer-reader-fns)]
+              (merge-with merge
+                          {:rw-fns reader-fns}
+                          (or context {}))))]
     (let [context (if (atom? context)
                     context
                     (atom context))]
@@ -86,7 +101,7 @@
   It will attempt to look up the :spec key to locate the actual specs."
   ([spec ^ByteBuffer bb & [context data rest]]
 
-   (let [context (merge-default-rw-fns context)]
+   (let [context (merge-default-rw-fns bb context)]
 
      ;; Callers can provide a map or an atom to specify how to read primitives.
      ;; Read in the value using either a supplied read function or
@@ -281,7 +296,7 @@
         buffer (byte-array (buffer-size-for-string length requested-encoding))]
 
     ;; Read the string bytes into the buffer
-    (.get bb buffer 0 (buffer-size-for-string length requested-encoding))
+    (io.core/get-byte-array bb buffer 0 (buffer-size-for-string length requested-encoding))
 
     ;; If the context asked for bytes to be transformed, do it now
     ;; FIXME!!!  Reading API for byte array is very different here.

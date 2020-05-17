@@ -3,7 +3,8 @@
             [gd-edit.utils :as u]
             [clojure.pprint :refer [pprint]]
             [kmp-search.core :as kmp]
-            [gd-edit.io.gdc :as gdc])
+            [gd-edit.io.gdc :as gdc]
+            [gd-edit.io.core :as io.core])
 
   (:import  [java.nio ByteBuffer ByteOrder]))
 
@@ -37,8 +38,8 @@
                   :data (s/string :bytes :length 28))))))
 
 (defn search-buffer
-  "returns a vector containing all the offsets where a byte pattern
-  appears within a file"
+  "Returns a vector containing all the offsets where a byte pattern
+  appears within the `buffer`"
   [^bytes buffer buf-limit ^bytes pattern]
   (loop [context (kmp/context pattern)
          matches []]
@@ -47,139 +48,52 @@
         (recur new-context (conj matches match))
         matches))))
 
-(defn search-bytebuffer
+(defn search-byte-reader
   "returns a vector containing all the offsets where a byte pattern
-  appears within a file"
-  [^ByteBuffer bb ^bytes pattern & {:keys [buffer-size] :or {buffer-size 1024}}]
+  appears accessible through `reader`"
+  [reader ^bytes pattern & {:keys [buffer-size] :or {buffer-size 1024}}]
   (let [buffer (byte-array buffer-size)
-        copy-data (fn [bb buf buf-size]
-                    (let [read-count (Math/min buf-size (.remaining bb))]
-                      (.get bb buf 0 read-count)
+        copy-data (fn [reader buf buf-size]
+                    (let [read-count (Math/min buf-size (io.core/get-remaining reader))]
+                      (io.core/get-byte-array reader buf 0 read-count)
                       read-count))]
     (loop [context (kmp/context pattern)
-           read-count (copy-data bb buffer buffer-size)
+           read-count (copy-data reader buffer buffer-size)
            matches []]
       (if (zero? read-count)
         matches
         (let [new-context (kmp/search context buffer read-count)]
           (if-let [match (kmp/match new-context)]
             (recur new-context read-count (conj matches match))
-            (recur new-context (copy-data bb buffer buffer-size) matches)))))))
-
-(defn load-wrl-gates-and-shrines2
-  [^ByteBuffer bb]
-
-  (.mark bb)
-  (let [initial-offset (.position bb)
-
-        rift-gates-offset (first (search-bytebuffer bb
-                                                    (byte-array (concat [0x00 0x00 0x00 0x00
-                                                                         0x03 0x00 0x00 0x00
-                                                                         0x11 0x00 0x00 0x00]
-                                                                        (.getBytes "- World Riftgates")))))
-
-        shrines-offset (first (search-bytebuffer bb
-                                                 (byte-array (concat [0x00 0x00 0x00 0x00
-                                                                      0x03 0x00 0x00 0x00
-                                                                      0x12 0x00 0x00 0x00]
-                                                                     (.getBytes "-- Devotion Shrine")))))]
-    (println "rfo" rift-gates-offset)
-    (println "so" shrines-offset)
-    (cond-> {}
-      rift-gates-offset
-      (assoc :rift-gates
-             (do
-               (.position bb (+ initial-offset rift-gates-offset))
-               (->>
-                (s/read-struct UIDTable bb)
-                :table
-                (map #(select-keys % [:id :record])))))
-
-      shrines-offset
-      (assoc :shrines
-             (do
-               (.position bb (+ initial-offset shrines-offset))
-               (->>
-                (s/read-struct UIDTable bb)
-                :table
-                (map #(select-keys % [:id :record]))))))
-    ))
+            (recur new-context (copy-data reader buffer buffer-size) matches)))))))
 
 (defn load-UID-table
-  [^ByteBuffer bb pattern]
+  [reader pattern]
 
-  ;; (println "position:" (.position bb))
-  ;; (println "limit:" (.limit bb))
-  ;; (println "remaining:" (.remaining bb))
-  (let [initial-offset (.position bb)]
+  (let [initial-offset (io.core/get-position reader)]
     ;; Can we locate a pattern that marks the beginning of a UID table?
-    (when-let [table-offset (first (search-bytebuffer bb pattern))]
-      ;; (println "table-offset" table-offset)
+    (when-let [table-offset (first (search-byte-reader reader pattern))]
 
       ;; Position the bytebuffer that location
-      (.position bb (+ initial-offset table-offset))
-      ;; (println "---------")
-      ;; (println "position:" (.position bb))
-      ;; (println "limit:" (.limit bb))
-      ;; (println "remaining:" (.remaining bb))
-      ;; (println)
+      (io.core/set-position reader (+ initial-offset table-offset))
 
       ;; Read in the table and keep only the :id and :record fields
-      (->> (s/read-struct UIDTable bb)
+      (->> (s/read-struct UIDTable reader)
            :table
            (map #(select-keys % [:id :record]))))))
 
 (defn load-shrines-table
-  [^ByteBuffer bb]
-  (load-UID-table bb
+  [reader]
+  (load-UID-table reader
                   (byte-array (concat [0x00 0x00 0x00 0x00
                                        0x03 0x00 0x00 0x00
                                        0x12 0x00 0x00 0x00]
                                       (.getBytes "-- Devotion Shrine")))))
 
 (defn load-rift-gates-table
-  [^ByteBuffer bb]
-  (load-UID-table bb
+  [reader]
+  (load-UID-table reader
                   (byte-array (concat [0x00 0x00 0x00 0x00
                                        0x03 0x00 0x00 0x00
                                        0x11 0x00 0x00 0x00]
                                       (.getBytes "- World Riftgates")))))
-
-(defn load-wrl-gates-and-shrines
-  [filepath]
-
-  (let [rift-gates-offset (first (kmp/search-file (byte-array (concat [0x00 0x00 0x00 0x00
-                                                                       0x03 0x00 0x00 0x00
-                                                                       0x11 0x00 0x00 0x00]
-                                                                      (.getBytes "- World Riftgates")))
-                                                  filepath))
-        shrines-offset (first (kmp/search-file (byte-array (concat [0x00 0x00 0x00 0x00
-                                                                    0x03 0x00 0x00 0x00
-                                                                    0x12 0x00 0x00 0x00]
-                                                                   (.getBytes "-- Devotion Shrine")))
-                                               filepath))
-
-        bb ^ByteBuffer (u/file-contents filepath)
-        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
-
-
-        ]
-
-    (cond-> {}
-      rift-gates-offset
-      (assoc :rift-gates
-             (do
-               (.position bb rift-gates-offset)
-               (->>
-                (s/read-struct UIDTable bb)
-                :table
-                (map #(select-keys % [:id :record])))))
-
-      shrines-offset
-      (assoc :shrines
-             (do
-               (.position bb shrines-offset)
-               (->>
-                (s/read-struct UIDTable bb)
-                :table
-                (map #(select-keys % [:id :record]))))))))

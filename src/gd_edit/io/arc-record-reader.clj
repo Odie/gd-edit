@@ -1,23 +1,10 @@
-(ns gd-edit.io.ArcRecordByteBuffer
+(ns gd-edit.io.arc-record-reader
   (:require [gd-edit.io.arc :as arc]
+            [gd-edit.io.core :as io.core]
             [gd-edit.utils :as u]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [clojure.java.io :as io])
   (:import [java.nio ByteBuffer]))
-
-(defprotocol DataReader
-  (get-byte [this])
-  (get-bytes [this byte-count])
-  (get-byte-array [this byte-arr])
-  (get-int16 [this])
-  (get-int32 [this])
-  (get-int64 [this])
-  (get-float [this])
-  (get-double [this])
-  (get-boolean [this]))
-
-(defprotocol Positionable
-  (get-position [this])
-  (set-position [this pos]))
 
 (defn target-file-part
   [file-parts target-pos]
@@ -35,7 +22,7 @@
   ;; While this is certainly faster...
   ;; It's unknown if all the file chunks always have the same decompressed size
   (nth file-parts
-       (mod target-pos (:decompressed-size (first file-parts)))))
+       (unchecked-divide-int target-pos (:decompressed-size (first file-parts)))))
 
 (defn file-part-loaded?
   [reader file-part]
@@ -89,14 +76,13 @@
      (<= pos (+ offset length)))))
 
 (defn get-byte-array-
-  [this byte-arr]
-  (let [cnt (count byte-arr)
-        state @(.state this)
+  [this byte-arr ba-offset requested-read-count]
+  (let [state @(.state this)
         final-read-cnt (loop [fp (nth (.file-parts this) (:current-file-part state))
                               pos (:position state)
                               src-cursor (- pos (:decompressed-offset fp))
-                              remaining cnt
-                              dst-cursor 0]
+                              remaining requested-read-count
+                              dst-cursor ba-offset]
 
                          ;; Does this file-part contain all of the rest of the data we need?
                          (if (file-part-contains-pos? fp (+ pos remaining))
@@ -142,66 +128,69 @@
     (swap! (.state this) assoc :position pos)
     (swap! (.state this) assoc :current-file-part (:idx file-part))))
 
+(defn get-byte-
+  [this]
+  (let [state @(.state this)
+        pos (:position state)
+        cur-fp (nth (.file-parts this) (:current-file-part state))
+        idx (- pos (:decompressed-offset cur-fp))
+        _ (ensure-file-part-loaded this cur-fp)
+        content (nth (file-part-content this cur-fp) idx)]
+
+    (swap! (.state this) update :position inc)
+    (swap! (.state this) assoc :current-file-part (:idx (target-file-part (.file-parts this) pos)))
+
+    content))
+
+(defn get-remaining-
+  [this]
+  (let [last-fp (last (.file-parts this))
+        pos (io.core/get-position this)]
+    ;; Find the total length of this file
+    (- (+ (:decompressed-offset last-fp)
+          (:decompressed-size last-fp))
+
+       ;; Subtract current position
+       pos)))
+
 (deftype ArcRecordReader
     [arc-file-bb arc-headers record-header file-parts state]
 
-  DataReader
+  io.core/DataReader
   (get-byte [this]
-    (let [state @(.state this)
-          pos (:position state)
-          cur-fp (nth (.file-parts this) (:current-file-part state))
-          idx (- pos (:decompressed-offset state))
-          content (nth (get-in state [:file-parts cur-fp]) idx)]
+    (get-byte- this))
 
-      (swap! (.state this) update :position inc)
-      (swap! (.state this) assoc :current-file-part (:idx (target-file-part (.file-parts this) pos)))
-
-      content))
-
-  (get-bytes [this byte-count]
-    (let [arr (byte-array byte-count)]
-      (get-byte-array this arr)
-      arr))
-
-  (get-byte-array [this byte-arr]
-    (get-byte-array- this byte-arr))
+  (get-byte-array [this byte-arr offset read-count]
+    (get-byte-array- this byte-arr offset read-count))
 
   (get-int16 [this]
-    (->> (get-bytes this 2)
-         (ByteBuffer/wrap)
-         (.getShort)))
+    (io.core/ba->short (io.core/get-bytes this 2)))
 
   (get-int32 [this]
-    (->> (get-bytes this 4)
-         (ByteBuffer/wrap)
-         (.getInt)))
+    (io.core/ba->int (io.core/get-bytes this 4)))
 
   (get-int64 [this]
-    (->> (get-bytes this 8)
-         (ByteBuffer/wrap)
-         (.getLong)))
+    (io.core/ba->long (io.core/get-bytes this 8)))
 
   (get-float [this]
-    (->> (get-bytes this 4)
-         (ByteBuffer/wrap)
-         (.getFloat)))
+    (io.core/ba->float (io.core/get-bytes this 4)))
 
   (get-double [this]
-    (->> (get-bytes this 4)
-         (ByteBuffer/wrap)
-         (.getDouble)))
+    (io.core/ba->double (io.core/get-bytes this 8)))
 
   (get-boolean [this]
-    (let [result (get-byte this)]
+    (let [result (io.core/get-byte this)]
       (if (zero? result)
         false
         true)))
 
-  Positionable
+  io.core/Positionable
   (get-position [this]
     (:position @state))
   (set-position [this pos]
-    (set-position- this pos)))
+    (set-position- this pos))
+  (get-remaining [this]
+    (get-remaining- this)))
 
 (defn arc-record-reader
   [filepath recordname]
@@ -230,7 +219,7 @@
 
             ;; Return a ArcRecordReader
             reader (->ArcRecordReader bb arc-headers record-header file-parts (atom {}))]
-        (set-position reader 0)
+        (io.core/set-position reader 0)
         reader))))
 
 (defn hex
@@ -243,29 +232,15 @@
 
 
 (comment
-  (let [filepath "/Volumes/Skyrim/SteamLibrary/steamapps/common/Grim Dawn/resources/Levels.arc"
-        bb (u/mmap filepath)
-        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
-        arc-headers (arc/load-arc-headers bb)
-        target-file "world001.map"
-        ]
-
-    (when-let [record-header (some #(when(= target-file (:filename %))
-                                      %)
-                                   (:record-headers arc-headers))]
-      (def fp
-        (->> (arc/load-record-file-part-headers bb (:arc-header arc-headers) record-header)
-             u/indexed
-             (map (fn [[idx m]]
-                    (assoc m :idx idx)))
-             )
-        )
-      )
-    )
-
 
   (def r
     (arc-record-reader "/Volumes/Skyrim/SteamLibrary/steamapps/common/Grim Dawn/resources/Levels.arc" "world001.map"))
+
+  (def s
+    (io.core/reader-slice r 9205 (+ 9205 297973))
+    )
+
+  (io.core/get-byte r)
 
   (ensure-file-part-loaded-by-idx r 0)
 
@@ -273,9 +248,11 @@
 
   (ensure-data-range-loaded r 0 262145)
 
-  (def b
-    (get-bytes r 262145))
+  (io.core/set-position r 0x394BD)
 
-  (u/hexify (take 20 b))
+  (def b
+    (io.core/get-bytes s 8))
+
+  (u/hexify (seq b))
 
   )

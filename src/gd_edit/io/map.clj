@@ -4,7 +4,9 @@
             [gd-edit.utils :as u]
             [gd-edit.structure :as s]
             [gd-edit.io.wrl :as wrl]
-            [gd-edit.io.arc :as arc])
+            [gd-edit.io.arc :as arc]
+            [gd-edit.io.arc-record-reader :as arc-record-reader]
+            [gd-edit.io.core :as io.core])
   (:import [java.nio ByteBuffer]))
 
 (defn get-bytes
@@ -14,8 +16,10 @@
     buf))
 
 (defn advance-bytes
-  [^ByteBuffer bb byte-count]
-  (.position bb (+ (.position bb) byte-count)))
+  [reader byte-count]
+  (io.core/set-position reader
+                        (+ (io.core/get-position reader)
+                           byte-count)))
 
 (def FilePreamble
   (s/struct-def
@@ -56,6 +60,24 @@
 	 0x1C :navigation})
 
 (defn load-section-headers
+  [reader]
+  (let [preamble (s/read-struct FilePreamble reader)
+        _ (validate-preamble preamble)
+
+        ;; Advance 4 more bytes
+        ;; Not sure what those 4 bytes are for
+        _ (advance-bytes reader 4)]
+
+    (loop [headers []]
+      (if-not (io.core/has-remaining? reader)
+        headers
+        (let [header (-> (s/read-struct SectionHeader reader)
+                         (update :type sector-id-map)
+                         (assoc :offset (io.core/get-position reader)))]
+          (io.core/set-position reader (+ (:offset header) (:length header)))
+          (recur (conj headers header)))))))
+
+(defn load-section-headers-from-file
   [filepath]
   (let [bb (u/mmap filepath)
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
@@ -77,18 +99,21 @@
           (.position bb (+ (:offset header) (:length header)))
           (recur (conj headers header)))))))
 
-(defn print-bb-info
-  [bb]
-  (println "position:" (.position bb))
-  (println "capacity:" (.capacity bb))
-  (println "limit:" (.limit bb))
-  (println "remaining:" (.remaining bb))
-  )
+
+(defn section-end-pos
+  [section-header]
+  (+ (:offset section-header) (:length section-header)))
 
 (defn bytebuffer-limit-to-section
   [bb section-header]
   (.position bb (:offset section-header))
-  (.limit bb (+ (:length section-header) (:offset section-header))))
+  (.limit bb (section-end-pos section-header)))
+
+(defn reader-limit-to-section
+  [reader section-header]
+  (io.core/reader-slice reader
+                        (:offset section-header)
+                        (section-end-pos section-header)))
 
 (defn slice-bytebuffer
   "Create a new view of the given byte buffer."
@@ -99,53 +124,29 @@
     (.limit (+ offset length))))
 
 
-(defn sector-end-pos
-  [sector-header]
-  (+ (:offset sector-header) (:length sector-header)))
+(defn load-shrines-and-rift-gates
+  [filepath]
+
+  (let [reader (arc-record-reader/arc-record-reader filepath "world001.map")
+
+        headers (->> (load-section-headers reader)
+                     (u/hashmap-with-keys :type))
+
+        _ (io.core/set-position reader 0)
+
+        shrines (when-let [header (:instance headers)]
+                  (wrl/load-shrines-table (reader-limit-to-section reader header)))
+        rift-gates (when-let [header (:instance headers)]
+                     (wrl/load-rift-gates-table (reader-limit-to-section reader header)))]
+
+    (u/collect-as-map shrines rift-gates)))
 
 (comment
 
   (load-section-headers "/Users/Odie/tmp/Levels/world001.map")
 
-
-  (let [filepath "/Users/Odie/tmp/Levels/world001.map"
-
-        headers (->> (load-section-headers filepath)
-                     (u/hashmap-with-keys :type))
-
-        bb (u/mmap filepath)
-        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
-
-        shrines (when-let [header (:instance headers)]
-                  (wrl/load-shrines-table (bytebuffer-limit-to-section bb header)))
-        rift-gates (when-let [header (:instance headers)]
-                     (wrl/load-rift-gates-table (bytebuffer-limit-to-section bb header)))]
-
-    (u/collect-as-map shrines rift-gates))
-
-  (let [filepath "/Volumes/Skyrim/SteamLibrary/steamapps/common/Grim Dawn/resources/Levels.arc"
-        headers (arc/load-record-headers filepath)
-
-        bb (u/mmap filepath)
-        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
-
-        ;; record-headers (->>  (load-record-headers bb header)
-        ;;                      (map (fn [record-header]
-        ;;                             {:recordname (load-record-filename bb header record-header)
-        ;;                              :record-header record-header}))
-        ;;                      (filter #(str/ends-with? (:recordname %) ".tex"))
-        ;;                      )
-        ]
-
-    ;; (->> record-headers
-    ;;      (map (fn [record-header]
-    ;;             (let [record-bb (as-> (load-record bb header (:record-header record-header)) $
-    ;;                               (ByteBuffer/wrap $)
-    ;;                               (.order $ java.nio.ByteOrder/LITTLE_ENDIAN))]
-
-    ;;               (assoc (load-fn record-bb)
-    ;;                      :recordname (:recordname record-header))))))
-    headers
-    )
+  (u/timed-readable
+   (load-shrines-and-rift-gates
+    "/Volumes/Skyrim/SteamLibrary/steamapps/common/Grim Dawn/resources/Levels.arc"))
 
   )
