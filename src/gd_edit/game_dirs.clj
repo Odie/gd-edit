@@ -146,6 +146,7 @@
 (def templates-file "database/templates.arc")
 (def localization-file "resources/Text_EN.arc")
 (def texture-file "resources/Items.arc")
+(def level-file "resources/Levels.arc")
 
 (defn get-game-dir
   ([]

@@ -179,6 +179,11 @@
   (and (associative? coll)
        (contains? coll :faction-value)))
 
+(defn uid?
+  [x]
+  (and (u/byte-array? x)
+       (= (count x) 16)))
+
 (defn skill-name-from-record
   [skill-record]
 
@@ -260,6 +265,32 @@
   (and (str/starts-with? (:basename item) "records/items/materia/")
        (= ((record-by-name (:basename item)) "Class") "ItemRelic")))
 
+(defn uid-record-display-name
+  [uid-record]
+
+  (or
+   (uid-record "journalTag")
+   (uid-record "description")))
+
+(defn uid-record-type-display-name
+  [uid-record]
+  (let [class (uid-record "Class")]
+    (cond
+      (= class "StaticShrine")
+      "Shrine"
+
+      (= class "StaticTeleporter")
+      "Rift Gate"
+
+      :else
+      class)))
+
+(defn uid-display-name
+  [uid]
+  (when-let [uid-info (@globals/shrines-and-gates-index (seq uid))]
+    (let [record (dbu/record-by-name (:recordname uid-info))]
+      (uid-record-display-name record))))
+
 (defn get-type
   "Given a map in the character sheet, what type of thing does it look like?"
   [obj]
@@ -268,6 +299,7 @@
     (is-item? obj) :item
     (is-skill? obj) :skill
     (is-faction? obj) :faction
+    (uid? obj) :uid
 
     :else
     nil))
@@ -284,6 +316,9 @@
 
     (is-faction? obj)
     (faction-name (last path))
+
+    (uid? obj)
+    (uid-display-name obj)
 
     :else
     nil))

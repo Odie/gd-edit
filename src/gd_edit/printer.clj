@@ -7,7 +7,9 @@
              [item-summary :as item-summary]]
             [clojure.string :as str]
             [jansi-clj.core :refer [red green yellow]]
-            [gd-edit.printer :as printer]))
+            [gd-edit.printer :as printer]
+            [gd-edit.globals :as globals]))
+
 
 (defn prompt-yes-no
   "Prompts the user to answer Y or N, returns true or false depending on user input."
@@ -114,6 +116,24 @@
       (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
 
+(defn print-uid-summary
+  [obj]
+  (if-let [uid-info (@globals/shrines-and-gates-index (seq obj))]
+    (let [record (dbu/record-by-name (:recordname uid-info))]
+      (println (yellow (dbu/uid-record-display-name record))
+               ;; (format (green "[%s]")  (uid-record-type-display-name record))
+               ))
+    (print-primitive obj)))
+
+(defn- print-uid
+  [obj]
+  (when-let [uid-info (@globals/shrines-and-gates-index (seq obj))]
+    (let [record (dbu/record-by-name (:recordname uid-info))]
+      (println (yellow (dbu/uid-record-display-name record)))
+      (println (yellow (dbu/uid-record-type-display-name record)))
+      (println)))
+  (print-primitive obj 1))
+
 (defn print-sequence
   [obj path]
 
@@ -133,6 +153,9 @@
 
       ;; Print some representation of the object
       (cond
+        (dbu/uid? item)
+        (print-uid-summary item)
+
         (dbu/is-primitive? item)
         (print-primitive item)
 
@@ -172,6 +195,9 @@
     ;; For items, we want to fetch and print all related db records.
     (= (dbu/get-type obj) :item)
     (show-item obj)
+
+    (dbu/uid? obj)
+    (print-uid obj)
 
     ;; For other types of interesting data, print out the
     ;; name followed by the data itself.

@@ -23,3 +23,6 @@
 (def settings (atom {}))
 
 (def transfer-stash (atom {}))
+
+(def shrines-and-gates (atom {}))
+(def shrines-and-gates-index (atom {}))

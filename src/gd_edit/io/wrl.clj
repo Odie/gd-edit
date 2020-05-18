@@ -34,7 +34,7 @@
          :table (s/array
                  (s/struct-def
                   :id gdc/UID
-                  :record (s/string :ascii)
+                  :recordname (s/string :ascii)
                   :data (s/string :bytes :length 28))))))
 
 (defn search-buffer
@@ -80,7 +80,7 @@
       ;; Read in the table and keep only the :id and :record fields
       (->> (s/read-struct UIDTable reader)
            :table
-           (map #(select-keys % [:id :record]))))))
+           (map #(select-keys % [:id :recordname]))))))
 
 (defn load-shrines-table
   [reader]

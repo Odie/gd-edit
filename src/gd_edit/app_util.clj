@@ -7,6 +7,7 @@
             [gd-edit.game-dirs :as dirs]
             [gd-edit.io.arc :as arc-reader]
             [gd-edit.io.arz :as arz-reader]
+            [gd-edit.io.map :as map-reader]
             [gd-edit.io.gdc :as gdc]
             [gd-edit.quest :as quest]
             [gd-edit.watcher :as watcher]
@@ -79,13 +80,27 @@
   {:db @globals/db
    :index @globals/db-index})
 
+(defn load-shrines-and-gates
+  []
+  (->> (dirs/get-file-and-overrides dirs/level-file)
+       (map map-reader/load-shrines-and-rift-gates)
+       (apply merge)
+       vals
+       flatten
+       distinct))
+
+(defn build-shrines-and-gates-index
+  [shrines-and-gates]
+  (u/hashmap-with-keys #(seq (:id %)) shrines-and-gates))
+
 (defn load-db-in-background
   []
-
   (intern 'gd-edit.globals 'localization-table (future (u/log-exceptions (load-localization-files))))
   (intern 'gd-edit.globals 'db (future (u/log-exceptions (load-db @globals/localization-table))))
   (intern 'gd-edit.globals 'db-index (future (build-db-index @globals/db)))
-  (intern 'gd-edit.globals 'db-and-index (future (build-db-and-index))))
+  (intern 'gd-edit.globals 'db-and-index (future (build-db-and-index)))
+  (intern 'gd-edit.globals 'shrines-and-gates (future (load-shrines-and-gates)))
+  (intern 'gd-edit.globals 'shrines-and-gates-index (future (build-shrines-and-gates-index @globals/shrines-and-gates))))
 
 
 (defn load-settings-file
