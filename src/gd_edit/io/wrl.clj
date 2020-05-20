@@ -33,7 +33,7 @@
         (s/struct-def
          :table (s/array
                  (s/struct-def
-                  :id gdc/UID
+                  :uid gdc/UID
                   :recordname (s/string :ascii)
                   :data (s/string :bytes :length 28))))))
 
@@ -80,7 +80,7 @@
       ;; Read in the table and keep only the :id and :record fields
       (->> (s/read-struct UIDTable reader)
            :table
-           (map #(select-keys % [:id :recordname]))))))
+           (map #(select-keys % [:uid :recordname]))))))
 
 (defn load-shrines-table
   [reader]

@@ -69,6 +69,47 @@
        (println (format "byte array[%d]" (count obj))
                 (map #(format (yellow "%02X") %1) obj))))))
 
+(defn print-kvs
+  [kvs & {:keys [skip-item-count]
+            :or {skip-item-count false}}]
+
+  (let [max-key-length (reduce
+                        (fn [max-length key-str]
+                          (if (> (count key-str) max-length)
+                            (count key-str)
+                            max-length))
+                        0
+
+                        ;; Map the keys to a more readable string format
+                        (->> kvs
+                             (map first)
+                             (map u/keyword->str)))]
+
+    (doseq [[key value] kvs]
+      (println
+
+       ;; Print the key name
+       (format (format "%%%ds :" (+ max-key-length 2))
+               (u/keyword->str key))
+
+       ;; Print the value
+       (cond
+         (coll? value)
+         (format "collection of %d items" (count value))
+
+         (u/byte-array? value)
+         (format "byte array[%d]" (count value))
+
+         (and (string? value) (empty? value))
+         "\"\""
+
+         :else
+         (yellow value))))
+
+    (when-not skip-item-count
+      (newline)
+      (println (format (format "%%%dd" (+ max-key-length 2)) (count kvs)) "fields"))))
+
 (defn print-map
   [character-map & {:keys [skip-item-count]
                     :or {skip-item-count false}}]

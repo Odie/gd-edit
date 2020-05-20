@@ -91,7 +91,7 @@
 
 (defn build-shrines-and-gates-index
   [shrines-and-gates]
-  (u/hashmap-with-keys #(seq (:id %)) shrines-and-gates))
+  (u/hashmap-with-keys #(seq (:uid %)) shrines-and-gates))
 
 (defn load-db-in-background
   []

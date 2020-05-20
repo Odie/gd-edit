@@ -26,7 +26,8 @@
              [write :as commands.write]
              [batch :as commands.batch]
              [remove :as commands.remove]
-             [delete :as commands.delete]]
+             [delete :as commands.delete]
+             [shrine :as commands.shrine]]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.jline :as jl]
@@ -117,7 +118,9 @@
    ["diag"]    (fn [input] (commands.diag/diag-handler input))
    ["batch"]    (fn [input] (commands.batch/batch-handler input))
    ["batch" "item"]    (fn [input] (commands.item/batch-item-handler input))
-   ["swap-variant"] (fn [input] (commands.item/swap-variant-handler input))})
+   ["swap-variant"] (fn [input] (commands.item/swap-variant-handler input))
+   ["shrine" "list"] (fn [input] (commands.shrine/shrine-list-handler input))
+   ["gate" "list"] (fn [input] (commands.shrine/gate-list-handler input))})
 
 (defn- find-command
   "Try to find the \"longest\" command match"

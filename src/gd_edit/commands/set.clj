@@ -4,12 +4,14 @@
              [choose-character :as commands.choose-character]
              [item :as commands.item]]
             [clojure.string :as str]
+            [clojure.set]
             [gd-edit.db-utils :as dbu]
             [gd-edit.structure-walk :as sw]
             [gd-edit.globals :as globals]
             [gd-edit.utils :as u]
             [gd-edit.printer :as printer]
-            [jansi-clj.core :refer [red green yellow]]))
+            [jansi-clj.core :refer [red green yellow]]
+            [flatland.ordered.set :as ordered-set]))
 
 (defn- find-item-component-by-name
   [db component-name]
@@ -79,6 +81,74 @@
                            false)
     :else true))
 
+(defn add-uid-by-name
+  [character path name-to-match shrines-or-gates-coll]
+
+  (let [rankings (dbu/rank-by-name-similarity name-to-match shrines-or-gates-coll)
+        potential-match (get-in rankings [0 :item])]
+
+    ;; Does the best matched item looks like a definite match?
+    (if (u/first-item-is-match? rankings)
+      ;; Check if the item is already in the path to add to
+      (if (some #(= (seq %) (seq (:uid potential-match))) (get-in @globals/character path))
+        {:status :already-exists :item potential-match :character character}
+
+        ;; The shrine isn't in the list yet... add it.
+        (do
+          (update-in character path conj (:id potential-match))
+          {:status :added-new-item :item potential-match :character character}))
+
+      ;; The first item doesn't look like a definite match
+      {:status :no-definite-match :rankings rankings :character character})))
+
+(defn add-all-uids
+  [character path uid-coll]
+  (let [item-by-id (u/hashmap-with-keys #(seq (:uid %)) uid-coll)
+        present-items (map #(seq %) (get-in @globals/character path))
+        missing-items (clojure.set/difference (ordered-set/into-ordered-set (keys item-by-id))
+                                              (ordered-set/into-ordered-set present-items))
+        missing-uids (->> (map item-by-id missing-items)
+                          (map :uid))]
+
+    (update-in character path into missing-uids)))
+
+(defn add-uid-by-record-name
+  [character path recordname uid-coll]
+  (if-let [matched-item (first (filter #(= recordname (:recordname %)) uid-coll))]
+    {:status :added-new-item :item matched-item :character (update-in character path conj (:uid matched-item))}
+    {:status :unknown-uid-record :character character}))
+
+(defn add-uid-by-name!
+  [path display-name uid-coll]
+
+  (let [old-character @globals/character
+        {:keys [status character] :as result} (cond
+                                                ;; Did the user enter the exact path of a record?
+                                                (dbu/record-by-name display-name)
+                                                (add-uid-by-record-name old-character path display-name uid-coll)
+
+                                                (u/case-insensitive= display-name "all")
+                                                {:status :added-all :character (add-all-uids old-character path uid-coll)}
+                                                :else
+                                                (add-uid-by-name old-character path display-name uid-coll))]
+
+        (cond
+          (= status :added-all)
+          (println (green "Added") (yellow (count (clojure.set/difference (into #{} (get-in character path))
+                                                                          (into #{} (get-in old-character path)))))
+                   (green "new UIDs"))
+
+          (= status :already-exists)
+          (println (red "Sorry,") "the UID" (yellow (get-in result [:item :display-name])) "is already in the list")
+
+          (= status :added-new-item)
+          (println (green "Added") (yellow (get-in result [:item :display-name])))
+
+          (= status :no-definite-match)
+          (println (red "Sorry,") (format (green "did you mean %s?") (yellow (get-in result [:rankings 0 :item :display-name])))))
+        (reset! globals/character character)))
+
+
 (defn set-handler
   [[input tokens]]
 
@@ -124,6 +194,12 @@
             (commands.item/path-is-inventory? val-path)
             (commands.item/set-item-handler [input tokens])
 
+            ;; Is the user trying to add a shrine or a rift gate?
+            (commands.item/path-is-shrine-list? val-path)
+            (add-uid-by-name! val-path (second tokens) (dbu/get-shrines))
+
+            (commands.item/path-is-rift-gate-list? val-path)
+            (add-uid-by-name! val-path (second tokens) (dbu/get-gates))
 
             (and
              (dbu/is-item? (get-in @globals/character (butlast val-path)))

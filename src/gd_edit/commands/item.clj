@@ -458,6 +458,16 @@
       (and (= (first path) :transfer-stashes)
            (= (last path) :inventory-items))))
 
+(defn path-is-shrine-list?
+  [path]
+  (and (= (first path) :shrines)
+       (= (count path) 2)))
+
+(defn path-is-rift-gate-list?
+  [path]
+  (and (= (first path) :teleporter-points)
+       (= (count path) 2)))
+
 (defn place-item-in-inventory!
   [character val-path item]
 

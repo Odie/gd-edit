@@ -269,6 +269,20 @@
         similarity (/ (* 2 match-count) total-count)]
     similarity))
 
+(defn rank-by-similarity
+  [target-str str-fn coll]
+  (->> coll
+       (map #(hash-map :rating (float (string-similarity (str/lower-case (str-fn %)) (str/lower-case target-str)))
+                       :item %))
+       (sort-by :rating >)
+       (into [])))
+
+(defn first-item-is-match?
+  [rankings]
+
+  (when (or (>= (get-in rankings [0 :rating]) 0.85)
+            (>= (- (get-in rankings [0 :rating]) (get-in rankings [1 :rating])) 0.25))
+    true))
 
 ;;------------------------------------------------------------------------------
 ;; Path related functions

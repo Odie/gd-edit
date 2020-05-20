@@ -34,7 +34,8 @@
                             [instaparse "1.4.10"]
                             [com.clojure-goes-fast/clj-async-profiler "0.1.0" :scope "test"]
                             [kmp-search "0.1.2"]
-                            [expound "0.8.4"]])
+                            [expound "0.8.4"]
+                            [org.flatland/ordered "1.5.9"]])
 
 
 

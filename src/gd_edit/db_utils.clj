@@ -1,4 +1,5 @@
 (ns gd-edit.db-utils
+  "Collection of functions that deals with fetching and interpreting game data."
   (:require [clojure.string :as str]
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
@@ -7,7 +8,7 @@
 
 (defn record-class
   [record]
-  (get record "Class"))
+  (record "Class"))
 
 (defn deref-or-exception
   "Check if `r` satisfies `pred`. If so, return dereferenced `r`, otherwise, throw an exception."
@@ -268,9 +269,13 @@
 (defn uid-record-display-name
   [uid-record]
 
-  (or
-   (uid-record "journalTag")
-   (uid-record "description")))
+  (let [display-name (or
+                      (uid-record "journalTag")
+                      (uid-record "description"))]
+    (if (and (= display-name "???")
+             (uid-record "FileDescription"))
+      (uid-record "FileDescription")
+      display-name)))
 
 (defn uid-record-type-display-name
   [uid-record]
@@ -496,3 +501,27 @@
                 [k (coerce-to-type v (type (reference k)))]
                 [k v])))
        (into (empty m))))
+
+(defn get-shrines
+  []
+  (->> @globals/shrines-and-gates
+       (map (fn [m]
+              (assoc m :record (dbu/record-by-name (:recordname m)))))
+       (filter #(u/ci-match (get-in % [:record "Class"]) "shrine"))
+       distinct
+       (map #(assoc % :display-name (dbu/uid-record-display-name (:record %))))
+       (sort-by :display-name)))
+
+(defn get-gates
+  []
+  (->> @globals/shrines-and-gates
+       (map (fn [m]
+              (assoc m :record (dbu/record-by-name (:recordname m)))))
+       (filter #(u/ci-match (get-in % [:record "Class"]) "teleporter"))
+       distinct
+       (map #(assoc % :display-name (dbu/uid-record-display-name (:record %))))
+       (sort-by :display-name)))
+
+(defn rank-by-name-similarity
+  [a-name coll]
+  (u/rank-by-similarity a-name :display-name coll))
