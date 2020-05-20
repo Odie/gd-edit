@@ -301,7 +301,10 @@
                "If it is possible to create the specified item, this command will place as many"
                "copies as it is possible to fit into specified container."
                ""
-               "Note that the expected parameters are the same as the item creation variant of \"set\"."])]])
+               "Note that the expected parameters are the same as the item creation variant of \"set\"."])]
+
+   ["shrine list" "Lists all known shrines"]
+   ["gate list" "Lists all known rift gates"]])
 
 (defn detail-help-text
   [help-item]
