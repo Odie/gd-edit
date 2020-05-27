@@ -565,9 +565,35 @@
   (pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
   (newline))
 
+(defn exit-unless-64-bit-runtime
+  []
+
+  (when (not= (System/getProperty "sun.arch.data.model") "64")
+    (println (red "Sorry,") "the editor requires 64 bit Java/JVM.")
+
+    (println "Your currently running:")
+    (u/print-indent 1)
+    (println (System/getProperty "java.vm.name"))
+    (u/print-indent 1)
+    (println (System/getProperty "java.runtime.version"))
+    (println)
+
+    (println "Installed at:")
+    (u/print-indent 1)
+    (println (System/getProperty "java.home"))
+
+
+    (println)
+    (println "Please download the 64 bit version from here:")
+    (u/print-indent 1)
+    (println "https://java.com/en/download/manual.jsp")
+    (System/exit 1)))
+
 
 (defn start-editor
   []
+
+  (exit-unless-64-bit-runtime)
 
   (initialize)
   (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
