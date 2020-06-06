@@ -28,6 +28,7 @@
   (map second (character-classes-with-index character)))
 
 (defn- db-class-ui-records
+  "Grab a list of records that describes how classes should be shown in the UI."
   []
 
   (->> (dbu/record-by-name "records/ui/skills/skills_mastertable.dbr")
@@ -49,14 +50,12 @@
 (defn- db-class-ui-record->class-record
   [class-ui-record]
 
-  (-> (class-ui-record "tabSkillButtons")
-      (first)
-
-      ;; Look up the records and grab the "skillName" field
-      ;; This shoud give us the _classtraining db records
-      (dbu/record-by-name)
-      (get "skillName")
-      (dbu/record-by-name)))
+  (->> (class-ui-record "tabSkillButtons")
+       (map dbu/record-by-name)
+       (map #(dbu/record-field % "skillName"))
+       (filter #(= (% "Class") "Skill_Mastery"))
+       (remove nil?)
+       (first)))
 
 (defn- db-class-records
   []
@@ -98,8 +97,7 @@
       (doseq [klass classes]
         (u/print-indent 1)
         (println (yellow (:skill-display-name klass)))
-                 (format "(skills/%d)" (:idx klass)))
-                 )))
+                 (format "(skills/%d)" (:idx klass))))))
 
 (defn class-handler
   "Show the class of the loaded character"
@@ -198,11 +196,15 @@
   (if (empty? tokens)
     (println "Please provide the partial name of the class to remove from the character")
     ;; Get the db record that represents the class mastery
-    (let [klass (->> (db-class-records)
-                     (filter #(u/ci-match (%1 "skillDisplayName") (first tokens)))
-                     (first))]
+    (let [class-to-add (first tokens)
 
-      (if (nil? klass)
+          [class-path class-name] (->> (class-display-name-map)
+                                       (filter #(u/ci-match (val %1) class-to-add))
+                                       first)
+
+          class-record (dbu/record-by-name class-path)]
+
+      (if (nil? class-record)
         (println (format "\"%s\" doesn't match any of the known classes" (first tokens)))
 
         (let [perform-op (if-not (zero? (:skill-points @globals/character))
@@ -212,10 +214,10 @@
                                                       "Adding a new mastery now will automatically add 1 skill point to your character."]))
                              (printer/prompt-yes-no "Really add class?")))]
           (when perform-op
-            (let [modified-character (class-add @globals/character klass)]
+            (let [modified-character (class-add @globals/character class-record)]
 
               ;; Inform the user what happened
-              (println "Adding class:" (klass "skillDisplayName"))
+              (println "Adding class:" class-name)
               (print-character-classes modified-character (dbu/db))
 
               (println)

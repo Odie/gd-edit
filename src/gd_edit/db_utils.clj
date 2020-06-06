@@ -54,6 +54,13 @@
 
   (get (db-recordname-index) recordname))
 
+(defn record-field
+  [record field-name]
+  (let [v (record field-name)]
+    (if-let [referenced-record (dbu/record-by-name v)]
+      referenced-record
+      v)))
+
 (defn related-db-records
   [record db-and-index]
 

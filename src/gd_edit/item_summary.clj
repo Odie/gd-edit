@@ -824,13 +824,6 @@
 
           (remove nil?)))))
 
-(defn record-field
-  [record field-name]
-  (let [v (record field-name)]
-    (if-let [referenced-record (dbu/record-by-name v)]
-      referenced-record
-      v)))
-
 (defn record-primary-attributes
   [record]
 
@@ -953,14 +946,14 @@
 
   (sort-by (comp name key)
            (-> @test-target
-               (record-field :basename)
+               (dbu/record-field :basename)
                ;; (record-field "modifierSkillName3")
                ;; (record-field "itemSetName")
                ;; (record-field "petSkillName")
                ;; (record-field "petBonusName")
                ;; (record-field "itemSkillName") ;; granted skill
                ;; (record-field "buffSkillName") ;; granted skill redirect
-               (record-field "itemSkillAutoController")
+               (dbu/record-field "itemSkillAutoController")
                (interesting-fields)
                ))
 
