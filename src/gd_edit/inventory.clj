@@ -10,7 +10,8 @@
             [gd-edit.globals :as globals]
             [gd-edit.io.arc :as arc]
             [gd-edit.utils :as u]
-            [gd-edit.db-utils :as dbu]))
+            [gd-edit.db-utils :as dbu]
+            [clojure.core.cache :as cache]))
 
 (defn- character-inventory
   [n]
@@ -86,6 +87,12 @@
 
   (some? texture-dim-fns))
 
+(defn make-cache
+  []
+  (cache/lru-cache-factory {} :threshold 1024))
+
+(defonce texture-dim-cache (atom (make-cache)))
+
 (defn bind-texture-slot-dims-fn
   "Binds the texture-slot-dims functions when called.
   This is done because:
@@ -100,7 +107,8 @@
   (alter-var-root #'texture-dim-fns
                   (constantly
                    (->> (dirs/get-file-and-overrides dirs/texture-file)
-                        (map make-dims-lookup-fn)))))
+                        (map make-dims-lookup-fn))))
+  (reset! texture-dim-cache (make-cache)))
 
 (defn lazy-load-texture-slot-dims
   []
@@ -110,7 +118,10 @@
 (defn texture-slot-dims
   [texture-name]
 
-  (some #(% texture-name) texture-dim-fns))
+  (cache/lookup (swap! texture-dim-cache cache/through-cache texture-name
+                       (fn [tex-name]
+                         (some #(% tex-name) texture-dim-fns)))
+                texture-name))
 
 
 ;; The texture-slot-dims functions is bound/rebound whenever the :game-dir setting changes.

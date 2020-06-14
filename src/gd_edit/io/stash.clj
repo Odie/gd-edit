@@ -78,7 +78,7 @@
 
 (defn write-stash-file
   [stash savepath]
-  (let [bb (ByteBuffer/allocate (* 512 1024))
+  (let [bb (ByteBuffer/allocate (* 10 1024 1024))
         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
         seed (:meta-stash-seed stash)
