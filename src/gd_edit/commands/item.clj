@@ -342,7 +342,7 @@
   all suffix records are stored under :suffix"
   [records]
   (select-keys (->> records
-                    (into #{} (filter-for-record-of-class "LootRandomizer"))
+                    (into #{} filter-for-affixes)
                     (group-by categorize-prefix-or-suffix))
                [:prefix :suffix]))
 
@@ -497,11 +497,11 @@
 ;;------------------------------------------------------------------------------
 ;; Command handlers
 ;;------------------------------------------------------------------------------
-(defn item-at-fuzzy-path
+(defn data-at-fuzzy-path
   [character path-str]
   (sw/walk character (str/split path-str #"/")))
 
-(defn item-located-or-print-error
+(defn data-located-or-print-error
   [walk-result]
   (let [{:keys [status]} walk-result]
     (cond
@@ -519,8 +519,8 @@
   [[input [path target-name level-cap-str]]]
 
   ;; Do some sanity checks before we try creating and placing an item
-  (if-let [result (->> (item-at-fuzzy-path @globals/character path)
-                       (item-located-or-print-error))]
+  (if-let [result (->> (data-at-fuzzy-path @globals/character path)
+                       (data-located-or-print-error))]
     (let [{:keys [actual-path]} result
           level-cap (when (some? level-cap-str)
                       (Integer/parseInt level-cap-str))
@@ -548,6 +548,63 @@
             (printer/show-item item))
           (println "Sorry, there is" (red "no room") "to fit the item."))))))
 
+
+(defn granted-skill-name
+  [record]
+  (-> record
+      (get "itemSkillName")
+      dbu/record-by-name
+      dbu/skill-name-from-record))
+
+(defn affix-name-idx-by-type
+  [affix-type]
+  (let [affixes (->> (dbu/db)
+                     (reshape-records-as-affixes)
+                     affix-type)
+        affixes-by-granted-skill-name (->> affixes
+                                           (map #(vector (granted-skill-name %) %))
+                                           (remove #(nil? (first %)))
+                                           (into {}))
+        affixes-by-name (->> affixes
+                             (map #(vector (affix-record-get-name %) %))
+                             (remove #(nil? (first %)))
+                             (into {}))]
+    (merge affixes-by-name affixes-by-granted-skill-name)))
+
+(defn set-affix-handler
+  [[input [path target-name]]]
+
+  ;; Do some sanity checks before we try creating and placing an item
+  (if-let [result (->> (data-at-fuzzy-path @globals/character path)
+                       (data-located-or-print-error))]
+    (let [{:keys [actual-path]} result
+          affix-type (cond
+                       (= (last actual-path) :prefix-name)
+                       :prefix
+                       (= (last actual-path) :suffix-name)
+                       :suffix)
+
+          affixes-idx (affix-name-idx-by-type affix-type)
+          best-match (first (u/rank-by-similarity target-name first affixes-idx))
+          matched-affix-name (get-in best-match [:item 0])
+          affix (get-in best-match [:item 1])]
+
+      (cond
+        (nil? affix)
+        (println (u/fmt "Sorry, the affix \"#{target-name}\" could not be found"))
+
+        (not (> (u/string-similarity (str/lower-case target-name) matched-affix-name) 0.75))
+        (do
+          (println (u/fmt "Sorry, the closest affix match \"#{matched-affix-name}\" doesn't look like the affix you asked for."))
+          (println (red "Item not altered")))
+
+        :else
+        (do
+          (swap! globals/character update-in actual-path (constantly (:recordname affix)))
+          (println (green "Item altered"))
+          (let [path-to-item (drop-last actual-path)]
+            (printer/print-object (get-in @globals/character path-to-item) path-to-item)))))))
+
 (defn batch-items!
   [item inv-path]
   (loop [item item]
@@ -558,8 +615,8 @@
   [[input [path target-name level-cap-str]]]
 
   ;; Do some sanity checks before we try creating and placing an item
-  (if-let [result (->> (item-at-fuzzy-path @globals/character path)
-                       (item-located-or-print-error))]
+  (if-let [result (->> (data-at-fuzzy-path @globals/character path)
+                       (data-located-or-print-error))]
     (let [{:keys [actual-path]} result
           level-cap (when (some? level-cap-str)
                       (Integer/parseInt level-cap-str))
@@ -643,8 +700,8 @@
   (if (<= (count path) 1)
     (swap-variant-print-usage)
 
-    (if-let [result (->> (item-at-fuzzy-path @globals/character path)
-                         (item-located-or-print-error))]
+    (if-let [result (->> (data-at-fuzzy-path @globals/character path)
+                         (data-located-or-print-error))]
       (let [{:keys [found-item actual-path]} result
             target-field-name (or target-field-name
                                   "basename")

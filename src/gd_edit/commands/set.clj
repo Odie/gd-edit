@@ -201,6 +201,11 @@
             (commands.item/path-is-rift-gate-list? val-path)
             (add-uid-by-name! val-path (second tokens) (dbu/get-gates))
 
+            (or
+             (= (last (:actual-path walk-result)) :prefix-name)
+             (= (last (:actual-path walk-result)) :suffix-name))
+            (commands.item/set-affix-handler [input tokens])
+
             (and
              (dbu/is-item? (get-in @globals/character (butlast val-path)))
              (= :relic-name (last val-path)))

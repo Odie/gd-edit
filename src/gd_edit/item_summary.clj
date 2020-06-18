@@ -718,6 +718,17 @@
            (s/transform [s/MAP-VALS] #(into {} %)))
       (set/rename-keys {nil :main})))
 
+(defn- calc-item-skill-level
+  [record]
+  (when (and (not (record "itemSkillLevel"))
+             (record "itemSkillLevelEq")
+             (or
+              (record "levelRequirement")
+              (record "itemLevel")))
+    (dec (int (eq/evaluate (record "itemSkillLevelEq")
+                           {"itemLevel" (or (record "itemLevel")
+                                            (record "levelRequirement"))})))))
+
 (defn effect-summary
   ([record]
    (effect-summary record #{}))
@@ -728,22 +739,15 @@
    ;; Some records require a calculated `itemSkillLevel` to full resolve some of its values
    ;; In these cases, the `v` in the record will be a vector.
    ;; `itemSkillLevel` can be used as the index to retrieve the actual value of `v`
-   (let [record (cond-> record
-                  (and (not (record "itemSkillLevel"))
-                       (record "itemSkillLevelEq")
-                       (or
-                        (record "levelRequirement")
-                        (record "itemLevel")))
-                  (assoc "itemSkillLevel" (dec (int (eq/evaluate (record "itemSkillLevelEq")
-                                                                 {"itemLevel" (or (record "itemLevel")
-                                                                                  (record "levelRequirement"))})))))
-
+   (let [item-skill-level (calc-item-skill-level record)
+         record (cond-> record
+                    item-skill-level
+                    (assoc "itemSkillLevel" item-skill-level))
          sub-records (split-subrecords record)
          record (sub-records :main)
          sub-records (-> sub-records
                          (dissoc :main)
-                         vals)
-         ]
+                         vals)]
 
      (->> (concat
 
@@ -841,7 +845,8 @@
   [item]
 
   (let [base-record (dbu/record-by-name (:basename item))
-        subtype (record-class-subtype base-record)]
+        subtype (record-class-subtype base-record)
+        item-skill-level (calc-item-skill-level base-record)]
 
     (->>
      [;; Name of item
@@ -867,10 +872,14 @@
                            (into {})))
 
       (when-let [prefix (dbu/record-by-name (:prefix-name item))]
-        (effect-summary prefix))
+        (effect-summary (cond-> prefix
+                          item-skill-level
+                          (assoc "itemSkillLevel" item-skill-level))))
 
       (when-let [suffix (dbu/record-by-name (:suffix-name item))]
-        (effect-summary suffix))
+        (effect-summary (cond-> suffix
+                          item-skill-level
+                          (assoc "itemSkillLevel" item-skill-level))))
 
       ;; Requirements section
       ""
