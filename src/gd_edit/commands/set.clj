@@ -148,6 +148,15 @@
           (println (red "Sorry,") (format (green "did you mean %s?") (yellow (get-in result [:rankings 0 :item :display-name])))))
         (reset! globals/character character)))
 
+(defn- path-is-tokens?
+  [path]
+
+  (and (= (first path) :tokens-per-difficulty)
+       (= 2 (count path))))
+
+(defn char-add-token!
+  [val-path token]
+  (swap! globals/character update-in val-path conj token))
 
 (defn set-handler
   [[input tokens]]
@@ -200,6 +209,10 @@
 
             (commands.item/path-is-rift-gate-list? val-path)
             (add-uid-by-name! val-path (second tokens) (dbu/get-gates))
+
+            ;; Is the user trying to add to the tokens list?
+            (path-is-tokens? val-path)
+            (char-add-token! val-path (second tokens))
 
             (or
              (= (last (:actual-path walk-result)) :prefix-name)

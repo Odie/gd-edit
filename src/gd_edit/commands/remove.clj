@@ -41,14 +41,14 @@
                         [([:weapon-sets _ :items _] :seq)] :fixed-length
                         :else :ok)]
         (cond
-          (string? target)
-          (println (red "Sorry,") (format "can't target a string for removal"))
+          (map? parent)
+          (println (red "Sorry,") "a structure field cannot be removed")
 
           (number? target)
-          (println (red "Sorry,") (format "can't target a number for removal"))
+          (println (red "Sorry,") "can't target a number for removal")
 
           (boolean? target)
-          (println (red "Sorry,") (format "can't target a boolean for removal"))
+          (println (red "Sorry,") "can't target a boolean for removal")
 
           ;; Want to remove the contents of a whole array?
           (and all?
@@ -73,11 +73,17 @@
                            (count parent)))
 
           ;; Want to remove a single item?
-          (map? found-item)
+          (map? target)
           (do
             (swap! globals/character #(s/setval actual-path s/NONE %))
             (println (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
 
+          (and
+           (string? target)
+           (vector? parent))
+          (do
+            (swap! globals/character update-in parent-path u/vec-remove (nth actual-path 2))
+            (println (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
 
           :else
           (println (red "Oops!") "I don't know how to remove this!"))))))

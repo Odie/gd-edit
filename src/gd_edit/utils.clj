@@ -135,6 +135,10 @@
           {}
           coll))
 
+(defn vec-remove
+  "remove elem in coll"
+  [coll pos]
+  (into (subvec coll 0 pos) (subvec coll (inc pos))))
 
 ;;------------------------------------------------------------------------------
 ;; Logging related functions
