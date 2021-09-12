@@ -32,15 +32,17 @@
     (when (.exists lib-folder-file)
       (as-> lib-folder-file $
         (vdf/parse $)
-        (get $ "LibraryFolders")
+        (get $ "libraryfolders")
+
         (filter #(parse-int (key %)) $)
         (specter/transform [specter/ALL specter/FIRST] parse-int $)
 
         ;; Sort by the directory priority
         (sort-by first $)
         ;; Grab the directories only
-        (map second $)))))
-
+        (map second $)
+        (map #(get % "path") $)
+        ))))
 
 (defn- standard-game-dirs
   "Get the game's expected installation paths"
