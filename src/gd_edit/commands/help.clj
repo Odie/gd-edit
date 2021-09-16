@@ -293,6 +293,12 @@
                "After running through the commands, control will return back to the"
                "command-prompt."])]
 
+   ["batch character" "Execute commands in batch file for all known characters"
+    (str/join "\n"
+              ["Syntax: batch character <path-to-batch-file>"
+               ""
+               "Load each character file found by the editor, run the commands indicated by the batch file, then write the character file before proceeding to the next character."])
+    ]
 
    ["batch item" "Batch creates several copies of the specified item"
     (str/join "\n"
