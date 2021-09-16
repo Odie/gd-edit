@@ -118,6 +118,7 @@
    ["diag"]    (fn [input] (commands.diag/diag-handler input))
    ["batch"]    (fn [input] (commands.batch/batch-handler input))
    ["batch" "item"]    (fn [input] (commands.item/batch-item-handler input))
+   ["batch" "character"]    (fn [input] (commands.batch/batch-character-handler input))
    ["swap-variant"] (fn [input] (commands.item/swap-variant-handler input))
    ["shrine" "list"] (fn [input] (commands.shrine/shrine-list-handler input))
    ["gate" "list"] (fn [input] (commands.shrine/gate-list-handler input))})

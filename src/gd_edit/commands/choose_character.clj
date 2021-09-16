@@ -11,6 +11,22 @@
             [gd-edit.io.stash :as stash]
             [gd-edit.printer :as printer]))
 
+(defn character-name-from-dir
+  [dir]
+  (let [char-name (.getName dir)]
+    (if (= \_ (first char-name))
+      (subs char-name 1)
+      char-name)))
+
+(defn character-list
+  []
+  (map (fn
+         [dir]
+         {:character-name (character-name-from-dir dir)
+          :gdc-path (.getPath (io/file dir "player.gdc"))
+          :dir dir})
+       (dirs/get-all-save-file-dirs)))
+
 (defn- character-manipulation-screen
   []
   {:display-fn
@@ -20,10 +36,9 @@
    :choice-map [["r" "reload" (fn [] (au/load-character-file (@globals/character :meta-character-loaded-from)))]
                 ["w" "write" (fn[] (commands.write/write-handler [nil]))]]})
 
-
 (declare character-manipulation-screen!)
 
-(defn- load-character-file
+(defn load-character-file
   [savepath]
   (println "Loading from:")
   (u/print-indent 1)
@@ -45,23 +60,22 @@
 
      ;; generate the menu choices
      ;; reduce over save-dirs with each item being [index save-dir-item]
-     :choice-map (reduce
-                  (fn [accum [idx dir]]
-                    (let [display-idx (inc idx)]
+     :choice-map (map
+                  (fn [[idx char-loc]]
+                    [;; command string
+                     (str (inc idx))
 
-                      (conj accum
-                            [(str display-idx)                    ; command string
-                             (format "%s (%s save)"
-                                     (let [char-name (u/last-path-component (.getPath dir))]
-                                       (if (= \_ (first char-name))
-                                         (subs char-name 1)
-                                         char-name))
-                                     (dirs/save-dir-type dir))         ; menu display string
-                             (fn []                               ; function to run when selected
-                               (let [savepath (.getPath (io/file dir "player.gdc"))]
-                                 (load-character-file savepath)))])))
-                  []
-                  (map-indexed vector save-dirs))}))
+                     ;; menu display string
+                     (format "%s (%s save)"
+                             (:character-name char-loc)
+                             (dirs/save-dir-type (:dir char-loc)))
+
+                     ;; function to run when selected
+                     (fn []
+                       (load-character-file (:gdc-path char-loc)))])
+                  (->> (character-list)
+                       (sort-by :character-name)
+                       u/indexed))}))
 
 (defn character-selection-screen! [] (stack/replace-last! gd-edit.globals/menu-stack (character-selection-screen)))
 (defn character-manipulation-screen! [] (stack/replace-last! gd-edit.globals/menu-stack (character-manipulation-screen)))
