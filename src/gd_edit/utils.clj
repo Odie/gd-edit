@@ -697,3 +697,9 @@
    #(let [[form path] %]
       {:path path :val form})
    (path-seq* form nil)))
+
+(defn open-null-stream
+  []
+  (if (u/running-windows?)
+    (java.io.FileOutputStream. "NUL")
+    (java.io.FileOutputStream. "/dev/null")))
