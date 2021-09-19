@@ -3,7 +3,8 @@
             [gd-edit.db-utils :as dbu]
             [gd-edit.printer :as printer]
             [gd-edit.level :refer :all]
-            [clojure.data :refer [diff]]))
+            [clojure.data :refer [diff]]
+            [gd-edit.utils :as u]))
 
 (defn fields-for--modify-character-level
   [character new-level]
@@ -38,7 +39,7 @@
 
   (cond
     (empty? tokens)
-    (println
+    (u/print-line
      "usage: level <new-level>")
 
     :else
@@ -47,18 +48,18 @@
                           (get "maxPlayerLevel"))]
       (cond
         (< level 1)
-        (println "Please enter a level value that is 1 or greater")
+        (u/print-line "Please enter a level value that is 1 or greater")
 
         (> level level-limit)
-        (println "Sorry, max allowed level is" level-limit)
+        (u/print-line "Sorry, max allowed level is" level-limit)
 
         :else
         (let [modified-character (merge @globals/character
                                         (fields-for--modify-character-level @globals/character level))]
-          (println "Changing level to" level)
-          (newline)
+          (u/print-line "Changing level to" level)
+          (u/newline-)
 
-          (println "Updating the following fields:")
+          (u/print-line "Updating the following fields:")
           (printer/print-map-difference (diff @globals/character modified-character))
 
           (swap! globals/character modify-character-level level))))))

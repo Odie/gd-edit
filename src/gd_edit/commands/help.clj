@@ -1,5 +1,6 @@
 (ns gd-edit.commands.help
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [gd-edit.utils :as u]))
 
 
 (def command-help-map
@@ -345,9 +346,9 @@
                                   0 command-names)]
       ;; Print the name of the command followed by the short help text
       (doseq [help-item command-help-map]
-        (println (format (format "%%-%ds     %%s" max-name-length) (first help-item) (second help-item))))
-      (newline)
-      (println (str/join "\n"
+        (u/print-line (format (format "%%-%ds     %%s" max-name-length) (first help-item) (second help-item))))
+      (u/newline-)
+      (u/print-line (str/join "\n"
                          ["To more detailed help text on a command, run: "
                           " help <command>"
                           ""
@@ -365,13 +366,13 @@
           help-item (get-help-item command)]
       (cond
         (nil? help-item)
-        (println (format "Unknown command '%s'" command))
+        (u/print-line (format "Unknown command '%s'" command))
 
         (> (count help-item) 2)
-        (println (nth help-item 2))
+        (u/print-line (nth help-item 2))
 
         :else
         (do
-          (println (format "%s\t%s" (first help-item) (second help-item)))
-          (println)
-          (println (format "Sorry, '%s' has no detailed help text." command)))))))
+          (u/print-line (format "%s\t%s" (first help-item) (second help-item)))
+          (u/print-line)
+          (u/print-line (format "Sorry, '%s' has no detailed help text." command)))))))

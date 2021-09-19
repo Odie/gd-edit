@@ -88,15 +88,15 @@
                              })))]
 
     ;; Print the display names
-    (println "classes:")
+    (u/print-line "classes:")
     (if (empty? classes)
       (do
         (u/print-indent 1)
-        (println (yellow "None")))
+        (u/print-line (yellow "None")))
 
       (doseq [klass classes]
         (u/print-indent 1)
-        (println (yellow (:skill-display-name klass)))
+        (u/print-line (yellow (:skill-display-name klass)))
                  (format "(skills/%d)" (:idx klass))))))
 
 (defn class-handler
@@ -109,11 +109,11 @@
   "Show the class of the loaded character"
   [[input tokens]]
 
-  (println "Known classes:")
+  (u/print-line "Known classes:")
   (doseq [classname (->> (db-class-ui-records)
                          (map db-class-ui-record->class-name))]
     (u/print-indent 1)
-    (println classname)))
+    (u/print-line classname)))
 
 (defn class-remove-by-name
   [character class-name]
@@ -140,7 +140,7 @@
   [[input tokens]]
 
   (if (empty? tokens)
-    (println "Please provide the partial name of the class to remove from the character")
+    (u/print-line "Please provide the partial name of the class to remove from the character")
     ;; Get the db record that represents the class mastery
     (let [class-to-remove (first tokens)
 
@@ -150,17 +150,17 @@
                              (first))]
 
       (if (empty? matched-class)
-        (println (format "\"%s\" doesn't match any of the known classes" class-to-remove))
+        (u/print-line (format "\"%s\" doesn't match any of the known classes" class-to-remove))
 
         ;; Update the character
         (let [modified-character (class-remove-by-name @globals/character matched-class)]
 
           ;; Inform the user what happened
-          (println "Removing class:" matched-class)
+          (u/print-line "Removing class:" matched-class)
           (print-character-classes modified-character (dbu/db))
 
-          (println)
-          (println "Updating the following fields:")
+          (u/print-line)
+          (u/print-line "Updating the following fields:")
           (printer/print-map-difference (clojure.data/diff @globals/character modified-character))
 
           ;; Actually update the loaded character
@@ -194,7 +194,7 @@
   [[input tokens]]
 
   (if (empty? tokens)
-    (println "Please provide the partial name of the class to remove from the character")
+    (u/print-line "Please provide the partial name of the class to remove from the character")
     ;; Get the db record that represents the class mastery
     (let [class-to-add (first tokens)
 
@@ -205,23 +205,23 @@
           class-record (dbu/record-by-name class-path)]
 
       (if (nil? class-record)
-        (println (format "\"%s\" doesn't match any of the known classes" (first tokens)))
+        (u/print-line (format "\"%s\" doesn't match any of the known classes" (first tokens)))
 
         (let [perform-op (if-not (zero? (:skill-points @globals/character))
                            true
                            (do
-                             (println (str/join "\n" ["You need at least 1 skill point to add new mastery."
+                             (u/print-line (str/join "\n" ["You need at least 1 skill point to add new mastery."
                                                       "Adding a new mastery now will automatically add 1 skill point to your character."]))
                              (printer/prompt-yes-no "Really add class?")))]
           (when perform-op
             (let [modified-character (class-add @globals/character class-record)]
 
               ;; Inform the user what happened
-              (println "Adding class:" class-name)
+              (u/print-line "Adding class:" class-name)
               (print-character-classes modified-character (dbu/db))
 
-              (println)
-              (println "Updating the following fields:")
+              (u/print-line)
+              (u/print-line "Updating the following fields:")
               (printer/print-map-difference (clojure.data/diff @globals/character modified-character))
 
               ;; Actually update the loaded character

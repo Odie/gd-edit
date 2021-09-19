@@ -16,14 +16,14 @@
         target (cond-> target
                  (.isFile target)
                  (.getParentFile))]
-    (println "Moving character to trash:")
+    (u/print-line "Moving character to trash:")
     (u/print-indent 1)
-    (println (yellow target))
+    (u/print-line (yellow target))
 
     (try
       (.moveToTrash (FileUtils/getInstance)
                     (into-array [target]))
-      (catch Exception _ (println (red "Error!") "Could not move files to trash!")))
+      (catch Exception _ (u/print-line (red "Error!") "Could not move files to trash!")))
 
     ;; If the loaded character was deleted, unload the character from memory
     (when (= (:meta-character-loaded-from @globals/character) (io/file savepath))
@@ -40,8 +40,8 @@
     {:display-fn
      (fn []
        (if (empty? save-dirs)
-         (println (red "No save files found"))
-         (println "Please choose a character to delete:")))
+         (u/print-line (red "No save files found"))
+         (u/print-line "Please choose a character to delete:")))
 
      ;; generate the menu choices
      ;; reduce over save-dirs with each item being [index save-dir-item]
@@ -80,14 +80,14 @@
            characters (au/locate-character-files param)]
        (cond
          (zero? (count characters))
-         (println (red "Sorry,") (format "cannot find a character named \"%s\"" character-name))
+         (u/print-line (red "Sorry,") (format "cannot find a character named \"%s\"" character-name))
 
          (> (count characters) 1)
          (do
-           (println (red "Sorry,") "there is more than one character with that name at:")
+           (u/print-line (red "Sorry,") "there is more than one character with that name at:")
            (doseq [f characters]
              (u/print-indent 1)
-             (println (yellow f))))
+             (u/print-line (yellow f))))
 
          :else
          (delete-character-file (first characters)))))

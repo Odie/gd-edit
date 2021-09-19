@@ -26,9 +26,9 @@
   ;; If the user supplied no params, show the current log level
   (if (zero? (count token))
     (do
-      (println "Current log level:")
+      (u/print-line "Current log level:")
       (u/print-indent 1)
-      (println
+      (u/print-line
        (yellow
         (u/keyword->str
          (or (log-level-get @globals/settings)
@@ -40,14 +40,14 @@
         (= log-level-str "clear")
         (do
           (swap! globals/settings log-level-clear)
-          (println (green "Ok!")))
+          (u/print-line (green "Ok!")))
 
         ;; The user asked to set a specific log level?
         (contains? log/-levels-set (keyword log-level-str))
         (let [log-level (keyword log-level-str)]
           (swap! globals/settings log-level-set (keyword log-level))
           (log/set-level! log-level)
-          (println (green "Ok!")))
+          (u/print-line (green "Ok!")))
 
         :else
-        (println (red "Unknown log level: " log-level-str))))))
+        (u/print-line (red "Unknown log level: " log-level-str))))))

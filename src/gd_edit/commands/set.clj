@@ -134,18 +134,18 @@
 
         (cond
           (= status :added-all)
-          (println (green "Added") (yellow (count (clojure.set/difference (into #{} (get-in character path))
+          (u/print-line (green "Added") (yellow (count (clojure.set/difference (into #{} (get-in character path))
                                                                           (into #{} (get-in old-character path)))))
                    (green "new UIDs"))
 
           (= status :already-exists)
-          (println (red "Sorry,") "the UID" (yellow (get-in result [:item :display-name])) "is already in the list")
+          (u/print-line (red "Sorry,") "the UID" (yellow (get-in result [:item :display-name])) "is already in the list")
 
           (= status :added-new-item)
-          (println (green "Added") (yellow (get-in result [:item :display-name])))
+          (u/print-line (green "Added") (yellow (get-in result [:item :display-name])))
 
           (= status :no-definite-match)
-          (println (red "Sorry,") (format (green "did you mean %s?") (yellow (get-in result [:rankings 0 :item :display-name])))))
+          (u/print-line (red "Sorry,") (format (green "did you mean %s?") (yellow (get-in result [:rankings 0 :item :display-name])))))
         (reset! globals/character character)))
 
 (defn- path-is-tokens?
@@ -168,7 +168,7 @@
     (commands.choose-character/character-selection-screen!)
 
     (< (count tokens) 2)
-    (println "Usage: show <path> <new-value>")
+    (u/print-line "Usage: show <path> <new-value>")
 
     ;; Split a path into components.
     ;; We're going to use these as keys to navigate into the character sheet
@@ -179,7 +179,7 @@
 
       (cond
         (= status :not-found)
-        (println "No matches found")
+        (u/print-line "No matches found")
 
         (= status :too-many-matches)
         (sw/print-ambiguous-walk-result walk-result)
@@ -237,11 +237,11 @@
             ;; The user cannot create a collection directly from the commandline.
             ;; So replacing a collection directly makes no sense and cannot be done.
             (coll? value)
-            (println "Sorry, can't set the value of" (first tokens))
+            (u/print-line "Sorry, can't set the value of" (first tokens))
 
             ;; If coercion failed, tell the user what type is being expected
             (= newval :failed)
-            (println "Please provide a value that is of type" (-> (type value)
+            (u/print-line "Please provide a value that is of type" (-> (type value)
                                                                   (str)
                                                                   (str/split #"\.")
                                                                   (last)
@@ -249,7 +249,7 @@
 
             :else
             (if-not (warn-user-before-set-val @globals/character val-path newval)
-              (println (red"Command aborted."))
+              (u/print-line (red"Command aborted."))
               ;; Set the new value into the character sheet
               (reset! globals/character
                       (update-in @globals/character val-path (constantly newval)))))

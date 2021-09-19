@@ -10,6 +10,23 @@
            java.io.File
            [java.security MessageDigest]))
 
+(def ^:dynamic *suppress-print* false)
+
+(defn print-line
+  [& args]
+  (when-not *suppress-print*
+    (apply println args)))
+
+(defn print-
+  [& args]
+  (when-not *suppress-print*
+    (apply print args)))
+
+(defn newline-
+  []
+  (when-not *suppress-print*
+    (newline)))
+
 (defmacro when-let*
   "Multiple binding version of when-let"
   [bindings & body]
@@ -170,7 +187,7 @@
 
 (defmacro print-stack []
   `(doseq [s# (.getStackTrace (Thread/currentThread))]
-     (println s#)))
+     (print-line s#)))
 
 ;;------------------------------------------------------------------------------
 ;; Timing functions
@@ -194,7 +211,7 @@
   [msg sexp]
 
    `(let [[duration# result#] (timed ~sexp)]
-      (println ~msg "in" (nanotime->secs duration#) "seconds")
+      (print-line ~msg "in" (nanotime->secs duration#) "seconds")
       result#))
 
 (defn readable-time
@@ -433,7 +450,7 @@
   [indent-level]
 
   (dotimes [_ indent-level]
-    (print "    ")))
+    (print- "    ")))
 
 (defn collect-values-with-key-prefix
   [coll key-prefix]
@@ -700,6 +717,12 @@
 
 (defn open-null-stream
   []
-  (if (u/running-windows?)
+  (if (running-windows?)
     (java.io.FileOutputStream. "NUL")
     (java.io.FileOutputStream. "/dev/null")))
+
+(defn clamp
+  [val minimum maximum]
+  (->> val
+       (max minimum)
+       (min maximum)))

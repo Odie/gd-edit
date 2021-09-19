@@ -10,13 +10,13 @@
   [[input tokens]]
 
   (au/setting-gamedir-clear!)
-  (println "Ok!"))
+  (u/print-line "Ok!"))
 
 (defn- gamedir-show
   []
 
-  (println "Currently using this as game dir:")
-  (println "    " (let [game-dir  (dirs/get-game-dir)]
+  (u/print-line "Currently using this as game dir:")
+  (u/print-line "    " (let [game-dir  (dirs/get-game-dir)]
                     (if (nil? game-dir)
                       (red "None")
                       game-dir))))
@@ -28,7 +28,7 @@
   (if (empty? game-dir)
     (au/setting-gamedir-clear!)
     (au/setting-gamedir-set! game-dir))
-  (println "Ok!"))
+  (u/print-line "Ok!"))
 
 (defn gamedir-handler
   [[input tokens]]

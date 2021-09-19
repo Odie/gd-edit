@@ -313,7 +313,7 @@
 
 (defn val-or-range->string
   [v & opts]
-  ;; (println v)
+  ;; (u/print-line v)
   (if (seq? v)
     (if (> (count v) 1)
       (apply format "%s-%s"
@@ -341,7 +341,7 @@
 (defn generic-effect-kv->string-
   [record [k v :as kv]]
 
-  ;; (println "generic-effect:" k)
+  ;; (u/print-line "generic-effect:" k)
   (when-not (or (str/ends-with? k "Max")
                 (str/ends-with? k "Chance"))
     (let [components (camelcase->keywords k)]
@@ -404,7 +404,7 @@
 (defn slow-effect-kv->string-
   [record [k v :as kv]]
 
-  ;; (println "slow effect:" k)
+  ;; (u/print-line "slow effect:" k)
   (let [components (camelcase->keywords k)
         effect (effect-by-components components)]
     (cond
@@ -520,7 +520,7 @@
 (defn effect-kv->string
   [record [k v :as kv]]
 
-  ;; (println "effect-kv->string:" k)
+  ;; (u/print-line "effect-kv->string:" k)
   (let [v (lookup-and-resolve record k)
         kv [k v]]
     (when-not (effect-ignore-fields k)
@@ -734,7 +734,7 @@
    (effect-summary record #{}))
 
   ([record recursion-blocks]
-   ;; (println "Summarizing: " (:recordname record))
+   ;; (u/print-line "Summarizing: " (:recordname record))
 
    ;; Some records require a calculated `itemSkillLevel` to full resolve some of its values
    ;; In these cases, the `v` in the record will be a vector.
@@ -982,7 +982,7 @@
   (defn printall
     [x]
     (doseq [line x]
-      (println line)))
+      (u/print-line line)))
 
   (-> (dbu/record-by-name
        "records/skills/playerclass08/soultransfer.dbr")
@@ -993,7 +993,7 @@
 
   ;; Test individual items in the inventory
   (doseq [line (item-summary (repl/get-at-path @globals/character "inv/1/items/4"))]
-    (println line))
+    (u/print-line line))
 
 
   ;; Batch test for items that completely fail

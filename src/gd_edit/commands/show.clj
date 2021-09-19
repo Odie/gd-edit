@@ -27,7 +27,7 @@
   [result]
 
   (let [actual-path-item (get-in @globals/character (:actual-path result))]
-    (println (format "Cannot traverse into %s at the path \"%s\""
+    (u/print-line (format "Cannot traverse into %s at the path \"%s\""
                      (classname actual-path-item)
                      (str/join "/" (:longest-path result))))))
 
@@ -35,7 +35,7 @@
   [path-keys {:keys [status] :as result}]
   (cond
     (= status :not-found)
-    (println "No matches found")
+    (u/print-line "No matches found")
 
     (= status :too-many-matches)
     (if ;; If we were able to match the entire path, but arrived at multiple entries
@@ -80,7 +80,7 @@
         (print-traverse-walk-error-or-true path-keys result)
         ;; Print the path to the entry being shown
         ;; This helps the user verify what they're looking at is what is asked for.
-        (println (->> (:actual-path result)
+        (u/print-line (->> (:actual-path result)
                       (map u/keyword->str)
                       (str/join "/")))
         (printer/print-object found-item (:actual-path result))))))

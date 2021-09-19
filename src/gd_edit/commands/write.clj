@@ -115,19 +115,19 @@
     (cond
       (= backup-status true)
       (do
-        (println "Save file backed up to:")
+        (u/print-line "Save file backed up to:")
         (u/print-indent 1)
-        (println (yellow backup-path)))
+        (u/print-line (yellow backup-path)))
 
       (= backup-status false)
       (do
-        (println "Cannot backup file up to:")
+        (u/print-line "Cannot backup file up to:")
         (u/print-indent 1)
-        (println (yellow backup-path))))
+        (u/print-line (yellow backup-path))))
 
-    (println "Saving file:" )
+    (u/print-line "Saving file:" )
     (u/print-indent 1)
-    (println (yellow savepath))
+    (u/print-line (yellow savepath))
 
     (gdc/write-character-file character (.getCanonicalPath (io/file savepath)))))
 
@@ -143,21 +143,21 @@
     ;; Print out any rename status
     (cond
       (= rn-status :rename-success)
-      (println "Renamed save directory to match character name: " character-name)
+      (u/print-line "Renamed save directory to match character name: " character-name)
 
       ;; Did the rename fail because there because the target directory already exists?
       ;; If so, inform the user...
       (= rn-status :rename-failed)
       (if (.exists (.getParentFile (io/file (get-savepath character))))
         (do
-          (println "Unable to rename save directory because it conflicts with an existing directory: ")
+          (u/print-line "Unable to rename save directory because it conflicts with an existing directory: ")
           (u/print-indent 1)
-          (println (yellow (.getCanonicalPath (.getParentFile (io/file (get-savepath character))))))
-          (newline)
-          (println "Please rename your character before trying again."))
+          (u/print-line (yellow (.getCanonicalPath (.getParentFile (io/file (get-savepath character))))))
+          (u/newline-)
+          (u/print-line "Please rename your character before trying again."))
 
         ;; If we don't know why the renamed failed, just print a generic message.
-        (println "Unable to rename save directory to match character name: " character-name)))
+        (u/print-line "Unable to rename save directory to match character name: " character-name)))
 
     ;; If rename failed (rename required, but could not be done...)
     ;; Don't write the file and just return the character as is
@@ -214,15 +214,15 @@
 
   (cond
     (not (au/character-loaded?))
-    (println "Don't have a character loaded yet!")
+    (u/print-line "Don't have a character loaded yet!")
 
     ;; Make sure GD isn't running
     (and
      (dirs/is-character-from-cloud-save? @globals/character)
      (au/is-grim-dawn-running?))
     (do
-      (println "Please quit Grim Dawn before saving the file.")
-      (println (red "File not saved!")))
+      (u/print-line "Please quit Grim Dawn before saving the file.")
+      (u/print-line (red "File not saved!")))
 
     ;; If the user invoked the command without any parameters...
     ;; Write out the currently loaded character
@@ -249,16 +249,16 @@
       (cond
         (= status :new-path-already-exists)
         (do
-          (println (red "Cannot copy character because the directory already exists:"))
+          (u/print-line (red "Cannot copy character because the directory already exists:"))
           (u/print-indent 1)
-          (println savepath))
+          (u/print-line savepath))
 
         :else
         (do
-          (println (green "Ok!"))
+          (u/print-line (green "Ok!"))
           (when (dirs/is-character-from-cloud-save? @globals/character)
-            (println "Looks like you're steam with cloud saves, please remember to restart steam.")
-            (println "Otherwise, your copied character will not show up in the character selection menu.")))))))
+            (u/print-line "Looks like you're steam with cloud saves, please remember to restart steam.")
+            (u/print-line "Otherwise, your copied character will not show up in the character selection menu.")))))))
 
 (defn cycle-backup-and-save-transfer-stash
   [stash]
@@ -268,19 +268,19 @@
     (cond
       (= backup-status true)
       (do
-        (println "Save file backed up to:")
+        (u/print-line "Save file backed up to:")
         (u/print-indent 1)
-        (println (yellow backup-path)))
+        (u/print-line (yellow backup-path)))
 
       (= backup-status false)
       (do
-        (println "Cannot backup file up to:")
+        (u/print-line "Cannot backup file up to:")
         (u/print-indent 1)
-        (println (yellow backup-path))))
+        (u/print-line (yellow backup-path))))
 
-    (println "Saving transfer stash file:" )
+    (u/print-line "Saving transfer stash file:" )
     (u/print-indent 1)
-    (println (yellow save-path))
+    (u/print-line (yellow save-path))
 
     (stash/write-stash-file stash (@globals/transfer-stash :meta-stash-loaded-from))))
 
@@ -289,13 +289,13 @@
 
   (cond
     (nil? (@globals/character :transfer-stashes))
-    (println "The transfer stash had not been loaded")
+    (u/print-line "The transfer stash had not been loaded")
 
     ;; Editing the transfer stash in cloud saves is not supported
     (dirs/is-character-from-cloud-save? @globals/character)
     (do
-      (println "Sorry, saving the transfer stash in cloud saves is not supported.")
-      (println (red "File not saved!")))
+      (u/print-line "Sorry, saving the transfer stash in cloud saves is not supported.")
+      (u/print-line (red "File not saved!")))
 
     :else
     ;; Check if the stash is actually different from the old known state
@@ -304,11 +304,11 @@
 
       ;; If so, tell the user we won't do anything
       (if (= new-state old-state)
-        (println "Transfer stash not saved. Nothing changed.")
+        (u/print-line "Transfer stash not saved. Nothing changed.")
 
         (do
           ;; Otherwise, save the data back to where it was read from.
           (-> @globals/transfer-stash
               (assoc :stash new-state)
               (cycle-backup-and-save-transfer-stash))
-          (println (green "Ok!")))))))
+          (u/print-line (green "Ok!")))))))

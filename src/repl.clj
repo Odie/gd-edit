@@ -64,7 +64,7 @@
 
   (if-let [target-file (resolve-save-file f)]
     (au/load-character-file target-file)
-    (println "File not found: " f)))
+    (u/print-line "File not found: " f)))
 
 (defn write-character-file [character f]
   (gdc/write-character-file character f))
@@ -145,7 +145,7 @@
         explored
 
         (let [node (first front)
-              ;; _ (println "node: " (:recordname node))
+              ;; _ (u/print-line "node: " (:recordname node))
               related (->> (related-db-records node @globals/db-and-index)
                            (filter #(or (= "LevelTable" (get % "Class"))
                                         (u/ci-match (get % "Class") "loot")
@@ -167,6 +167,8 @@
 
 (comment
   (init)
+
+  (cmd "batch character b/do-this")
 
   (load-character "Odie")
 
@@ -228,5 +230,9 @@
   (require '[gd-edit.printer :as printer])
 
   (printer/show-item (get-at-path @globals/character "equipment/0"))
+
+  (doseq [i (range 75)]
+    (cmd (format "write %s" (str i)))
+    )
 
 )

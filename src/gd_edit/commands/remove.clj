@@ -42,32 +42,32 @@
                         :else :ok)]
         (cond
           (map? parent)
-          (println (red "Sorry,") "a structure field cannot be removed")
+          (u/print-line (red "Sorry,") "a structure field cannot be removed")
 
           (number? target)
-          (println (red "Sorry,") "can't target a number for removal")
+          (u/print-line (red "Sorry,") "can't target a number for removal")
 
           (boolean? target)
-          (println (red "Sorry,") "can't target a boolean for removal")
+          (u/print-line (red "Sorry,") "can't target a boolean for removal")
 
           ;; Want to remove the contents of a whole array?
           (and all?
                (sequential? target))
           (do
             (swap! globals/character #(s/transform actual-path empty %))
-            (println (yellow (format "Removed %d items from \"%s\"" (count target) (u/keywords->path target-path)))))
+            (u/print-line (yellow (format "Removed %d items from \"%s\"" (count target) (u/keywords->path target-path)))))
 
           ;; Can't remove the array itself
           (sequential? target)
-          (println (red "Sorry,") "can't target an array for removal")
+          (u/print-line (red "Sorry,") "can't target an array for removal")
 
           (= kase :no-remove)
-          (println (red "Sorry,")
+          (u/print-line (red "Sorry,")
                    (format "\"%s\" cannot be removed"
                            (u/keywords->path actual-path)))
 
           (= kase :fixed-length)
-          (println (red "Sorry,")
+          (u/print-line (red "Sorry,")
                    (format "\"%s\" needs to be fixed to length of %d"
                            (u/keywords->path parent-path)
                            (count parent)))
@@ -76,14 +76,14 @@
           (map? target)
           (do
             (swap! globals/character #(s/setval actual-path s/NONE %))
-            (println (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
+            (u/print-line (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
 
           (and
            (string? target)
            (vector? parent))
           (do
             (swap! globals/character update-in parent-path u/vec-remove (nth actual-path 2))
-            (println (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
+            (u/print-line (yellow (format "Removed item at \"%s\"" (u/keywords->path target-path)))))
 
           :else
-          (println (red "Oops!") "I don't know how to remove this!"))))))
+          (u/print-line (red "Oops!") "I don't know how to remove this!"))))))

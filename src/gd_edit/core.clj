@@ -67,9 +67,9 @@
      ;; Grab a command from the *commands* list if available
      (not-empty @*commands*)
      (do
-       (print (green "> "))
+       (u/print- (green "> "))
        (let [line (first @*commands*)]
-         (println line)
+         (u/print-line line)
          (swap! *commands* rest)
          line))
 
@@ -184,8 +184,8 @@
     (if-not (empty? choice-map)
       (do
         (doseq [[cmd-str disp-str] choice-map]
-          (println (format "%s) %s" cmd-str disp-str)))
-        (println)))))
+          (u/print-line (format "%s) %s" cmd-str disp-str)))
+        (u/print-line)))))
 
 (defn repl-eval
   [[input tokens] command-map]
@@ -211,7 +211,7 @@
                          nil)
 
           command (find-command tokens command-map)
-          _ (newline)
+          _ (u/newline-)
           command-handler (command-map command)]
 
       (cond
@@ -232,7 +232,7 @@
           (command-handler [command-input-string param-tokens]))
 
         :else
-        (println "Don't know how to handle this command")))))
+        (u/print-line "Don't know how to handle this command")))))
 
 (defn- repl-print-notification
   [chan]
@@ -241,7 +241,7 @@
   (when-let [msg (async/poll! chan)]
 
     ;; If a message can be retrieved, display it now.
-    (println msg)))
+    (u/print-line msg)))
 
 (defn repl-iter
   "Runs one repl iteration. Useful when the program is run from the repl"
@@ -249,8 +249,12 @@
 
   (repl-print-menu (last @globals/menu-stack))
   (repl-print-notification globals/notification-chan)
-  (repl-eval (repl-read) command-map)
-  (println))
+  (let [c (repl-read)]
+    (repl-eval c command-map)
+    )
+
+  ;; (repl-eval (repl-read) command-map)
+  (u/print-line))
 
 (defn handle-repl-exceptions
   [e]
@@ -258,19 +262,19 @@
     (cond
       (= (:cause data) :db-not-loaded)
       (do
-        (println (red "Oops!"))
-        (println "This command requires some game data to function correctly.")
-        (println "Please help the editor find the game installation directory using the 'gamedir' command.")
-        (println "See 'help gamedir' for more info.")
-        (newline))
+        (u/print-line (red "Oops!"))
+        (u/print-line "This command requires some game data to function correctly.")
+        (u/print-line "Please help the editor find the game installation directory using the 'gamedir' command.")
+        (u/print-line "See 'help gamedir' for more info.")
+        (u/newline-))
 
       ;; The exception has no additional data attached...
       ;; Print out the stacktrace so it can be diagnosed by *somebody*
       :else
       (do
-        (println "Caught exception:" (.getMessage e))
+        (u/print-line "Caught exception:" (.getMessage e))
         (print-stack-trace e)
-        (newline)
+        (u/newline-)
 
         (t/info e)))))
 
@@ -321,8 +325,8 @@
   []
 
   (if-let [build-info (get-build-info-str)]
-    (println (bold (black build-info)))
-    (println (red "No build info available"))))
+    (u/print-line (bold (black build-info)))
+    (u/print-line (red "No build info available"))))
 
 (defn- check-save-dir-found?!
   [verbose]
@@ -330,10 +334,10 @@
   (let [save-file-dirs (dirs/get-all-save-file-dirs)]
     (if (empty? save-file-dirs)
       (do
-        (println (red "No save files can be located"))
-        (println "The following locations were checked:")
+        (u/print-line (red "No save files can be located"))
+        (u/print-line "The following locations were checked:")
         (doseq [loc (dirs/get-save-dir-search-list)]
-          (println (str "    " loc)))
+          (u/print-line (str "    " loc)))
         false ;; return false to indicate that we failed the test
         )
 
@@ -343,10 +347,10 @@
                                       (conj result (.getParent (io/file item))))
                                     #{}
                                     save-file-dirs)]
-            (println "save directories:")
-            ;;(println actual-dirs)
+            (u/print-line "save directories:")
+            ;;(u/print-line actual-dirs)
             (doseq [loc actual-dirs]
-              (println (str "    " loc)))
+              (u/print-line (str "    " loc)))
           ))
         true))))
 
@@ -355,12 +359,12 @@
 
   (if-not (dirs/get-game-dir)
     (do
-      (println (red "Game directory cannot be located"))
-      (println "The following locations were checked:")
+      (u/print-line (red "Game directory cannot be located"))
+      (u/print-line "The following locations were checked:")
       (doseq [dir (dirs/get-game-dir-search-list)]
-              (println (str "    " dir)))
-      (newline)
-      (println "Some editor functions such as db queries and changing items and equipment won't work properly.")
+              (u/print-line (str "    " dir)))
+      (u/newline-)
+      (u/print-line "Some editor functions such as db queries and changing items and equipment won't work properly.")
       false)
 
     (do
@@ -370,9 +374,9 @@
                                   #{}
                                   [(-> (io/file (dirs/get-game-dir) dirs/database-file)
                                        (.getParent))])]
-          (println "game directory:")
+          (u/print-line "game directory:")
           (doseq [loc actual-dirs]
-            (println (str "    " loc)))
+            (u/print-line (str "    " loc)))
           ))
       true)))
 
@@ -380,9 +384,9 @@
   []
 
   (let [passes-required-checks (check-save-dir-found?! true)]
-    (newline)
+    (u/newline-)
     (check-game-dir-found?! true)
-    (newline)
+    (u/newline-)
     passes-required-checks))
 
 (defn- should-check-for-update?
@@ -541,7 +545,7 @@
                  (u/write-settings @globals/settings))))
 
   (print-build-info)
-  (println)
+  (u/print-line)
   (future (log-build-info))
   (future (log-environment))
 
@@ -562,32 +566,32 @@
   []
 
   (pprint (.getInputArguments (java.lang.management.ManagementFactory/getRuntimeMXBean)))
-  (newline)
+  (u/newline-)
   (pprint (seq (.getURLs (java.lang.ClassLoader/getSystemClassLoader))))
-  (newline))
+  (u/newline-))
 
 (defn exit-unless-64-bit-runtime
   []
 
   (when (not= (System/getProperty "sun.arch.data.model") "64")
-    (println (red "Sorry,") "the editor requires 64 bit Java/JVM.")
+    (u/print-line (red "Sorry,") "the editor requires 64 bit Java/JVM.")
 
-    (println "Your currently running:")
+    (u/print-line "Your currently running:")
     (u/print-indent 1)
-    (println (System/getProperty "java.vm.name"))
+    (u/print-line (System/getProperty "java.vm.name"))
     (u/print-indent 1)
-    (println (System/getProperty "java.runtime.version"))
-    (println)
+    (u/print-line (System/getProperty "java.runtime.version"))
+    (u/print-line)
 
-    (println "Installed at:")
+    (u/print-line "Installed at:")
     (u/print-indent 1)
-    (println (System/getProperty "java.home"))
+    (u/print-line (System/getProperty "java.home"))
 
 
-    (println)
-    (println "Please download the 64 bit version from here:")
+    (u/print-line)
+    (u/print-line "Please download the 64 bit version from here:")
     (u/print-indent 1)
-    (println "https://java.com/en/download/manual.jsp")
+    (u/print-line "https://java.com/en/download/manual.jsp")
     (System/exit 1)))
 
 
@@ -597,7 +601,7 @@
   (exit-unless-64-bit-runtime)
 
   (initialize)
-  (println "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
+  (u/print-line "Need help? Check the docs!\n\thttps://odie.github.io/gd-edit-docs/faq/\n")
 
   (thread (notify-repl-if-latest-version-available))
 
@@ -626,8 +630,8 @@
      ;; Handle all the commandline params
      (cond
        (:help options) (do
-                         (println "The valid options are:")
-                         (println summary)
+                         (u/print-line "The valid options are:")
+                         (u/print-line summary)
                          (System/exit 0))
        (:file options) (au/load-character-file (:file options)))
 
@@ -637,7 +641,7 @@
        ;; Open the file as a stream and replace stdin with it
        (with-open [is (io/input-stream (:batch options))]
          (jl/set-input is)
-         (println (red "Starting in batch mode!"))
+         (u/print-line (red "Starting in batch mode!"))
          (start-editor))
 
        ;; Otherwise, start the editor in interactive mode

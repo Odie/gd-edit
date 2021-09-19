@@ -132,7 +132,7 @@
   ;; Verify that this looks like a game directory
   (if-not (dirs/looks-like-game-dir game-dir)
     ;; If this isn't a valid game directory, print an error msg and exit.
-    (println (format "\"%s\" does not look like a game directory" game-dir))
+    (u/print-line (format "\"%s\" does not look like a game directory" game-dir))
 
     (do
       ;; If this *is* a valid game directory, set it into a global variable.

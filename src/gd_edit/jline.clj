@@ -23,7 +23,7 @@
   ;; when invoked from the cider repl
   (if (not use-jline)
     (do
-      (print prompt)
+      (u/print- prompt)
       (clojure.core/read-line))
 
     (.readLine reader prompt))))

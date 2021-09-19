@@ -22,7 +22,7 @@
 
     (if (or (not (.exists moddir))
             (empty? mods))
-      (println "No mods installed")
+      (u/print-line "No mods installed")
 
       {:display-fn nil
        :choice-map (reduce
@@ -45,11 +45,11 @@
 (defn mod-handler
   [[input tokens]]
 
-  (println "currently selected mod:")
+  (u/print-line "currently selected mod:")
   (u/print-indent 1)
   (if (:moddir @globals/settings)
-    (println (u/last-path-component (:moddir @globals/settings)))
-    (println "none")))
+    (u/print-line (u/last-path-component (:moddir @globals/settings)))
+    (u/print-line "none")))
 
 (defn mod-pick-handler
   [[input tokens]]
@@ -63,4 +63,4 @@
 
   (on-mod-change)
 
-  (println "Ok!"))
+  (u/print-line "Ok!"))

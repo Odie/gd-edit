@@ -163,8 +163,8 @@
   ([^ByteBuffer bb context block-spec-overrides]
 
    (let [{:keys [id length expected-end-position] :as block-header} (read-block-start bb context)
-         ;; _ (println "Reading block:" id)
-         ;; _ (println "length:" length)
+         ;; _ (u/print-line "Reading block:" id)
+         ;; _ (u/print-line "length:" length)
 
          ;; Push data about the current block into a stack
          _ (swap! context update-in [:block-stack] conj block-header)

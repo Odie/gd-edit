@@ -2,9 +2,8 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [progress.file :as progress]
-            [gd-edit
-             [utils :as utils]]
-            [clj-http.client :as client])
+            [clj-http.client :as client]
+            [gd-edit.utils :as u])
   (:import java.io.IOException
            [java.nio.file Files]
            [java.nio.file CopyOption StandardCopyOption]))
@@ -44,7 +43,7 @@
   WARNING: This may block for a long time."
   []
   (let [url (cond
-              (utils/running-nix?)
+              (u/running-nix?)
               "http://tiny.cc/gdednixedn"
 
               :else
@@ -56,7 +55,7 @@
 (defn fetch-latest-build
   [build-info]
   (let [url (cond
-              (utils/running-nix?)
+              (u/running-nix?)
               "http://tiny.cc/gdednixbin"
 
               :else
@@ -64,7 +63,7 @@
         file (java.io.File/createTempFile "gd-edit" ".exe")]
 
     ;; Try to copy the file contents to a temp location
-    (println "Downloading new version")
+    (u/print-line "Downloading new version")
 
     (progress/with-file-progress file :filesize (:filesize build-info)
       (io/copy (fetch-url-as-stream url) file))
@@ -85,8 +84,8 @@
 
   (when-let [latest-build-info (fetch-latest-build-info)]
     (when-let [current-build-info (get-build-info)]
-      ;; (println "latest: " latest-build-info)
-      ;; (println "current: " current-build-info)
+      ;; (u/print-line "latest: " latest-build-info)
+      ;; (u/print-line "current: " current-build-info)
 
       ;; Is the latest build newer than the one we're running?
       (if-not (is-newer? latest-build-info current-build-info)
@@ -115,19 +114,19 @@
 
 (defn- get-restart-script-file
   []
-  (io/file (utils/working-directory) "restart.bat"))
+  (io/file (u/working-directory) "restart.bat"))
 
 (defn- restart-for-win
   [new-exe]
 
-  (println "Restarting...")
+  (u/print-line "Restarting...")
   (let [running-exe-path (io/file (System/getProperty "java.class.path"))
         backup-path (io/file (str running-exe-path ".bak"))
         restart-script-path (get-restart-script-file)]
 
     ;; Write out the restart script
     (spit restart-script-path
-     (utils/fmt
+     (u/fmt
       "
         @echo off
         echo Preparing to restart gd-edit...
@@ -179,23 +178,23 @@
 
     ;; Make a backup of the current exe/binary
     (if-not (.renameTo (io/file running-exe-path) (io/file backup-path))
-      (println "Sorry. Could not rename the current executable.")
+      (u/print-line "Sorry. Could not rename the current executable.")
 
       ;; Replace the current binary with the new one
       (if-not (Files/move (.toPath (io/file new-exe))
                           (.toPath (io/file running-exe-path))
                           (into-array CopyOption [StandardCopyOption/REPLACE_EXISTING]))
-        (println "Sorry. Could not rename the new version.")
+        (u/print-line "Sorry. Could not rename the new version.")
 
         (do
           (.setExecutable (io/file running-exe-path) true)
-          (println "Please restart the editor manually."))))))
+          (u/print-line "Please restart the editor manually."))))))
 
 (defn- restart-self
   [new-exe]
 
   (cond
-    (utils/running-nix?)
+    (u/running-nix?)
     (restart-for-nix new-exe)
 
     :else

@@ -154,8 +154,8 @@
                                        (if (str/starts-with? (str/lower-case str)"tag")
                                          ;; (do
                                          ;;   (if (nil? (localization-table str))
-                                         ;;     ;; (println "replacing \"" str "\" with" (localization-table str))
-                                         ;;     (println "could not replace localization string:" str)
+                                         ;;     ;; (u/print-line "replacing \"" str "\" with" (localization-table str))
+                                         ;;     (u/print-line "could not replace localization string:" str)
                                          ;;     ))
 
                                          ;; Look it up in the localization table

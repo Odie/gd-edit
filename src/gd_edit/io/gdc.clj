@@ -935,7 +935,7 @@
   [ns id]
 
   (when-let [block-spec-var (ns-resolve ns (symbol (str "Block" id)))]
-    (println "block-spec fetched, id:" id)
+    (u/print-line "block-spec fetched, id:" id)
     (var-get block-spec-var)))
 
 (defn get-block-read-fn-by-ns
@@ -946,7 +946,7 @@
 
     (if-not (nil? block-read-fn-var)
       (do
-        (println "read-fn fetched, id:" id)
+        (u/print-line "read-fn fetched, id:" id)
         (var-get block-read-fn-var))
       nil)))
 
@@ -1009,9 +1009,9 @@
              (throw (Throwable. (str"Don't know how to read block " id))))
 
          _ (when *debug*
-             (println "read-block--------------")
-             (println "id" id)
-             (println "length" length)
+             (u/print-line "read-block--------------")
+             (u/print-line "id" id)
+             (u/print-line "length" length)
              )
 
          ;; Try to read the block
@@ -1020,13 +1020,13 @@
          block-data (s/read-struct block-spec-or-read-fn bb context)
 
          _ (when *debug*
-             (println "block-data")
+             (u/print-line "block-data")
              (pprint block-data))
 
          ;; Verify we've reached the expected position
          _ (when *debug*
-             (println "expected-end-position" expected-end-position)
-             (println "actual position" (.position bb)))
+             (u/print-line "expected-end-position" expected-end-position)
+             (u/print-line "actual position" (.position bb)))
          _ (assert (= expected-end-position (.position bb)))
 
          ;; Verify we have the correct enc-state at this point
@@ -1092,7 +1092,7 @@
         enc-context (make-enc-context seed enc-table)
 
         _ (when *debug*
-            (println "\n---------------------- Preamble ----------------------"))
+            (u/print-line "\n---------------------- Preamble ----------------------"))
         preamble (s/read-struct FilePreamble bb enc-context)
         _ (when *debug*
             (pprint preamble))
@@ -1100,7 +1100,7 @@
         _ (validate-preamble preamble)
 
         _ (when *debug*
-            (println "\n---------------------- Header ----------------------"))
+            (u/print-line "\n---------------------- Header ----------------------"))
         header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
         _ (when *debug*
             (pprint header))

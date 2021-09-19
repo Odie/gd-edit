@@ -2,7 +2,8 @@
   (:require [clojure.string :as str]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.app-util :as au]
-            [gd-edit.commands.choose-character :as commands.choose-character]))
+            [gd-edit.commands.choose-character :as commands.choose-character]
+            [gd-edit.utils :as u]))
 
 (defn- maybe-return-to-character-selection-screen
   []
@@ -11,7 +12,7 @@
   (if (not (au/character-loaded?))
     (commands.choose-character/choose-character-handler nil)
 
-    (println (str/join "\n"
+    (u/print-line (str/join "\n"
                        ["Savedir changed."
                         "You can use the \"load\" command to return to the character selection screen."
                         "Any unsaved changes for the current character will be lost."]))))
@@ -20,7 +21,7 @@
   [[input tokens]]
 
   (au/setting-savedir-clear!)
-  (println "Ok!")
+  (u/print-line "Ok!")
   (maybe-return-to-character-selection-screen))
 
 (defn savedir-handler
@@ -29,9 +30,9 @@
   (cond
     (= 0 (count tokens))
     (do
-      (println "Currently looking through these directories for save files:")
+      (u/print-line "Currently looking through these directories for save files:")
       (doseq [loc (dirs/get-save-dir-search-list)]
-        (println (str "    " loc))))
+        (u/print-line (str "    " loc))))
 
     :else
     (let [save-dir (first tokens)]
@@ -39,5 +40,5 @@
       (if (empty? save-dir)
         (au/setting-savedir-clear!)
         (au/setting-savedir-set! save-dir))
-      (println "Ok!")
+      (u/print-line "Ok!")
       (maybe-return-to-character-selection-screen))))

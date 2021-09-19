@@ -7,12 +7,13 @@
             [gd-edit.io.gdc :as gdc]
             [gd-edit.printer :as printer]
             [gd-edit.utils :as utils]
-            [jansi-clj.core :refer [red green yellow]]))
+            [jansi-clj.core :refer [red green yellow]]
+            [gd-edit.utils :as u]))
 
 (defn- print-usage
   []
 
-  (println (->> (help/get-help-item "find")
+  (u/print-line (->> (help/get-help-item "find")
                 (help/detail-help-text))))
 
 
@@ -22,7 +23,7 @@
   (try
     (gdc/load-character-file filepath)
     (catch Error _
-      (println (str "Unable to read file: " filepath)))))
+      (u/print-line (str "Unable to read file: " filepath)))))
 
 (defn- load-all-characters
   "Loads all characters that the editor can currently locate and read."
@@ -74,15 +75,15 @@
         partial-matches (filter #(utils/ci-match (:name %) a-name) interesting-data-items)]
 
     (doseq [[char items] (group-by :character partial-matches)]
-      (println "character: " (yellow (:meta-character-loaded-from char)))
+      (u/print-line "character: " (yellow (:meta-character-loaded-from char)))
 
       (doseq [item items]
-        (println
+        (u/print-line
          (format "%s: %s"
                  (yellow (:name item))
                  (printer/displayable-path (:path item)))))
 
-      (println)
+      (u/print-line)
       )
     )
   )
@@ -102,7 +103,7 @@
 
     ;; Display the results
     (doseq [item partial-matches]
-      (println
+      (u/print-line
        (format "%s: %s"
                (yellow (:name item))
                (printer/displayable-path (:path item)))))))

@@ -2,14 +2,15 @@
   (:require [clojure.string :as str]
             [gd-edit.game-dirs :as dirs]
             [clojure.java.io :as io]
-            [jansi-clj.core :refer [red green yellow]]))
+            [jansi-clj.core :refer [red green yellow]]
+            [gd-edit.utils :as u]))
 
 (defn- print-test-header
   [result-bool text]
 
   (if result-bool
-    (println (green (str "✔ " text)))
-    (println (red   (str "✖ " text)))))
+    (u/print-line (green (str "✔ " text)))
+    (u/print-line (red   (str "✖ " text)))))
 
 (defn- verify-jvm-version
   []
@@ -64,7 +65,7 @@
   (doseq [test-result test-results]
     (when-not (:passed? test-result)
       (print-test-header (:passed? test-result) (:test-msg test-result))
-      (println (:additional-message test-result)))))
+      (u/print-line (:additional-message test-result)))))
 
 (defn diag-info
   []
@@ -97,9 +98,9 @@
     (doseq [test-result test-results]
       (print-test-header (:passed? test-result) (:test-msg test-result))
       (when-not (:passed? test-result)
-        (println (:additional-message test-result))))
+        (u/print-line (:additional-message test-result))))
 
-    (newline)
+    (u/newline-)
     (if all-tests-passed
-      (println "Looks good! The editor should be ready to go!")
-      (println "Oops! Please fix those errors before using the editor!"))))
+      (u/print-line "Looks good! The editor should be ready to go!")
+      (u/print-line "Oops! Please fix those errors before using the editor!"))))

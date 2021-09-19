@@ -31,7 +31,7 @@
   []
   {:display-fn
    (fn []
-     (println "Character: " (:character-name @globals/character)))
+     (u/print-line "Character: " (:character-name @globals/character)))
 
    :choice-map [["r" "reload" (fn [] (au/load-character-file (@globals/character :meta-character-loaded-from)))]
                 ["w" "write" (fn[] (commands.write/write-handler [nil]))]]})
@@ -40,9 +40,9 @@
 
 (defn load-character-file
   [savepath]
-  (println "Loading from:")
+  (u/print-line "Loading from:")
   (u/print-indent 1)
-  (println (yellow savepath))
+  (u/print-line (yellow savepath))
   (au/load-character-file savepath)
   (character-manipulation-screen!))
 
@@ -55,8 +55,8 @@
     {:display-fn
      (fn []
        (if (empty? save-dirs)
-         (println (red "No save files found"))
-         (println "Please choose a character to load:")))
+         (u/print-line (red "No save files found"))
+         (u/print-line "Please choose a character to load:")))
 
      ;; generate the menu choices
      ;; reduce over save-dirs with each item being [index save-dir-item]
@@ -100,14 +100,14 @@
                  characters (au/locate-character-files param)]
              (cond
                (zero? (count characters))
-               (println (red "Sorry,") (format "cannot find a character named \"%s\"" character-name))
+               (u/print-line (red "Sorry,") (format "cannot find a character named \"%s\"" character-name))
 
                (> (count characters) 1)
                (do
-                 (println (red "Sorry,") "there is more than one character with that name at:")
+                 (u/print-line (red "Sorry,") "there is more than one character with that name at:")
                  (doseq [f characters]
                    (u/print-indent 1)
-                   (println (yellow f))))
+                   (u/print-line (yellow f))))
 
                :else
                (load-character-file (first characters)))))])

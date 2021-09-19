@@ -506,7 +506,7 @@
   (let [{:keys [status]} walk-result]
     (cond
       (= status :not-found)
-      (println "The path does not specify an item")
+      (u/print-line "The path does not specify an item")
 
       (= status :too-many-matches)
       (sw/print-ambiguous-walk-result walk-result)
@@ -531,22 +531,22 @@
       ;; If construction was not successful, inform the user and abort
       (cond
         (nil? item)
-        (println "Sorry, the item could not be constructed")
+        (u/print-line "Sorry, the item could not be constructed")
 
         (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
         (do
           (printer/show-item item)
-          (println "Sorry, the item generated doesn't look like the item you asked for.")
-          (println (red "Item not altered")))
+          (u/print-line "Sorry, the item generated doesn't look like the item you asked for.")
+          (u/print-line (red "Item not altered")))
 
         ;; Otherwise, put the item into the character sheet
         :else
         (if-let [placed-path (place-item-in-inventory! globals/character actual-path item)]
           (do
-            (println "Item placed in" (yellow (printer/displayable-path placed-path)))
-            (println)
+            (u/print-line "Item placed in" (yellow (printer/displayable-path placed-path)))
+            (u/print-line)
             (printer/show-item item))
-          (println "Sorry, there is" (red "no room") "to fit the item."))))))
+          (u/print-line "Sorry, there is" (red "no room") "to fit the item."))))))
 
 
 (defn granted-skill-name
@@ -591,17 +591,17 @@
 
       (cond
         (nil? affix)
-        (println (u/fmt "Sorry, the affix \"#{target-name}\" could not be found"))
+        (u/print-line (u/fmt "Sorry, the affix \"#{target-name}\" could not be found"))
 
         (not (> (u/string-similarity (str/lower-case target-name) matched-affix-name) 0.75))
         (do
-          (println (u/fmt "Sorry, the closest affix match \"#{matched-affix-name}\" doesn't look like the affix you asked for."))
-          (println (red "Item not altered")))
+          (u/print-line (u/fmt "Sorry, the closest affix match \"#{matched-affix-name}\" doesn't look like the affix you asked for."))
+          (u/print-line (red "Item not altered")))
 
         :else
         (do
           (swap! globals/character update-in actual-path (constantly (:recordname affix)))
-          (println (green "Item altered"))
+          (u/print-line (green "Item altered"))
           (let [path-to-item (drop-last actual-path)]
             (printer/print-object (get-in @globals/character path-to-item) path-to-item)))))))
 
@@ -627,13 +627,13 @@
       ;; If construction was not successful, inform the user and abort
       (cond
         (nil? item)
-        (println "Sorry, the item could not be constructed")
+        (u/print-line "Sorry, the item could not be constructed")
 
         (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
         (do
           (printer/show-item item)
-          (println "Sorry, the item generated doesn't look like the item you asked for.")
-          (println (red "Item not altered")))
+          (u/print-line "Sorry, the item generated doesn't look like the item you asked for.")
+          (u/print-line (red "Item not altered")))
 
         ;; Otherwise, put the item into the character sheet
         :else
@@ -641,8 +641,8 @@
               _ (batch-items! item actual-path)
               after (get-in @globals/character actual-path)]
           (printer/show-item item)
-          (println)
-          (println "Placed" (yellow (- (count after) (count before))) "items into" (u/keywords->path actual-path)))))))
+          (u/print-line)
+          (u/print-line "Placed" (yellow (- (count after) (count before))) "items into" (u/keywords->path actual-path)))))))
 
 
 (defn- swap-variant-screen
@@ -657,7 +657,7 @@
                         ;; choice text
                         ;; we'll print the unique fields of each variant
                         (with-out-str
-                          (println (:recordname variant))
+                          (u/print-line (:recordname variant))
                           (printer/print-map (->> variant
                                                   (remove #(= :recordname (key %))))
                                              :skip-item-count true))
@@ -677,11 +677,11 @@
     {:display-fn
      (fn []
        (printer/displayable-path item-path)
-       (println (format "Pick a variant for the %s of %s"
+       (u/print-line (format "Pick a variant for the %s of %s"
                         (u/keyword->str target-field)
                         (dbu/item-name
                          (get-in @globals/character item-path) (dbu/db-and-index))))
-       (newline))
+       (u/newline-))
 
      :choice-map choices}))
 
@@ -691,7 +691,7 @@
 
 (defn- swap-variant-print-usage
   []
-  (println (->> (help/get-help-item "swap-variant")
+  (u/print-line (->> (help/get-help-item "swap-variant")
                 (help/detail-help-text))))
 
 (defn swap-variant-handler
@@ -713,10 +713,10 @@
                           (map set))]
         (cond
           (not (contains? found-item target-field))
-          (println (format "Sorry, can't find '%s' on the item at '%'" target-field-name (printer/displayable-path actual-path)))
+          (u/print-line (format "Sorry, can't find '%s' on the item at '%'" target-field-name (printer/displayable-path actual-path)))
 
           (<= (count variants) 1)
-          (println "Sorry, can't find any" target-field-name "variants for" (yellow (dbu/item-name found-item (dbu/db-and-index))))
+          (u/print-line "Sorry, can't find any" target-field-name "variants for" (yellow (dbu/item-name found-item (dbu/db-and-index))))
 
           :else
           (swap-variant-screen! actual-path

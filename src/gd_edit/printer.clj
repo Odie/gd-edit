@@ -20,14 +20,14 @@
    (let [prompt (cond->> prompt
                   (vector? prompt) (str/join "\n"))
          print-yes-no (fn [default]
-                        (print (cond
-                                 (true? default) "(Y/n) "
-                                 (false? default) "(y/N) "
-                                 (nil? default) "(y/n) ")))]
+                        (u/print- (cond
+                                    (true? default) "(Y/n) "
+                                    (false? default) "(y/N) "
+                                    (nil? default) "(y/n) ")))]
 
      ;; Show the prompt
-     (print prompt)
-     (print " ")
+     (u/print- prompt)
+     (u/print- " ")
      (print-yes-no default)
      (flush)
 
@@ -45,8 +45,8 @@
 
          ;; Otherwise, ask the user to choose from a valid answer.
          :else (do
-                 (println)
-                 (println "Please enter 'Y' or 'N'.")
+                 (u/print-line)
+                 (u/print-line "Please enter 'Y' or 'N'.")
                  (recur prompt default)))))))
 
 (declare show-item)
@@ -61,12 +61,12 @@
      (or (number? obj) (string? obj) (boolean? obj))
      (do
        (u/print-indent indent-level)
-       (println (yellow obj)))
+       (u/print-line (yellow obj)))
 
      (u/byte-array? obj)
      (do
        (u/print-indent indent-level)
-       (println (format "byte array[%d]" (count obj))
+       (u/print-line (format "byte array[%d]" (count obj))
                 (map #(format (yellow "%02X") %1) obj))))))
 
 (defn print-kvs
@@ -86,7 +86,7 @@
                              (map u/keyword->str)))]
 
     (doseq [[key value] kvs]
-      (println
+      (u/print-line
 
        ;; Print the key name
        (format (format "%%%ds :" (+ max-key-length 2))
@@ -107,8 +107,8 @@
          (yellow value))))
 
     (when-not skip-item-count
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count kvs)) "fields"))))
+      (u/newline-)
+      (u/print-line (format (format "%%%dd" (+ max-key-length 2)) (count kvs)) "fields"))))
 
 (defn print-map
   [character-map & {:keys [skip-item-count]
@@ -132,7 +132,7 @@
                         )]
 
     (doseq [[key value] character]
-      (println
+      (u/print-line
 
        ;; Print the key name
        (format (format "%%%ds :" (+ max-key-length 2))
@@ -153,15 +153,15 @@
          (yellow value))))
 
     (when-not skip-item-count
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
+      (u/newline-)
+      (u/print-line (format (format "%%%dd" (+ max-key-length 2)) (count character)) "fields"))))
 
 
 (defn print-uid-summary
   [obj]
   (if-let [uid-info (@globals/shrines-and-gates-index (seq obj))]
     (let [record (dbu/record-by-name (:recordname uid-info))]
-      (println (yellow (dbu/uid-record-display-name record))
+      (u/print-line (yellow (dbu/uid-record-display-name record))
                ;; (format (green "[%s]")  (uid-record-type-display-name record))
                ))
     (print-primitive obj)))
@@ -170,9 +170,9 @@
   [obj]
   (when-let [uid-info (@globals/shrines-and-gates-index (seq obj))]
     (let [record (dbu/record-by-name (:recordname uid-info))]
-      (println (yellow (dbu/uid-record-display-name record)))
-      (println (yellow (dbu/uid-record-type-display-name record)))
-      (println)))
+      (u/print-line (yellow (dbu/uid-record-display-name record)))
+      (u/print-line (yellow (dbu/uid-record-type-display-name record)))
+      (u/print-line)))
   (print-primitive obj 1))
 
 (defn print-sequence
@@ -181,16 +181,16 @@
   (if (empty? obj)
     (do
       (u/print-indent 1)
-      (println (yellow "Empty")))
+      (u/print-line (yellow "Empty")))
     (doseq [[i item] (u/with-idx obj)]
       ;; Print the index of the object
-      (print (format
-              (format "%%%dd: " (-> (count obj)
-                                    (Math/log10)
-                                    (Math/ceil)
-                                    (max 1)
-                                    (int)))
-              i))
+      (u/print- (format
+                 (format "%%%dd: " (-> (count obj)
+                                       (Math/log10)
+                                       (Math/ceil)
+                                       (max 1)
+                                       (int)))
+                 i))
 
       ;; Print some representation of the object
       (cond
@@ -201,32 +201,32 @@
         (print-primitive item)
 
         (sequential? item)
-        (println (format "collection of %d items" (count item)))
+        (u/print-line (format "collection of %d items" (count item)))
 
         (associative? item)
         (do
           ;; If a display name can be fetched...
           (when-let [display-name (dbu/get-name item (conj path i))]
             ;; Print annotation on the same line as the index
-            (println (yellow display-name)))
+            (u/print-line (yellow display-name)))
 
           ;; Close the index + display-name line
-          (newline)
+          (u/newline-)
 
           (print-map item :skip-item-count true)
           (if-not (= i (dec (count obj)))
-            (newline)))
+            (u/newline-)))
 
         :else
-        (println item)))))
+        (u/print-line item)))))
 
 
 (defn- print-object-name
   [s]
 
   (when-not (empty? s)
-    (println (yellow s))
-    (println)))
+    (u/print-line (yellow s))
+    (u/print-line)))
 
 (defn print-object
   "Given some kind of thing in the character sheet, try to print it."
@@ -265,27 +265,27 @@
   (if (string? (first results))
     ;; In that case, just show the strings
     (doseq [s results]
-      (println s))
+      (u/print-line s))
 
     ;; Otherwise, we'll assume we're looking at a db record...
     ;; Print the record
     (doseq [kv-map results]
-      (println (:recordname kv-map))
+      (u/print-line (:recordname kv-map))
       (doseq [[key value] (->> kv-map
                                seq
                                (filter #(not (keyword? (first %1))))
                                (sort-by first))]
 
-        (println (format "\t%s: %s" key (yellow value))))
+        (u/print-line (format "\t%s: %s" key (yellow value))))
 
-      (newline))))
+      (u/newline-))))
 
 
 (defn print-map-difference
   [[only-in-a only-in-b _]]
 
   (if (and (empty? only-in-a) (empty? only-in-b))
-    (println "Nothing has been changed")
+    (u/print-line "Nothing has been changed")
 
     (let [changed-keys (->> (concat (keys only-in-a)
                                     (keys only-in-b))
@@ -295,7 +295,7 @@
                               (apply max 0))]
 
       (doseq [[key value] (sort only-in-a)]
-        (println
+        (u/print-line
 
          ;; Print the key name
          (format (format "%%%ds :" (+ max-key-length 2))
@@ -311,8 +311,8 @@
            :else
            (format "%s => %s" (yellow value) (yellow (only-in-b key))))))
 
-      (newline)
-      (println (format (format "%%%dd" (+ max-key-length 2)) (count changed-keys)) "fields changed"))))
+      (u/newline-)
+      (u/print-line (format (format "%%%dd" (+ max-key-length 2)) (count changed-keys)) "fields changed"))))
 
 
 (defn show-item
@@ -322,29 +322,29 @@
   (cond
 
     (not (dbu/is-item? item))
-    (println "Sorry, this doesn't look like an item")
+    (u/print-line "Sorry, this doesn't look like an item")
 
     (empty? (:basename item))
     (do
-      (println "This isn't a valid item (no basename)")
+      (u/print-line "This isn't a valid item (no basename)")
       (print-map item))
 
     :else
     (let [related-records (dbu/related-db-records item (dbu/db-and-index))
           name (dbu/item-name item (dbu/db-and-index))]
       (when (not (nil? name))
-        (println (yellow name))
-        (newline))
+        (u/print-line (yellow name))
+        (u/newline-))
       (print-map item :skip-item-count true)
-      (newline)
+      (u/newline-)
       (print-result-records related-records)
 
       (try
         (let [summary (item-summary/item-summary item)]
-          (println (first summary))
+          (u/print-line (first summary))
           (doseq [line (rest summary)]
             (u/print-indent 1)
-            (println line)))
+            (u/print-line line)))
         (catch Exception e)))))
 
 

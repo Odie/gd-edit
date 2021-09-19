@@ -3,7 +3,8 @@
             [gd-edit.printer :as printer]
             [jansi-clj.core :as jansi :refer [red green yellow]]
             [gd-edit.db-query :as query]
-            [gd-edit.db-utils :as dbu]))
+            [gd-edit.db-utils :as dbu]
+            [gd-edit.utils :as u]))
 
 (defn paginate-next
   [page {:keys [pagination-size] :as query-state}]
@@ -59,8 +60,8 @@
         end-entry (+ start-entry (min (count paginated-result) pagination-size))]
 
     (printer/print-result-records paginated-result)
-    (println)
-    (println (format "%d-%d / %d %s" start-entry end-entry (count result) (yellow "matched records")))))
+    (u/print-line)
+    (u/print-line (format "%d-%d / %d %s" start-entry end-entry (count result) (yellow "matched records")))))
 
 (defn query-show-handler
   [[input tokens]]
@@ -72,7 +73,7 @@
   [input]
 
   (let [predicates (try (query/query-string->query-predicates input)
-                        (catch Throwable e (println (str "Query syntax error: " (.getMessage e)))))]
+                        (catch Throwable e (u/print-line (str "Query syntax error: " (.getMessage e)))))]
 
     (when (not (nil? predicates))
       ;; Run a query against the db using generated predicates
@@ -87,12 +88,12 @@
 
   (cond
     (empty? input)
-    (println
+    (u/print-line
      "usage: q <target> <op> <value>
        <target> can be \"recordname\", \"value\", or \"key\"")
 
     (not (realized? globals/db))
-    (println "db not yet loaded")
+    (u/print-line "db not yet loaded")
 
     :else
     (run-query input)))

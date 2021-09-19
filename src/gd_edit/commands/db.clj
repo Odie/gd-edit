@@ -58,6 +58,6 @@
       ;; Just print the names
       (do
         (doseq [item sorted-matches]
-          (println item))
-        (println)
-        (println (count sorted-matches) " matches")))))
+          (u/print-line item))
+        (u/print-line)
+        (u/print-line (count sorted-matches) " matches")))))

@@ -130,10 +130,10 @@
     ;; Sanity check on the respec mode
     (if-not (contains? valid-modes mode)
       (do
-        (println "Please choose from one of the valid respec types:")
+        (u/print-line "Please choose from one of the valid respec types:")
         (doseq [r-type (sort valid-modes)]
           (u/print-indent 1)
-          (println r-type)))
+          (u/print-line r-type)))
 
       ;; Try to modify the character according to the chosen mocd
       (let [options (when (= mode "hard") {:hard true})
@@ -162,7 +162,7 @@
             differences (diff @globals/character modified-character)]
 
         ;; Print how we're going to update the character
-        (println "Updating the following fields:")
+        (u/print-line "Updating the following fields:")
         (printer/print-map-difference differences)
 
         ;; Actually update the character

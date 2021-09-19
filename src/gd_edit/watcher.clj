@@ -132,16 +132,16 @@
          (not (empty? @globals/character))
          (not (tf-watcher-started?)))
     (when-let [stash-file (dirs/get-transfer-stash @globals/character)]
-      ;; (println "stash-file" stash-file)
+      ;; (u/print-line "stash-file" stash-file)
       (when (.exists stash-file)
-        (println "Loading stash file:")
+        (u/print-line "Loading stash file:")
         (u/print-indent 1)
-        (println (yellow (str stash-file)))
+        (u/print-line (yellow (str stash-file)))
         (load-transfer-stash! stash-file)
 
         (watcher-start-thread! (fn [path]
                                  (when (= stash-file (io/file path))
-                                   ;; (println "Reloading stash file!")
+                                   ;; (u/print-line "Reloading stash file!")
                                    (u/wait-file-stopped-growing stash-file)
                                    (load-transfer-stash! stash-file)))
                                [stash-file])))))

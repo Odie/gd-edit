@@ -85,8 +85,8 @@
            ks ks-all
            actual-path []]
 
-      ;; (println "ks" ks)
-      ;; (println "actual-path" actual-path)
+      ;; (u/print-line "ks" ks)
+      ;; (u/print-line "actual-path" actual-path)
       ;; Which key are we trying to navigate to?
       (let [k (first ks)]
         (cond
@@ -95,20 +95,20 @@
           ;; The cursor should be pointing at the item the user wants
           (nil? k)
           (do
-            ;; (println "nil k")
+            ;; (u/print-line "nil k")
             (return-result :found ks actual-path {:found-item cursor}))
 
           ;; Did we try navigating into a location that doesn't exist?
           (nil? cursor)
           (do
-            ;; (println "nil cursor")
+            ;; (u/print-line "nil cursor")
             (return-result :not-found ks actual-path))
 
           ;; If we have a sequential collection, just try to navigate into
           ;; the collection with the key
           (sequential? cursor)
           (do
-            ;; (println "br sequential")
+            ;; (u/print-line "br sequential")
             (recur (nav-into cursor k) (rest ks) (conj actual-path (coerce-to-int k))))
 
           ;; If we're looking at an associative collection, then we want to
@@ -119,21 +119,21 @@
               ;; If we can't get a match at all, we cannot navigate to the key
               (= (count matches) 0)
               (do
-                ;; (println "br1")
+                ;; (u/print-line "br1")
                 (return-result :not-found (rest ks) actual-path))
 
               ;; If we have more than one match, tell the caller we cannot
               ;; resolve this ambiguity.
               (> (count matches) 1)
               (do
-                ;; (println "br2")
+                ;; (u/print-line "br2")
                 (return-result :too-many-matches (rest ks) actual-path {:ambiguous-matches matches}))
 
               :else
               (do
-                ;; (println "br3")
+                ;; (u/print-line "br3")
                 (let [[matched-key matched-value :as matches] (first matches)]
-                  ;; (println "matches" matches)
+                  ;; (u/print-line "matches" matches)
                   (recur matched-value (rest ks) (conj actual-path matched-key))))))
 
           :else
@@ -142,7 +142,7 @@
 (defn print-ambiguous-walk-result
   [result]
 
-  (println (format "Cannot traverse path because \"%s\""
+  (u/print-line (format "Cannot traverse path because \"%s\""
                    (str/join "/" (:longest-path result)))
            "matches more than one item:")
 
@@ -151,4 +151,4 @@
                               (map u/keyword->str)
                               (sort))]
     (u/print-indent 1)
-    (println ambiguous-item)))
+    (u/print-line ambiguous-item)))
