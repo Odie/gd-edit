@@ -5,6 +5,7 @@
             [gd-edit.commands.choose-character :as choose-character]
             [gd-edit.commands.write :as write]
             [gd-edit.utils :as u]
+            [gd-edit.app-util :as au]
             [gd-edit.progress-bar :as progress]
             )
   (:import [sun.misc Signal SignalHandler]))
@@ -68,7 +69,7 @@
       (let [batch-cmds (->> (io/file batch-file)
                             (slurp)
                             (str/split-lines))
-            char-locs (choose-character/character-list)
+            char-locs (au/character-list)
             handler-context (atom {})
             _ (setup-INT-handler handler-context)
 

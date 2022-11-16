@@ -9,7 +9,10 @@
             [me.raynes.fs :as fs]
             [gd-edit.io.gdc :as gdc]
             [gd-edit.io.stash :as stash]
-            [gd-edit.game-dirs :as dirs]))
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.db-utils :as dbu]
+            [clojure.data.csv :as csv]
+            ))
 
 
 (defn- get-loadpath
@@ -312,3 +315,46 @@
               (assoc :stash new-state)
               (cycle-backup-and-save-transfer-stash))
           (u/print-line (green "Ok!")))))))
+
+
+(defn row-maps->csv-vectors
+  ([row-maps]
+   (row-maps->csv-vectors row-maps
+                          (->> row-maps
+                               first
+                               keys)))
+
+  ([row-maps column-order]
+   (map #(mapv % column-order) row-maps)))
+
+(defn write-character-list
+  [[input tokens]]
+
+
+  (let [output-filename (or (first tokens)
+                            "character-list.csv")
+        loc-table (dbu/localization-table)
+        chars-list (->> (au/character-list)  ;; Grab a list of all known characters
+
+                        ;; Take each character, grab  [name, class, level]
+                        (map (fn [char-entry]
+                               (-> char-entry
+                                   :gdc-path
+                                   gdc/load-character-file
+                                   (select-keys [:character-name :player-class-name :character-level]))))
+
+                        ;; Convert the class name from a tag name to a display name
+                        (map (fn [char-data]
+                               (update char-data :player-class-name loc-table)))
+
+                        )
+        ]
+
+
+    ;; Write the character list to a CSV file
+    (with-open [out-file (io/writer output-filename)]
+      (let [columns [:character-name :player-class-name :character-level]
+            headers ["name" "class" "level"]
+            rows (row-maps->csv-vectors chars-list columns)]
+        (csv/write-csv out-file
+                       (cons headers rows))))))

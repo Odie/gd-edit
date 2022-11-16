@@ -36,7 +36,8 @@
                             [com.clojure-goes-fast/clj-async-profiler "0.4.1" :scope "test"]
                             [kmp-search "0.1.2"]
                             [expound "0.8.4"]
-                            [org.flatland/ordered "1.5.9"]])
+                            [org.flatland/ordered "1.5.9"]
+                            [org.clojure/data.csv "1.0.1"]])
 
 
 

@@ -11,21 +11,6 @@
             [gd-edit.io.stash :as stash]
             [gd-edit.printer :as printer]))
 
-(defn character-name-from-dir
-  [dir]
-  (let [char-name (.getName dir)]
-    (if (= \_ (first char-name))
-      (subs char-name 1)
-      char-name)))
-
-(defn character-list
-  []
-  (map (fn
-         [dir]
-         {:character-name (character-name-from-dir dir)
-          :gdc-path (.getPath (io/file dir "player.gdc"))
-          :dir dir})
-       (dirs/get-all-save-file-dirs)))
 
 (defn- character-manipulation-screen
   []
@@ -73,7 +58,7 @@
                      ;; function to run when selected
                      (fn []
                        (load-character-file (:gdc-path char-loc)))])
-                  (->> (character-list)
+                  (->> (au/character-list)
                        (sort-by :character-name)
                        u/indexed))}))
 

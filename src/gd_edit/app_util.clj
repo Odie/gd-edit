@@ -164,3 +164,19 @@
   (->> (dirs/get-all-save-file-dirs)
        (filter #(= (last (u/filepath->components (str %))) (str "_" character-name)))
        (map #(io/file % "player.gdc"))))
+
+(defn character-name-from-dir
+  [dir]
+  (let [char-name (.getName dir)]
+    (if (= \_ (first char-name))
+      (subs char-name 1)
+      char-name)))
+
+(defn character-list
+  []
+  (map (fn
+         [dir]
+         {:character-name (character-name-from-dir dir)
+          :gdc-path (.getPath (io/file dir "player.gdc"))
+          :dir dir})
+       (dirs/get-all-save-file-dirs)))

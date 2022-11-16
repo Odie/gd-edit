@@ -239,6 +239,9 @@
                "mod character"])]
    ["write stash" "Writes out the transfer stash if it is loaded"]
    ["ws" "Alias for \"write stash\""]
+   ["write character-list" "Writes all characters to a csv file"
+    (str/join "\n"
+              ["Syntax: write character-list <filename>"])]
    ["class" "Displays the classes/masteries of the loaded character"]
    ["class list" "Display classes/masteries known ot the editor"]
    ["class add" "Add a class/mastery by name"]
