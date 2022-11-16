@@ -45,7 +45,7 @@
 
 (defn localization-table
   []
-  (deref-or-exception globals/db-and-index #(not (empty? %))
+  (deref-or-exception globals/localization-table #(not (empty? %))
                       "Game DB has not been loaded"
                       {:cause :db-not-loaded}))
 
