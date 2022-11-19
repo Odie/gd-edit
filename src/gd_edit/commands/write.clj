@@ -334,6 +334,7 @@
   (let [output-filename (or (first tokens)
                             "character-list.csv")
         loc-table (dbu/localization-table)
+        target-fields [:character-name :player-class-name :character-level :hardcore-mode]
         chars-list (->> (au/character-list)  ;; Grab a list of all known characters
 
                         ;; Take each character, grab  [name, class, level]
@@ -341,7 +342,7 @@
                                (-> char-entry
                                    :gdc-path
                                    gdc/load-character-file
-                                   (select-keys [:character-name :player-class-name :character-level]))))
+                                   (select-keys target-fields))))
 
                         ;; Convert the class name from a tag name to a display name
                         (map (fn [char-data]
@@ -353,8 +354,8 @@
 
     ;; Write the character list to a CSV file
     (with-open [out-file (io/writer output-filename)]
-      (let [columns [:character-name :player-class-name :character-level]
-            headers ["name" "class" "level"]
+      (let [columns target-fields
+            headers ["name" "class" "level" "hardcore"]
             rows (row-maps->csv-vectors chars-list columns)]
         (csv/write-csv out-file
                        (cons headers rows))))))
