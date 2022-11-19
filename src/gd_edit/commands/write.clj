@@ -353,8 +353,8 @@
 
     ;; Write the character list to a CSV file
     (with-open [out-file (io/writer output-filename)]
-      (let [columns [:character-name :player-class-name :character-level]
-            headers ["name" "class" "level"]
+      (let [columns [:character-name :player-class-name :character-level :hardcore-mode]
+            headers ["name" "class" "level" "hardcore"]
             rows (row-maps->csv-vectors chars-list columns)]
         (csv/write-csv out-file
                        (cons headers rows))))))
