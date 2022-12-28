@@ -5,11 +5,12 @@
             [gd-edit.app-util :as au]
             [com.rpl.specter :as s]
             [gd-edit.commands.class :as class-cmds]
-
             [gd-edit.globals :as globals]
-            [repl]
-
-            [gd-edit.skill :as skill]))
+            [gd-edit.skill :as skill]
+            [gd-edit.commands.item :as item]
+            [gd-edit.db-utils :as dbu]
+            [clojure.java.io :as io]
+            [repl]))
 
 
 (defn gt-classes
@@ -60,28 +61,76 @@
           character
           gt-character-skills))
 
-(defn from-grimtools-character-file [json-file]
-  (let [;; This is the character we want to end up with
-        target-character (json/read-json (slurp (u/expand-home json-file)) true)
+(def weapon-set-path {:weapon1 [:weapon-sets 0 :items 0]
+                      :weapon2 [:weapon-sets 1 :items 0]})
 
-        ;; Here's a character template to work off of
-        character (-> (au/locate-character-files "Odie")
-                      first
-                      gdc/load-character-file
+(def equipment-slot-idx {:head   0
+                         :amulet 1
+                         :chest  2
+                         :legs   3
+                         :feet   4
+                         :hands  5
+                         :ring1  6
+                         :ring2  7
+                         :waist  8
+                         :shoulders 9
+                         :medal  10
+                         :relic  11})
 
-                      skill/skills-remove-all)
+(def equipment-slot-path
+  (merge
+   weapon-set-path
+   (into {}
+         (for [[slot-name idx] equipment-slot-idx]
+           [slot-name [:equipment idx]]))))
 
-        ;; add all classes to the character
-        character (gt-apply-classes (gt-class-names target-character) character)
-        character (gt-apply-attributes (gt-attributes target-character) character)
-        character (gt-apply-skills (:skills target-character) character)
-        ]
+(defn gt-apply-equipment
+  [gt-character-equipments character]
 
-    character
-    )
+  ;; Try to add each piece of equipment onto the character
+  (reduce (fn [character gt-item]
+            ;; Try to construct the item
+            (let [slot-name (:slot gt-item)
+                  path (equipment-slot-path (keyword slot-name))
+                  _ (println (str "Generating item for: " slot-name))
+                  item (item/construct-item (:name gt-item) (:level character))
+
+                  ;; Try to place the item onto the character
+                  updated-character (when (item/item-names-similiar (:name gt-item) (dbu/item-name item))
+                                      (when-let [[updated-character actual-path] (item/place-item-in-inventory character path item)]
+                                        updated-character))]
+              ;; If the update failed for some reason, just return the original (un-altered) character
+              (if updated-character
+                updated-character
+                character)))
+
+              character gt-character-equipments)
   )
 
+(defn from-grimtools-character-file
+  [json-file]
+  (let [;; This is the character we want to end up with
+        target-character (json/read-json (slurp json-file) true)
+
+        ;; Here's a character template to work off of
+        ;; Grab an emtpy character file packed with the editor
+        character (-> (io/file (io/resource "blank-character.gdc"))
+                      gdc/load-character-file
+                      skill/skills-remove-all)
+
+        ;; Apply various settings from the json character file
+        character (->> character
+                       (gt-apply-classes (gt-class-names target-character))
+                       (gt-apply-attributes (gt-attributes target-character))
+                       (gt-apply-skills (:skills target-character))
+                       (gt-apply-equipment (:items target-character)))
+        ]
+
+    character))
+
+
 (comment
+
   (from-grimtools-character-file "~/inbox/testChar-formatted.json")
 
   ;; What does the target character look like?
@@ -94,11 +143,8 @@
                       first
                       gdc/load-character-file
                       remove-all-skills
-                      )
-
-        ]
-    character
-    )
+                      )]
+    character)
 
   (->> (range 10)
        (drop 1)
@@ -118,16 +164,11 @@
 
   (:skills @globals/character)
 
+  (:items (json/read-json (slurp (u/expand-home "~/inbox/testChar-formatted.json")) true))
 
-  (json/read-json (slurp (u/expand-home "~/inbox/testChar-formatted.json")) true)
+  (:equipment (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json")))
 
-  (:skills (from-grimtools-character-file "~/inbox/testChar-formatted.json"))
-
-  (repl/cmd "class")
-
-
-  (-> @globals/character
-      (select-keys [:physique :cunning :spirit])
-      )
+  (-> (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json"))
+      (gdc/write-character-file (u/expand-home "~/inbox/out.gdc")))
 
   )

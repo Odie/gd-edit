@@ -403,52 +403,55 @@
       a1)))
 
 (defn construct-item
-  [target-name db db-index level-cap]
+  ([target-name level-cap]
+   (construct-item target-name (dbu/db) (dbu/db-recordname-index) level-cap))
 
-  ;; Build a list of base item names with their quality name
-  ;; The index takes the form of: item-name => [item-records]
-  ;; Multiple records may have the same name, but differ in strength
-  (let [item-name-idx (build-item-name-idx db)
+  ([target-name db db-index level-cap]
 
-        ;; Try to decompose the complete item name into its prefix, base, and suffix, using
-        ;; all known affixes
-        affixes-all (->> db
-                         (reshape-records-as-affixes)
-                         (group-affixes-by-loot-name))
-        analysis-all (analyze-item-name item-name-idx
-                                        affixes-all
-                                        target-name)
+   ;; Build a list of base item names with their quality name
+   ;; The index takes the form of: item-name => [item-records]
+   ;; Multiple records may have the same name, but differ in strength
+   (let [item-name-idx (build-item-name-idx db)
 
-        ;; Now that we have a good idea of the basename of the item,
-        ;; try to narrow down to "legal" prefixes only.
-        legal-affixes (->> (:recordname (:base analysis-all))
-                           (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index) )
+         ;; Try to decompose the complete item name into its prefix, base, and suffix, using
+         ;; all known affixes
+         affixes-all (->> db
+                          (reshape-records-as-affixes)
+                          (group-affixes-by-loot-name))
+         analysis-all (analyze-item-name item-name-idx
+                                         affixes-all
+                                         target-name)
+
+         ;; Now that we have a good idea of the basename of the item,
+         ;; try to narrow down to "legal" prefixes only.
+         legal-affixes (->> (:recordname (:base analysis-all))
+                            (baseitem-valid-affix-paths (dbu/db) (dbu/db-recordname-index) )
 
 
-                           (map (fn [[k affix-set]]
-                                  [k (->> affix-set
-                                          (map #(db-index %))
-                                          (filter some?))]))
-                           (into {}))
+                            (map (fn [[k affix-set]]
+                                   [k (->> affix-set
+                                           (map #(db-index %))
+                                           (filter some?))]))
+                            (into {}))
 
-        affixes-legal (group-affixes-by-loot-name legal-affixes)
-        analysis-legal (analyze-item-name item-name-idx
-                                          affixes-legal
-                                          target-name)
+         affixes-legal (group-affixes-by-loot-name legal-affixes)
+         analysis-legal (analyze-item-name item-name-idx
+                                           affixes-legal
+                                           target-name)
 
-        analysis-final (analysis-better-match analysis-legal analysis-all)
-        affixes-final (if (= analysis-final analysis-legal)
-                        affixes-legal
-                        affixes-all)]
-    (analysis->item analysis-final
-                    item-name-idx
-                    affixes-final
-                    level-cap)))
+         analysis-final (analysis-better-match analysis-legal analysis-all)
+         affixes-final (if (= analysis-final analysis-legal)
+                         affixes-legal
+                         affixes-all)]
+     (analysis->item analysis-final
+                     item-name-idx
+                     affixes-final
+                     level-cap))))
 
 (defn- path-is-item?
   [character path]
 
-  (contains? (get-in @character path) :basename))
+  (contains? (get-in character path) :basename))
 
 (defn path-is-inventory?
   [path]
@@ -493,6 +496,37 @@
     :else
     (throw (Throwable. "Unhandled case"))))
 
+(defn place-item-in-inventory
+  "Tries the place the specified `item` at the `val-path` of the character.
+  Answers with [character item-path]"
+  [character val-path item]
+
+  (cond
+    ;; If the caller indicated an existing item,
+    ;; replace it with the new given item.
+    (path-is-item? character val-path)
+    [(assoc-in character val-path
+               (merge (get-in character val-path) item))
+     val-path]
+
+    ;; Did the call ask to have an item added to an inventory/sack?
+    (path-is-inventory? val-path)
+    (if-let [coord (inventory/fit-new-item val-path item)]
+      [(update-in character val-path conj (merge item coord))
+       (conj val-path (dec (count (get-in @character val-path))))]
+
+      ;; TODO Implement better error handling pattern!
+      [character nil])
+
+    :else
+    (throw (Throwable. (str "Unhandled case trying to place an item at: " (or val-path "nil"))))))
+
+(defn item-names-similiar
+  "Test an item against some target name and return if they are similar"
+  [target-item-name test-item-name]
+
+  (> (u/string-similarity (str/lower-case target-item-name)
+                          (str/lower-case test-item-name)) 0.8))
 
 ;;------------------------------------------------------------------------------
 ;; Command handlers
@@ -533,7 +567,7 @@
         (nil? item)
         (u/print-line "Sorry, the item could not be constructed")
 
-        (not (> (u/string-similarity (str/lower-case target-name) (str/lower-case (dbu/item-name item (dbu/db-and-index)))) 0.8))
+        (not (item-names-similiar target-name (dbu/item-name item)))
         (do
           (printer/show-item item)
           (u/print-line "Sorry, the item generated doesn't look like the item you asked for.")
