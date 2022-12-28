@@ -1,0 +1,4 @@
+{:project 'gd-edit
+ :version "0.2.0-SNAPSHOT"
+ :jvm-opt #{"-Xms128m" "-Xmx2048m" "-Djna.nosys=true"}
+}

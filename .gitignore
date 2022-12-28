@@ -17,3 +17,5 @@ settings.edn
 /records
 .publish.edn
 gd-edit.log
+
+.cpcache
