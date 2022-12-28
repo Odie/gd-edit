@@ -726,3 +726,36 @@
   (->> val
        (max minimum)
        (min maximum)))
+
+(defn starts-with-insensitive?
+  [s substring]
+
+  (str/starts-with? (str/lower-case s) (str/lower-case substring)))
+
+(defn reverse-map
+  [hmap]
+
+  (->> hmap
+       (map (fn [[k v]] [v k]))
+       (into {})))
+
+(defn lower-cased-keys
+  [hmap]
+
+  (->> hmap
+       (map (fn [[k v]] [(str/lower-case k) v]))
+       (into {})))
+
+(defn positions
+  [pred coll]
+  (keep-indexed (fn [idx x]
+                  (when (pred x)
+                    idx))
+                coll))
+
+(defn first-match-position
+  [pred coll]
+  (some (fn [[idx x]]
+          (when (pred x)
+            idx))
+        (indexed coll)))

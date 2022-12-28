@@ -4,7 +4,8 @@
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
             [clojure.set :as set]
-            [gd-edit.db-utils :as dbu]))
+            [gd-edit.db-utils :as dbu]
+            [com.rpl.specter :as s]))
 
 (defn record-class
   [record]
@@ -533,3 +534,8 @@
 (defn rank-by-name-similarity
   [a-name coll]
   (u/rank-by-similarity a-name :display-name coll))
+
+(defn record-fields-starting-with
+  [substring record]
+
+  (filter #(u/starts-with-insensitive? (str (key %)) substring) record))

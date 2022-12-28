@@ -17,7 +17,8 @@
   [character]
 
   (->> (map-indexed vector (character :skills))
-       (filter (fn [[idx skill]] (= "Skill_Mastery" (-> (:skill-name skill)
+       (filter (fn [[idx skill]]
+                 (= "Skill_Mastery" (-> (:skill-name skill)
                                                         (dbu/record-by-name)
                                                         (get "Class")))))))
 
@@ -168,7 +169,7 @@
 
 
 (defn class-add
-  [character klass]
+  [character klass-record]
 
   (merge character
          ;; Adding a mastery requires investing at least 1 skill point in it
@@ -179,7 +180,7 @@
                          :skill-active false
                          :autocast-skill-name ""
                          :skill-transition false
-                         :skill-name (:recordname klass),
+                         :skill-name (:recordname klass-record),
                          :level 1
                          :sublevel 0
                          :autocast-controller-name ""
@@ -187,6 +188,16 @@
 
           ;; Deduct a skill point if possible
           :skill-points (max (dec (:skill-points character)) 0)}))
+
+(defn class-add-by-name
+  [character klass-name]
+
+  (let [[class-path class-name] (->> (class-display-name-map)
+                                     (filter #(u/ci-match (val %1) klass-name))
+                                     first)
+        class-record (dbu/record-by-name class-path)]
+
+    (class-add character class-record)))
 
 
 (defn class-add-handler
