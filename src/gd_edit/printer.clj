@@ -7,7 +7,6 @@
              [item-summary :as item-summary]]
             [clojure.string :as str]
             [jansi-clj.core :refer [red green yellow]]
-            [gd-edit.printer :as printer]
             [gd-edit.globals :as globals]))
 
 

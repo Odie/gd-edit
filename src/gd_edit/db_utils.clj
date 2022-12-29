@@ -4,7 +4,6 @@
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
             [clojure.set :as set]
-            [gd-edit.db-utils :as dbu]
             [com.rpl.specter :as s]))
 
 (defn record-class
@@ -58,7 +57,7 @@
 (defn record-field
   [record field-name]
   (let [v (record field-name)]
-    (if-let [referenced-record (dbu/record-by-name v)]
+    (if-let [referenced-record (record-by-name v)]
       referenced-record
       v)))
 
@@ -302,7 +301,7 @@
 (defn uid-display-name
   [uid]
   (when-let [uid-info (@globals/shrines-and-gates-index (seq uid))]
-    (let [record (dbu/record-by-name (:recordname uid-info))]
+    (let [record (record-by-name (:recordname uid-info))]
       (uid-record-display-name record))))
 
 (defn get-type
@@ -515,20 +514,20 @@
   []
   (->> @globals/shrines-and-gates
        (map (fn [m]
-              (assoc m :record (dbu/record-by-name (:recordname m)))))
+              (assoc m :record (record-by-name (:recordname m)))))
        (filter #(u/ci-match (get-in % [:record "Class"]) "shrine"))
        distinct
-       (map #(assoc % :display-name (dbu/uid-record-display-name (:record %))))
+       (map #(assoc % :display-name (uid-record-display-name (:record %))))
        (sort-by :display-name)))
 
 (defn get-gates
   []
   (->> @globals/shrines-and-gates
        (map (fn [m]
-              (assoc m :record (dbu/record-by-name (:recordname m)))))
+              (assoc m :record (record-by-name (:recordname m)))))
        (filter #(u/ci-match (get-in % [:record "Class"]) "teleporter"))
        distinct
-       (map #(assoc % :display-name (dbu/uid-record-display-name (:record %))))
+       (map #(assoc % :display-name (uid-record-display-name (:record %))))
        (sort-by :display-name)))
 
 (defn rank-by-name-similarity
