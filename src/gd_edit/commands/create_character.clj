@@ -14,7 +14,8 @@
 
 
             [me.raynes.fs :as fs]
-            [gd-edit.jline :as jl]))
+            [gd-edit.jline :as jl]
+            [gd-edit.game-dirs :as dirs]))
 
 
 (defn gt-classes
@@ -155,16 +156,12 @@
   passthrough)
 
 (defn from-grimtools-character-file
-  [json-file]
+  [json-file template-character]
   (let [;; This is the character we want to end up with
         target-character (json/read-json (slurp json-file) true)
 
-        ;; Here's a character template to work off of
-        ;; Grab an emtpy character file packed with the editor
-        character (gdc/load-character-file nil (u/slurp-bytes (io/resource "blank-character.gdc")))
-
         ;; Apply various settings from the json character file
-        character (->> character
+        character (->> template-character
                        skill/skills-remove-all
                        prompt-set-character-name
                        (gt-apply-classes (gt-class-names target-character))
@@ -173,19 +170,39 @@
                        prompt-set-character-level
                        (println-passthrough-last "")
                        (gt-apply-skills (:skills target-character))
-                       (gt-apply-equipment (:items target-character)))]
+                       (gt-apply-equipment (:items target-character))
+                       )]
     character))
 
+
 (defn create-character
+  "Take the json file, recreate the character using a template, then move the character to
+  the local save directory
+  "
   [json-filepath]
   (let [json-file (io/file json-filepath)
-        new-character (from-grimtools-character-file json-file)
-        out-file (u/path-sibling json-file (str (or (:character-name new-character)
-                                                    (fs/base-name json-file true))
-                                                ".gdc"))]
 
-    (gdc/write-character-file new-character out-file)
-    new-character))
+        ;; Copy the template character directory to a temporary location on disk
+        tmp-dir (fs/temp-dir "gd-edit-char")
+        _ (u/copy-resource-files-recursive "_blank_character" tmp-dir)
+
+        ;; Load the template directory
+        character-file (io/file tmp-dir "player.gdc")
+        template-character (gdc/load-character-file character-file)
+
+        ;; Create a new character from the template
+        new-character (from-grimtools-character-file json-file template-character)
+
+        ;; Save it back into the template files directory
+        _ (gdc/write-character-file new-character character-file)
+
+        save-dir (dirs/get-local-save-dir)
+        character-dir (io/file save-dir (format "_%s" (:character-name new-character)))
+        ]
+
+    ;; The template directory now contains the new character
+    ;; Move it to the local save dir now
+    (.renameTo tmp-dir character-dir)))
 
 
 (comment
@@ -229,5 +246,7 @@
 
   (-> (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json"))
       (gdc/write-character-file (u/expand-home "~/inbox/out.gdc")))
+
+  (create-character (u/expand-home "~/inbox/testChar-formatted.json"))
 
   )

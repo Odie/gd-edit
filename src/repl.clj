@@ -11,7 +11,9 @@
             [clojure.string :as str]
             [gd-edit.structure-walk :as sw]
             [gd-edit.equation-eval :as eq]
-            [gd-edit.printer :as printer])
+            [clojure.data :refer [diff]]
+            [gd-edit.printer :as printer]
+            [me.raynes.fs :as fs])
   (:import [java.io StringReader]))
 
 (defn class-compile [ns-name]
@@ -234,5 +236,17 @@
   (doseq [i (range 75)]
     (cmd (format "write %s" (str i)))
     )
+
+  ;; Load the template blank character
+  (let [filepath (io/file (io/resource "_blank_character/player.gdc"))
+        character (load-character-file filepath)]
+    (reset! globals/character character))
+
+  ;; Compare the two template characters
+  (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
+                  (dissoc :meta-block-list))
+        char2 (-> (load-character-file (io/file (io/resource "blank-character.gdc")))
+                  (dissoc :meta-block-list))]
+    (diff char1 char2))
 
 )

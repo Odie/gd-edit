@@ -6,7 +6,8 @@
             [clojure.edn :as edn]
             [taoensso.timbre :as t]
             [clojure.walk :refer [postwalk-replace]]
-            [me.raynes.fs :as fs])
+            [me.raynes.fs :as fs]
+            [cpath-clj.core :as cp])
   (:import java.nio.ByteBuffer
            java.io.File
            [java.security MessageDigest]))
@@ -780,3 +781,22 @@
       fs/parent
       (io/file sibling-name)
       str))
+
+(defn copy-resource-files-recursive
+  "Recursively copies files from a resource directory (which might be in a jar file)
+  into the target directory."
+  [src-resource-dir target-dir]
+
+  (let [src-files (cp/resources (io/resource src-resource-dir))]
+
+    (doseq [[path uris] src-files]
+      (let [uri (first uris)
+            relative-path (subs path 1)
+            output-file (io/file target-dir relative-path)]
+        (println "copying:" relative-path)
+        (->> output-file
+             (.getParentFile)
+             (.mkdirs)
+             )
+        (with-open [in (io/input-stream uri)]
+          (io/copy in output-file))))))
