@@ -17,7 +17,7 @@
          :page 0
          :pagination-size 10}))
 
-(def character (atom {}))
+(def ^:dynamic character (atom {}))
 (def last-loaded-character (atom{}))
 
 (def settings (atom {}))

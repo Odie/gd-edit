@@ -47,11 +47,20 @@
           level-limit (-> (dbu/record-by-name "records/creatures/pc/playerlevels.dbr")
                           (get "maxPlayerLevel"))]
       (cond
+        (= level :failed)
+        (do
+          (u/print-line "That's not a valid integer")
+          :level-should-be-an-integer)
+
         (< level 1)
-        (u/print-line "Please enter a level value that is 1 or greater")
+        (do
+          (u/print-line "Please enter a level value that is 1 or greater")
+          :level-should-be-positive)
 
         (> level level-limit)
-        (u/print-line "Sorry, max allowed level is" level-limit)
+        (do
+          (u/print-line "Sorry, max allowed level is" level-limit)
+          :max-level-exceeded)
 
         :else
         (let [modified-character (merge @globals/character
@@ -62,4 +71,5 @@
           (u/print-line "Updating the following fields:")
           (printer/print-map-difference (diff @globals/character modified-character))
 
-          (swap! globals/character modify-character-level level))))))
+          (swap! globals/character modify-character-level level)
+          :ok)))))

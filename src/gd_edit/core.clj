@@ -27,7 +27,9 @@
              [batch :as commands.batch]
              [remove :as commands.remove]
              [delete :as commands.delete]
-             [shrine :as commands.shrine]]
+             [shrine :as commands.shrine]
+             [create-character :as commands.create-character]
+             ]
             [gd-edit.game-dirs :as dirs]
             [gd-edit.globals :as globals]
             [gd-edit.jline :as jl]
@@ -627,25 +629,33 @@
 
    (init-jansi)
 
-   (let [{:keys [options summary]} (parse-opts args cli-options)]
+   (let [{:keys [arguments options summary]} (parse-opts args cli-options)]
      ;; Handle all the commandline params
      (cond
        (:help options) (do
                          (u/print-line "The valid options are:")
                          (u/print-line summary)
                          (System/exit 0))
-       (:file options) (au/load-character-file (:file options)))
 
-     ;; If the user asked to start the editor in batch mode...
-     (if (:batch options)
+       (:file options) (do
+                         (au/load-character-file (:file options))
+                         (start-editor))
 
+       (not-empty arguments) (when (str/ends-with? (first arguments) ".json")
+                               (initialize)
+                               (commands.create-character/create-character (first arguments))
+                               (System/exit 0))
+
+       ;; If the user asked to start the editor in batch mode...
        ;; Open the file as a stream and replace stdin with it
+       (:batch options)
        (with-open [is (io/input-stream (:batch options))]
          (jl/set-input is)
          (u/print-line (red "Starting in batch mode!"))
          (start-editor))
 
        ;; Otherwise, start the editor in interactive mode
+       :else
        (start-editor)))))
 
 

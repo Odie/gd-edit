@@ -1082,61 +1082,66 @@
        (into {})))
 
 (defn load-character-file
-  [filepath]
+  ([filepath]
+   (load-character-file filepath nil))
 
-  (let [bb ^ByteBuffer (u/file-contents filepath)
-        _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
+  ([filepath file-content-bytes]
 
-        seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) 1431655765)
-        enc-table (generate-encryption-table seed)
-        enc-context (make-enc-context seed enc-table)
+   (let [bb ^ByteBuffer (or (when file-content-bytes
+                              (ByteBuffer/wrap file-content-bytes))
+                            (u/file-contents filepath))
+         _ (.order bb java.nio.ByteOrder/LITTLE_ENDIAN)
 
-        _ (when *debug*
-            (u/print-line "\n---------------------- Preamble ----------------------"))
-        preamble (s/read-struct FilePreamble bb enc-context)
-        _ (when *debug*
-            (pprint preamble))
+         seed (bit-xor (Integer/toUnsignedLong (.getInt bb)) 1431655765)
+         enc-table (generate-encryption-table seed)
+         enc-context (make-enc-context seed enc-table)
 
-        _ (validate-preamble preamble)
+         _ (when *debug*
+             (u/print-line "\n---------------------- Preamble ----------------------"))
+         preamble (s/read-struct FilePreamble bb enc-context)
+         _ (when *debug*
+             (pprint preamble))
 
-        _ (when *debug*
-            (u/print-line "\n---------------------- Header ----------------------"))
-        header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
-        _ (when *debug*
-            (pprint header))
+         _ (validate-preamble preamble)
 
-        header-checksum (Integer/toUnsignedLong (.getInt bb))
-        _ (assert (= header-checksum (:enc-state @enc-context)))
+         _ (when *debug*
+             (u/print-line "\n---------------------- Header ----------------------"))
+         header (assoc (s/read-struct Header bb enc-context) :meta-block-id :header)
+         _ (when *debug*
+             (pprint header))
 
-        data-version (read-int! bb enc-context)
-        _ (when (not (contains? #{6 7 8} data-version))
-            (throw (Throwable. "I can't read this gdc format!")))
+         header-checksum (Integer/toUnsignedLong (.getInt bb))
+         _ (assert (= header-checksum (:enc-state @enc-context)))
 
-        mystery-field (read-bytes! bb enc-context 16)
+         data-version (read-int! bb enc-context)
+         _ (when (not (contains? #{6 7 8} data-version))
+             (throw (Throwable. "I can't read this gdc format!")))
 
-        fileinfo {:seed seed
-                  :preamble preamble
-                  :data-version data-version
-                  :mystery-field mystery-field}
+         mystery-field (read-bytes! bb enc-context 16)
 
-        ;; Keep reading more blocks until we've reached the end of the file
-        block-list (->> (loop [block-list (transient [])]
-                          (if (= (.remaining bb) 0)
-                            (persistent! block-list)
+         fileinfo {:seed seed
+                   :preamble preamble
+                   :data-version data-version
+                   :mystery-field mystery-field}
 
-                            (recur (conj! block-list (read-block bb enc-context block-specs)))))
+         ;; Keep reading more blocks until we've reached the end of the file
+         block-list (->> (loop [block-list (transient [])]
+                           (if (= (.remaining bb) 0)
+                             (persistent! block-list)
 
-                        ;; Append the header block when we're done reading
-                        (into [header]))
+                             (recur (conj! block-list (read-block bb enc-context block-specs)))))
 
-        ;; Try to merge all the block lists into one giant character sheet
-        character (assoc (apply merge (map block-strip-meta-info-fields block-list))
-                         :meta-block-list block-list
-                         :meta-fileinfo fileinfo
-                         :meta-character-loaded-from filepath)
-        ]
+                         ;; Append the header block when we're done reading
+                         (into [header]))
 
-    character))
+         ;; Try to merge all the block lists into one giant character sheet
+         character (assoc (apply merge (map block-strip-meta-info-fields block-list))
+                          :meta-block-list block-list
+                          :meta-fileinfo fileinfo
+                          :meta-character-loaded-from filepath)
+         ]
+
+     character)))
 
 (defn write-to-file
   [bb filepath]

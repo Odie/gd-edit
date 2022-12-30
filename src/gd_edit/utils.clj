@@ -5,7 +5,8 @@
             [clojure.java.io :as io]
             [clojure.edn :as edn]
             [taoensso.timbre :as t]
-            [clojure.walk :refer [postwalk-replace]])
+            [clojure.walk :refer [postwalk-replace]]
+            [me.raynes.fs :as fs])
   (:import java.nio.ByteBuffer
            java.io.File
            [java.security MessageDigest]))
@@ -759,3 +760,23 @@
           (when (pred x)
             idx))
         (indexed coll)))
+
+(defn replace-path-extension
+  [path new-ext]
+
+  (-> (io/file (fs/parent path) (fs/base-name path true))
+      (str new-ext)))
+
+(defn replace-path-basename
+  [path new-basename]
+
+  (-> (io/file (fs/parent path) new-basename)
+      (str (fs/extension path))))
+
+(defn path-sibling
+  [path sibling-name]
+
+  (-> (io/file path)
+      fs/parent
+      (io/file sibling-name)
+      str))

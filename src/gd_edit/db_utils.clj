@@ -429,29 +429,34 @@
   "Given an value as a string, return the value after coercing it to the correct type."
   [val-str type]
 
-  (cond
-    ;; If the caller asked to convert the value to a string,
-    ;; we don't have to do anything because the value should already be a string
-    (= java.lang.String type)
-    val-str
+  (try
 
-    (= java.lang.Float type)
-    (Float/parseFloat val-str)
+    (cond
+      ;; If the caller asked to convert the value to a string,
+      ;; we don't have to do anything because the value should already be a string
+      (= java.lang.String type)
+      val-str
 
-    (= java.lang.Double type)
-    (Double/parseDouble val-str)
+      (= java.lang.Float type)
+      (Float/parseFloat val-str)
 
-    (= java.lang.Short type)
-    (Short/parseShort val-str)
+      (= java.lang.Double type)
+      (Double/parseDouble val-str)
 
-    (= java.lang.Integer type)
-    (Integer/parseInt val-str)
+      (= java.lang.Short type)
+      (Short/parseShort val-str)
 
-    (= java.lang.Long type)
-    (Long/parseLong  val-str)
+      (= java.lang.Integer type)
+      (Integer/parseInt val-str)
 
-    (= java.lang.Boolean type)
-    (parseBoolean val-str)))
+      (= java.lang.Long type)
+      (Long/parseLong  val-str)
+
+      (= java.lang.Boolean type)
+      (parseBoolean val-str))
+
+    (catch Exception e
+      :failed)))
 
 (defn coerce-number-to-type
   [val-number to-type]

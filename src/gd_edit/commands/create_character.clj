@@ -8,9 +8,13 @@
             [gd-edit.globals :as globals]
             [gd-edit.skill :as skill]
             [gd-edit.commands.item :as item]
+            [gd-edit.commands.level :as level]
             [gd-edit.db-utils :as dbu]
             [clojure.java.io :as io]
-            [repl]))
+
+
+            [me.raynes.fs :as fs]
+            [gd-edit.jline :as jl]))
 
 
 (defn gt-classes
@@ -93,19 +97,62 @@
             (let [slot-name (:slot gt-item)
                   path (equipment-slot-path (keyword slot-name))
                   _ (println (str "Generating item for: " slot-name))
-                  item (item/construct-item (:name gt-item) (:level character))
 
-                  ;; Try to place the item onto the character
-                  updated-character (when (item/item-names-similiar (:name gt-item) (dbu/item-name item))
-                                      (when-let [[updated-character actual-path] (item/place-item-in-inventory character path item)]
-                                        updated-character))]
-              ;; If the update failed for some reason, just return the original (un-altered) character
-              (if updated-character
-                updated-character
-                character)))
+                  character-level (:character-level character)
+                  item-name (:name gt-item)
 
-              character gt-character-equipments)
-  )
+                  ;; Try to to create the requested item at the character level
+                  item (item/construct-item item-name character-level)
+
+                  ;; if that's not possible, try to create then item with no level restrictions
+                  item (if (some? item)
+                         item
+                         (do
+                           (println (format "Could not create item matching character level: %d" character-level))
+                           (println "Trying again with no level restrictions")
+                           (item/construct-item item-name nil)))]
+
+              (if (nil? item)
+                ;; If it's just impossible to create the item, do nothing and return the character unaltered
+                (do
+                  (println (format "Could not create item: %s" item-name))
+                  character)
+
+                ;; Try to place the item onto the character
+                (if-let [updated-character (when (item/item-names-similiar (:name gt-item) (dbu/item-name item))
+                                             (when-let [[updated-character actual-path] (item/place-item-in-inventory character path item)]
+                                               updated-character))]
+                  ;; If the update failed for some reason, just return the original (un-altered) character
+                  updated-character
+                  character))))
+
+          character gt-character-equipments))
+
+(defn prompt-set-character-name
+  [character]
+
+  (println)
+  (let [character-name (jl/readline "Give the character a name: ")]
+    (if (not-empty character-name)
+      (update character :character-name (constantly character-name))
+      character)))
+
+(defn prompt-set-character-level
+  [character]
+
+  (binding [gd-edit.globals/character (atom character)]
+    (loop []
+      (println)
+      (let [character-level (jl/readline "Input the character level: ")
+            result (level/level-handler ["" [character-level]])]
+        (if (not= result :ok)
+          (recur)
+          @globals/character)))))
+
+(defn println-passthrough-last
+  [text passthrough]
+  (println text)
+  passthrough)
 
 (defn from-grimtools-character-file
   [json-file]
@@ -114,19 +161,31 @@
 
         ;; Here's a character template to work off of
         ;; Grab an emtpy character file packed with the editor
-        character (-> (io/file (io/resource "blank-character.gdc"))
-                      gdc/load-character-file
-                      skill/skills-remove-all)
+        character (gdc/load-character-file nil (u/slurp-bytes (io/resource "blank-character.gdc")))
 
         ;; Apply various settings from the json character file
         character (->> character
+                       skill/skills-remove-all
+                       prompt-set-character-name
                        (gt-apply-classes (gt-class-names target-character))
                        (gt-apply-attributes (gt-attributes target-character))
-                       (gt-apply-skills (:skills target-character))
-                       (gt-apply-equipment (:items target-character)))
-        ]
 
+                       prompt-set-character-level
+                       (println-passthrough-last "")
+                       (gt-apply-skills (:skills target-character))
+                       (gt-apply-equipment (:items target-character)))]
     character))
+
+(defn create-character
+  [json-filepath]
+  (let [json-file (io/file json-filepath)
+        new-character (from-grimtools-character-file json-file)
+        out-file (u/path-sibling json-file (str (or (:character-name new-character)
+                                                    (fs/base-name json-file true))
+                                                ".gdc"))]
+
+    (gdc/write-character-file new-character out-file)
+    new-character))
 
 
 (comment
