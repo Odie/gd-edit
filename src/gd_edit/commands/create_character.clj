@@ -94,8 +94,6 @@
 (defn gt-apply-item-augment
   [gt-item item]
 
-  ;; (def x gt-item)
-  ;; (def y item)
   ;; Try to look up the augment specified in the gt-item by name
   (if-let [augment-record (get (dbu/augments) (get-in gt-item [:augment :name]))]
     ;; If the augment can be found, add it to the item now

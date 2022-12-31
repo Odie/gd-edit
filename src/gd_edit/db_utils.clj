@@ -401,6 +401,14 @@
          ;; Turn the unique fields of each variant into a hashmap again
          (map #(into {} %)))))
 
+(defn clean-display-name
+  [display-name]
+  (str/replace display-name "^k" ""))
+
+(defn get-cleaned-description
+  [record]
+  (str/replace (get record "description") "^k" ""))
+
 (defn augments
   "Return a <augment name> => <record> map for relics/components"
   []
@@ -411,7 +419,7 @@
        (filter #(= (get % "Class") "ItemEnchantment"))
 
        ;; Group them by their display name
-       (group-by #(get % "description"))
+       (group-by get-cleaned-description)
 
        ;; Each augment name now corresponds to a list of records
        ;; We want to turn them into a "augment name" => record mapping
@@ -430,8 +438,9 @@
   []
   (->> (db)
        (filter #(= (get % "Class") "ItemRelic"))
-       (group-by #(get % "description"))
+       (group-by get-cleaned-description)
        (s/transform [s/MAP-VALS] #(first %))))
+
 
 ;;------------------------------------------------------------------------------
 ;; Type coercion
