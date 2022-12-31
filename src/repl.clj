@@ -13,7 +13,9 @@
             [gd-edit.equation-eval :as eq]
             [clojure.data :refer [diff]]
             [gd-edit.printer :as printer]
-            [me.raynes.fs :as fs])
+            [me.raynes.fs :as fs]
+            [gd-edit.skill :as skill]
+            [com.rpl.specter :as s])
   (:import [java.io StringReader]))
 
 (defn class-compile [ns-name]
@@ -246,7 +248,127 @@
   (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
                   (dissoc :meta-block-list))
         char2 (-> (load-character-file (io/file (io/resource "blank-character.gdc")))
-                  (dissoc :meta-block-list))]
-    (diff char1 char2))
+                  (dissoc :meta-block-list))
+        ]
+    (diff char1 char2)
+    )
+
+  (let [template-file (io/file (io/resource "_blank_character/player.gdc"))
+        target-file (io/file (u/expand-home "player.gdc"))]
+    (fs/copy template-file target-file)
+    )
+
+  (let [template-file (io/file (io/resource "_blank_character/player.gdc"))
+        ;;template-file (io/file (u/expand-home "player.gdc"))
+        char1 (load-character-file template-file)
+        char2 (-> (load-character-file (io/file (io/resource "blank-character.gdc")))
+                  (dissoc :meta-block-list))
+
+        ;; updated-char1 (-> char1
+        ;;                   skill/skills-remove-all
+
+        ;;                   (assoc :relics-crafted 0)
+        ;;                   (assoc :hits-received 0)
+        ;;                   (assoc :boss-kills [0 0 0])
+        ;;                   (assoc :tier3-relics-crafted 0)
+        ;;                   (assoc :crits-inflicted 0)
+        ;;                   (assoc :health-potions-used 0)
+        ;;                   (assoc :last-monster-hit-DA 0.0)
+        ;;                   (assoc :last-monster-hit-OA 0.0)
+
+        ;;                   (assoc :survival-greatest-score 0)
+        ;;                   (assoc :survival-greatest-wave 0)
+
+        ;;                   (assoc :experience-from-kills 0)
+        ;;                   (assoc :one-shot-chests-unlocked 0)
+
+        ;;                   (assoc :greatest-survival-difficulty-completed 0)
+
+        ;;                   (assoc :champion-kills 0)
+
+        ;;                   (assoc :hits-inflicted 0)
+        ;;                   (assoc :playtime-seconds 0)
+
+        ;;                   (assoc :greatest-monster-killed
+        ;;                          [{:last-monster-hitBy "",
+        ;;                            :last-monster-hit "",
+        ;;                            :life-mana 0,
+        ;;                            :level 0,
+        ;;                            :name ""}
+        ;;                           {:last-monster-hitBy "",
+        ;;                            :last-monster-hit "",
+        ;;                            :life-mana 0,
+        ;;                            :level 0,
+        ;;                            :name ""}
+        ;;                           {:last-monster-hitBy "",
+        ;;                            :last-monster-hit "",
+        ;;                            :life-mana 0,
+        ;;                            :level 0,
+        ;;                            :name ""}]
+        ;;                          )
+
+        ;;                   (assoc :greatest-damage-received 0.0)
+
+        ;;                   (assoc :hero-kills 0)
+        ;;                   (assoc :kill-count 0)
+        ;;                   )
+        ]
+
+    ;; (write-character-file updated-char1 template-file)
+    ;; (diff updated-char1 char2)
+    (diff char1 char2)
+    )
+
+
+  (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
+                  (dissoc :meta-block-list))
+        char2 (-> (load-character-file (io/file (io/resource "blank-character.gdc")))
+                  (dissoc :meta-block-list))
+        ]
+    (diff char1 char2)
+    )
+
+  (reset! globals/character
+          (load-character-file (io/file (io/resource "_blank_character/player.gdc"))))
+
+  (cmd "level 100")
+
+  (cmd "write")
+
+
+  (cmd "q value~\"Coven Black Ash\"")
+
+  (cmd "q value~\"records/items/enchants/a02a_enchant.dbr\"")
+
+  (cmd "q value~\"Aether Soul\"")
+
+
+  (->> (dbu/db)
+       (filter #(= (get % "Class") "ItemEnchantment"))
+       (group-by #(get % "description"))
+       (filter #(> (count (val % )) 1))
+
+       ;; (map :recordname)
+       )
+
+
+
+  (dbu/record-by-name
+   "records/items/enchants/c102a_enchant.dbr")
+
+  (diff (dbu/record-by-name "records/items/enchants/a02a_enchant.dbr")
+        (dbu/record-by-name "records/items/enchants/a00000a_enchant.dbr")
+        )
+
+  (->> (dbu/db)
+
+       ;; We're only interested in things that are classed "ItemEnchantment"
+       (filter #(= (get % "Class") "ItemRelic"))
+
+       ;; Group them by their display name
+       (group-by #(get % "description"))
+
+       (s/transform [s/MAP-VALS] #(first %))
+       )
 
 )

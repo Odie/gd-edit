@@ -64,7 +64,7 @@
   (->> (db-class-ui-records)
        (map db-class-ui-record->class-record)))
 
-(defn- class-display-name-map
+(defn class-display-name-map
   "Returns a mapping from class record recordname => class name"
   []
   (->> (db-class-ui-records)
@@ -169,35 +169,41 @@
 
 
 (defn class-add
-  [character klass-record]
+  ([character klass-record]
+   (class-add character klass-record 1))
 
-  (merge character
-         ;; Adding a mastery requires investing at least 1 skill point in it
-         ;; Otherwise, the game will just ignore the choice
-         {:skills (conj (:skills character)
-                        {:devotion-level 0
-                         :devotion-experience 0
-                         :skill-active false
-                         :autocast-skill-name ""
-                         :skill-transition false
-                         :skill-name (:recordname klass-record),
-                         :level 1
-                         :sublevel 0
-                         :autocast-controller-name ""
-                         :enabled true})
+  ([character klass-record level]
+   (merge character
+          ;; Adding a mastery requires investing at least 1 skill point in it
+          ;; Otherwise, the game will just ignore the choice
+          {:skills (conj (:skills character)
+                         {:devotion-level 0
+                          :devotion-experience 0
+                          :skill-active false
+                          :autocast-skill-name ""
+                          :skill-transition false
+                          :skill-name (:recordname klass-record),
+                          :level level
+                          :sublevel 0
+                          :autocast-controller-name ""
+                          :enabled true})
 
-          ;; Deduct a skill point if possible
-          :skill-points (max (dec (:skill-points character)) 0)}))
+           ;; Deduct a skill point if possible
+           :skill-points (max (- (:skill-points character) level 1) 0)})))
+
 
 (defn class-add-by-name
-  [character klass-name]
+  ([character klass-name]
+   (class-add-by-name character klass-name 1))
 
-  (let [[class-path class-name] (->> (class-display-name-map)
-                                     (filter #(u/ci-match (val %1) klass-name))
-                                     first)
-        class-record (dbu/record-by-name class-path)]
+  ([character klass-name level]
 
-    (class-add character class-record)))
+   (let [[class-path class-name] (->> (class-display-name-map)
+                                      (filter #(u/ci-match (val %1) klass-name))
+                                      first)
+         class-record (dbu/record-by-name class-path)]
+
+     (class-add character class-record level))))
 
 
 (defn class-add-handler

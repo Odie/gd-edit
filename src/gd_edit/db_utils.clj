@@ -401,6 +401,37 @@
          ;; Turn the unique fields of each variant into a hashmap again
          (map #(into {} %)))))
 
+(defn augments
+  "Return a <augment name> => <record> map for relics/components"
+  []
+
+  (->> (db)
+
+       ;; We're only interested in things that are classed "ItemEnchantment"
+       (filter #(= (get % "Class") "ItemEnchantment"))
+
+       ;; Group them by their display name
+       (group-by #(get % "description"))
+
+       ;; Each augment name now corresponds to a list of records
+       ;; We want to turn them into a "augment name" => record mapping
+       (s/transform [s/MAP-VALS] (fn [record-list]
+                                   ;; Either unwrap single element lists...
+                                   (if (= 1 (count record-list))
+                                     (first record-list)
+
+                                     ;; Or try to do some basic tie-breaking
+                                     (->> record-list
+                                          (sort-by #(count (:recordname %)))
+                                          first))))))
+
+(defn relics
+  "Return a <component name> => <record> map for relics/components"
+  []
+  (->> (db)
+       (filter #(= (get % "Class") "ItemRelic"))
+       (group-by #(get % "description"))
+       (s/transform [s/MAP-VALS] #(first %))))
 
 ;;------------------------------------------------------------------------------
 ;; Type coercion

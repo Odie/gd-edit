@@ -12,7 +12,7 @@
             [gd-edit.db-utils :as dbu]
             [clojure.java.io :as io]
 
-
+            [clojure.pprint :refer [pprint]]
             [me.raynes.fs :as fs]
             [gd-edit.jline :as jl]
             [gd-edit.game-dirs :as dirs]))
@@ -23,12 +23,6 @@
 
   (:classes gt-character))
 
-(defn gt-class-names
-  [gt-character]
-
-  (->> (gt-classes gt-character)
-       (map :name)))
-
 (defn gt-attributes
   [gt-character]
   (:attributes gt-character))
@@ -36,8 +30,7 @@
 (defn gt-apply-classes
   [gt-character-classes character]
 
-  (reduce #(class-cmds/class-add-by-name % %2) character gt-character-classes)
-  )
+  (reduce #(class-cmds/class-add-by-name % (:name %2) (:level %2)) character gt-character-classes))
 
 (defn gt-apply-attributes
   [gt-character-attributes character]
@@ -67,7 +60,9 @@
           gt-character-skills))
 
 (def weapon-set-path {:weapon1 [:weapon-sets 0 :items 0]
-                      :weapon2 [:weapon-sets 1 :items 0]})
+                      :weapon2 [:weapon-sets 0 :items 1]
+                      :weapon1Alt [:weapon-sets 1 :items 0]
+                      :weapon2Alt [:weapon-sets 1 :items 1]})
 
 (def equipment-slot-idx {:head   0
                          :amulet 1
@@ -88,6 +83,42 @@
    (into {}
          (for [[slot-name idx] equipment-slot-idx]
            [slot-name [:equipment idx]]))))
+
+(defn place-item-in-inventory
+  [character path item]
+
+  (if-let [[updated-character actual-path] (item/place-item-in-inventory character path item)]
+    updated-character
+    character))
+
+(defn gt-apply-item-augment
+  [gt-item item]
+
+  ;; (def x gt-item)
+  ;; (def y item)
+  ;; Try to look up the augment specified in the gt-item by name
+  (if-let [augment-record (get (dbu/augments) (get-in gt-item [:augment :name]))]
+    ;; If the augment can be found, add it to the item now
+    (-> item
+        (assoc :augment-name (:recordname augment-record))
+        (assoc :augment-seed (rand-int Integer/MAX_VALUE)))
+
+    ;; Otherwise, just passback the unaltered item
+    item))
+
+
+(defn gt-apply-item-relic
+  [gt-item item]
+
+  ;; Try to look up the augment specified in the gt-item by name
+  (if-let [relic-record (get (dbu/relics) (get-in gt-item [:component :name]))]
+    ;; If the augment can be found, add it to the item now
+    (-> item
+        (assoc :relic-name (:recordname relic-record))
+        (assoc :relic-seed (rand-int Integer/MAX_VALUE)))
+
+    ;; Otherwise, just passback the unaltered item
+    item))
 
 (defn gt-apply-equipment
   [gt-character-equipments character]
@@ -113,19 +144,26 @@
                            (println "Trying again with no level restrictions")
                            (item/construct-item item-name nil)))]
 
-              (if (nil? item)
+              (cond
+
                 ;; If it's just impossible to create the item, do nothing and return the character unaltered
+                (or (nil? item)
+                    (not (item/item-names-similiar (:name gt-item) (dbu/item-name item))))
                 (do
                   (println (format "Could not create item: %s" item-name))
                   character)
 
-                ;; Try to place the item onto the character
-                (if-let [updated-character (when (item/item-names-similiar (:name gt-item) (dbu/item-name item))
-                                             (when-let [[updated-character actual-path] (item/place-item-in-inventory character path item)]
-                                               updated-character))]
-                  ;; If the update failed for some reason, just return the original (un-altered) character
-                  updated-character
-                  character))))
+                :else
+                (do
+                  (let [item (->> item
+                                  (gt-apply-item-augment gt-item)
+                                  (gt-apply-item-relic gt-item))]
+
+                    ;; Try to place the item onto the character
+                    (if-let [updated-character (place-item-in-inventory character path item)]
+                      ;; If the update failed for some reason, just return the original (un-altered) character
+                      updated-character
+                      character))))))
 
           character gt-character-equipments))
 
@@ -164,11 +202,12 @@
         character (->> template-character
                        skill/skills-remove-all
                        prompt-set-character-name
-                       (gt-apply-classes (gt-class-names target-character))
-                       (gt-apply-attributes (gt-attributes target-character))
-
                        prompt-set-character-level
                        (println-passthrough-last "")
+
+                       (gt-apply-classes (gt-classes target-character))
+                       (gt-apply-attributes (gt-attributes target-character))
+
                        (gt-apply-skills (:skills target-character))
                        (gt-apply-equipment (:items target-character))
                        )]
@@ -207,12 +246,16 @@
 
 (comment
 
-  (from-grimtools-character-file "~/inbox/testChar-formatted.json")
+  ;; Make a new character from a template
+  (let [template (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
+    (def t (from-grimtools-character-file (u/expand-home "~/inbox/charData.json") template)))
 
   ;; What does the target character look like?
-  (json/read-json (slurp (u/expand-home "~/inbox/testChar-formatted.json")) true)
+  (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true)
 
   ;; What does the current character look like?
+  (reset! globals/character t)
+
   @globals/character
 
   (let [character (-> (au/locate-character-files "Odie")
@@ -238,15 +281,31 @@
     :ok
     )
 
+
   (:skills @globals/character)
 
-  (:items (json/read-json (slurp (u/expand-home "~/inbox/testChar-formatted.json")) true))
+  (:items (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true))
 
   (:equipment (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json")))
 
   (-> (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json"))
       (gdc/write-character-file (u/expand-home "~/inbox/out.gdc")))
 
-  (create-character (u/expand-home "~/inbox/testChar-formatted.json"))
+  (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true)
+
+  (create-character (u/expand-home "~/inbox/charData-f.json"))
+
+  (class-cmds/class-display-name-map)
+
+  (require 'repl)
+
+  (repl/cmd "class")
+  (repl/cmd "show equipment")
+
+  (repl/cmd "show weaponsets")
+
+  (:weapon-sets t)
+
+  (:skills t)
 
   )

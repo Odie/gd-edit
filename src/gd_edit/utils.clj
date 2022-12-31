@@ -793,7 +793,6 @@
       (let [uri (first uris)
             relative-path (subs path 1)
             output-file (io/file target-dir relative-path)]
-        (println "copying:" relative-path)
         (->> output-file
              (.getParentFile)
              (.mkdirs)

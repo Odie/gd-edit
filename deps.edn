@@ -21,7 +21,7 @@
         expound/expound {:mvn/version "0.8.4"}
         org.flatland/ordered {:mvn/version "1.5.9"}
         org.clojure/data.csv {:mvn/version "1.0.1"}
-        cpath-clj {:mvn/version "0.1.2"}
+        cpath-clj/cpath-clj {:mvn/version "0.1.2"}
         }
  :aliases
  {:build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.0" :git/sha "8c93e0c"}
