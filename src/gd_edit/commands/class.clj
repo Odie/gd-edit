@@ -189,7 +189,7 @@
                           :enabled true})
 
            ;; Deduct a skill point if possible
-           :skill-points (max (- (:skill-points character) level 1) 0)})))
+           :skill-points (max (- (:skill-points character) level) 0)})))
 
 
 (defn class-add-by-name

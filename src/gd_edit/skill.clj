@@ -90,15 +90,15 @@
 
          ;; Update the entry to something we want
          entry (-> entry
-                   (update :skill-name (constantly recordname))
-                   (update :level (constantly level)))]
+                   (assoc :skill-name recordname)
+                   (assoc :level level))]
 
      ;; Put the update entry back into the array
      ;; Or just push the item onto the back of the array
-     (if existing-entry-idx
-       (update-in character [:skills existing-entry-idx] (constantly entry))
-       (update-in character [:skills] conj entry)))))
-
+     (-> (if existing-entry-idx
+           (update-in character [:skills existing-entry-idx] (constantly entry))
+           (update-in character [:skills] conj entry))
+         (update :skill-points #(- % level))))))
 
 (comment
 

@@ -32,32 +32,52 @@
 
   (reduce #(class-cmds/class-add-by-name % (:name %2) (:level %2)) character gt-character-classes))
 
+(defn attribute-points-required
+  "For any attribute, calcuate how many attribute points are required to reach the given target value.
+
+  Example: How many skill points does it need to raise physique to 450?
+  => 50"
+  [target-val]
+
+  (-> target-val
+      (- 50)
+      (/ 8)))
+
 (defn gt-apply-attributes
   [gt-character-attributes character]
 
-  ;; FIXME? It's unclear if I need to cast this to a float here
-  ;; I really should not need to perform type coersion here
-  ;; It'd be better if the type is correctly coerced when it's written to file
-  (cond-> character
-      (:physique gt-character-attributes)
-      (update :physique (constantly (:physique gt-character-attributes)))
+  (let [character (cond-> character
+                    (:physique gt-character-attributes)
+                    (assoc :physique (:physique gt-character-attributes))
 
-      (:cunning gt-character-attributes)
-      (update :cunning (constantly (:cunning gt-character-attributes)))
+                    (:cunning gt-character-attributes)
+                    (assoc :cunning (:cunning gt-character-attributes))
 
-      (:spirit gt-character-attributes)
-      (update :spirit (constantly (:spirit gt-character-attributes)))))
+                    (:spirit gt-character-attributes)
+                    (assoc :spirit (:spirit gt-character-attributes))
+                    )]
+    (update character :attribute-points #(max (- %
+                                                 (attribute-points-required (:physique character))
+                                                 (attribute-points-required (:cunning character))
+                                                 (attribute-points-required (:spirit character)))
+                                              0))))
 
 (defn gt-apply-skills
   [gt-character-skills character]
 
-  (reduce (fn [character gt-skill]
-            (skill/skill-add-by-display-name
-             character
-             (:name gt-skill)
-             (:level gt-skill)))
-          character
-          gt-character-skills))
+  ;; Entries in the gt-character-skills array may have a single layer of child skills.
+  ;; Flatten that into a single list so we can add the skills more easily.
+  (let [gt-character-skills (->> gt-character-skills
+                                 (s/select [s/ALL :children])
+                                 (apply concat gt-character-skills))]
+
+    (reduce (fn [character gt-skill]
+              (skill/skill-add-by-display-name
+               character
+               (:name gt-skill)
+               (:level gt-skill)))
+            character
+            gt-character-skills)))
 
 (def weapon-set-path {:weapon1 [:weapon-sets 0 :items 0]
                       :weapon2 [:weapon-sets 0 :items 1]
@@ -191,6 +211,11 @@
   (println text)
   passthrough)
 
+(defn cap-min-to-zero
+  [field-keyword character]
+
+  (update character field-keyword #(max % 0)))
+
 (defn from-grimtools-character-file
   [json-file template-character]
   (let [;; This is the character we want to end up with
@@ -208,7 +233,8 @@
 
                        (gt-apply-skills (:skills target-character))
                        (gt-apply-equipment (:items target-character))
-                       )]
+                       (cap-min-to-zero :attribute-points)
+                       (cap-min-to-zero :skill-points))]
     character))
 
 
@@ -246,7 +272,9 @@
 
   ;; Make a new character from a template
   (let [template (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
-    (def t (from-grimtools-character-file (u/expand-home "~/inbox/charData.json") template)))
+    (def t (from-grimtools-character-file (u/expand-home "~/inbox/charData (2).json") template)))
+
+  (def t (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc"))))
 
   ;; What does the target character look like?
   (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true)
@@ -282,7 +310,16 @@
 
   (:skills @globals/character)
 
-  (:items (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true))
+  (:skills (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true))
+
+  (let [gt-character-skills (:skills (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true))]
+
+    (->> gt-character-skills
+         (s/select [s/ALL :children])
+         (apply concat gt-character-skills)
+         )
+
+    )
 
   (:equipment (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json")))
 
@@ -305,5 +342,10 @@
   (:weapon-sets t)
 
   (:skills t)
+
+  (repl/cmd "show points")
+
+  (repl/cmd "level 100")
+
 
   )

@@ -276,13 +276,13 @@
         ;;                   (assoc :last-monster-hit-DA 0.0)
         ;;                   (assoc :last-monster-hit-OA 0.0)
 
-        ;;                   (assoc :survival-greatest-score 0)
-        ;;                   (assoc :survival-greatest-wave 0)
 
         ;;                   (assoc :experience-from-kills 0)
         ;;                   (assoc :one-shot-chests-unlocked 0)
 
-        ;;                   (assoc :greatest-survival-difficulty-completed 0)
+        ;;                   (assoc :survival-greatest-score 0)
+        ;;                   ;; (assoc :survival-greatest-wave 0)
+        ;;                   ;; (assoc :greatest-survival-difficulty-completed 0)
 
         ;;                   (assoc :champion-kills 0)
 
@@ -311,12 +311,13 @@
 
         ;;                   (assoc :hero-kills 0)
         ;;                   (assoc :kill-count 0)
+        ;;                   (assoc :experience 28475329)
         ;;                   )
         ]
 
-    ;; (write-character-file updated-char1 template-file)
+    (write-character-file updated-char1 template-file)
     ;; (diff updated-char1 char2)
-    (diff char1 char2)
+    ;; (diff char1 char2)
     )
 
 
@@ -326,6 +327,14 @@
                   (dissoc :meta-block-list))
         ]
     (diff char1 char2)
+    )
+
+  (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
+                  (dissoc :meta-block-list))
+        char2 (-> (load-character-file (io/file (u/expand-home "~/inbox/_blank_character 2/player.gdc")))
+                  (dissoc :meta-block-list))
+        ]
+    (nth (diff char1 char2) 1)
     )
 
   (reset! globals/character
@@ -341,6 +350,7 @@
   (cmd "q value~\"records/items/enchants/a02a_enchant.dbr\"")
 
   (cmd "q value~\"Aether Soul\"")
+  (cmd "q value=\"Lotus\"")
 
 
   (->> (dbu/db)
@@ -374,5 +384,18 @@
   (->> (dbu/relics)
        keys
        )
+
+
+  (cmd "db records/ui/skills/devotion/constellations/")
+
+  (->> (dbu/db)
+       (filter #(str/starts-with? (get % :recordname) "records/ui/skills/devotion/constellations/"))
+       (filter #(not (dbu/record-has-field "bitmapName" %)))
+       (apply concat)
+       (filter #(str/starts-with? (first %) "devotionButton"))
+       count
+       )
+  (json/read-json (slurp (io/resource "mastertable.json")) true)
+
 
 )
