@@ -82,7 +82,7 @@
 (defn devotion-skill-set-max-level
   [skill]
 
-  (let [skill-record (dbu/record-by-name (:skill-name skill))
+  (let [skill-record (dbu/devotion-skill-descriptor-by-recordname (:skill-name skill))
         max-level (get skill-record "skillMaxLevel")
         exp-levels (get skill-record "skillExperienceLevels")
         level (max 1 (count exp-levels) (or max-level 0))
