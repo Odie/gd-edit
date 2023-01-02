@@ -799,3 +799,8 @@
              )
         (with-open [in (io/input-stream uri)]
           (io/copy in output-file))))))
+
+(defn select-keys-pred
+  [m pred]
+  (->> m
+       (filter (fn [[k v]] (pred k)))))

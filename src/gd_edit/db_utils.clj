@@ -4,7 +4,9 @@
             [gd-edit.utils :as u]
             [gd-edit.globals :as globals]
             [clojure.set :as set]
-            [com.rpl.specter :as s]))
+            [com.rpl.specter :as s]
+            [me.raynes.fs :as fs]
+            ))
 
 (defn record-class
   [record]
@@ -583,3 +585,41 @@
   [substring record]
 
   (filter #(u/starts-with-insensitive? (str (key %)) substring) record))
+
+(defn record-has-field
+  [fieldname record]
+
+  (get record fieldname))
+
+(defn parse-devotion-button-name
+  [devotion-button-name]
+
+  (-> (subs devotion-button-name (count "devotionButton"))
+      Integer/parseInt))
+
+(defn constellationr-record->skills-map
+  [constellation-record]
+
+  (let [record constellation-record
+        constellation-id (-> (:recordname record)
+                             ;; (io/file)
+                             (fs/name)
+                             (subs (count "constellation"))
+                             Integer/parseInt)
+        interesting-fields (->> (u/select-keys-pred record (fn [k]
+                                                             (str/starts-with? k "devotionButton"))))]
+
+    (->> interesting-fields
+         (map (fn [[button-name skill-recordname]]
+                [{:constellation-id constellation-id
+                  :button-id (parse-devotion-button-name button-name)}
+                 skill-recordname]
+                ))
+         (into {}))))
+
+(defn constellation-skills-map []
+  (->> (db)
+       (filter #(str/starts-with? (get % :recordname) "records/ui/skills/devotion/constellations/"))
+       (filter #(not (record-has-field "bitmapName" %)))
+       (map constellationr-record->skills-map)
+       (apply merge)))

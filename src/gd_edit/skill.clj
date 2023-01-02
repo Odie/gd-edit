@@ -58,6 +58,18 @@
             skill-entry))
         (:skills character)))
 
+(def blank-skill
+  {:skill-name               ""
+   :level                    0
+   :enabled                  true
+   :devotion-level           0
+   :devotion-experience      0
+   :sublevel                 0
+   :skill-active             false
+   :skill-transition         false
+   :autocast-skill-name      ""
+   :autocast-controller-name ""})
+
 (defn skill-add-by-display-name
   ([character skill-display-name]
    (skill-add-by-display-name skill-display-name 1))
@@ -77,16 +89,7 @@
          ;; Grab the existing array or a map that represents an empty skill
          entry (if existing-entry-idx
                  (get-in character [:skills existing-entry-idx])
-                 {:skill-name               ""
-                  :level                    0
-                  :enabled                  true
-                  :devotion-level           1
-                  :devotion-experience      0
-                  :sublevel                 0
-                  :skill-active             false
-                  :skill-transition         false
-                  :autocast-skill-name      ""
-                  :autocast-controller-name ""})
+                 blank-skill)
 
          ;; Update the entry to something we want
          entry (-> entry

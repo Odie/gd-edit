@@ -79,6 +79,36 @@
             character
             gt-character-skills)))
 
+(defn gt-apply-devotions
+  [gt-devotions character]
+
+  (let [skills-map (dbu/constellation-skills-map)]
+    (reduce (fn [character gt-devotion]
+
+              (let [skill-recordname (-> skills-map
+                                            (get {:constellation-id (:constellationNumber gt-devotion )
+                                                  :button-id (:devotionButton gt-devotion )})
+                                            dbu/record-by-name
+                                            (get "skillName"))]
+
+                (if (not skill-recordname)
+                  (do
+                    (println "Oops... unable to locate this devotion in the character file...")
+                    (pprint gt-devotion)
+                    character)
+
+                  (let [skill-record (dbu/record-by-name skill-recordname)
+                        skill-max-level (get skill-record "skillMaxLevel")]
+                    ;; (pprint (dbu/record-by-name skill-recordname))
+                    (-> character
+                        (update :skills conj (cond-> skill/blank-skill
+                                               :always (assoc :skill-name skill-recordname)
+                                               skill-max-level (assoc :devotion-level (min 1 skill-max-level))
+                                               ))
+                        (update :devotion-points dec))))))
+            character
+            gt-devotions)))
+
 (def weapon-set-path {:weapon1 [:weapon-sets 0 :items 0]
                       :weapon2 [:weapon-sets 0 :items 1]
                       :weapon1Alt [:weapon-sets 1 :items 0]
@@ -160,7 +190,8 @@
                          (do
                            (println (format "Could not create item matching character level: %d" character-level))
                            (println "Trying again with no level restrictions")
-                           (item/construct-item item-name nil)))]
+                           (item/construct-item item-name nil)))
+                  ]
 
               (cond
 
@@ -232,6 +263,7 @@
                        (gt-apply-attributes (gt-attributes target-character))
 
                        (gt-apply-skills (:skills target-character))
+                       (gt-apply-devotions (:devotionNodes target-character))
                        (gt-apply-equipment (:items target-character))
                        (cap-min-to-zero :attribute-points)
                        (cap-min-to-zero :skill-points))]
