@@ -79,6 +79,27 @@
             character
             gt-character-skills)))
 
+(defn devotion-skill-set-max-level
+  [skill]
+
+  (let [skill-record (dbu/record-by-name (:skill-name skill))
+        max-level (get skill-record "skillMaxLevel")
+        exp-levels (get skill-record "skillExperienceLevels")
+        level (max 1 (count exp-levels) (or max-level 0))
+        exp (or (last exp-levels) 0)
+
+        display-name (dbu/skill-display-name skill-record)]
+
+    (when (and display-name
+               (> level 1))
+      (println (format "Setting '%s' to level %d"
+                       display-name
+                       level)))
+
+    (-> skill
+        (assoc :devotion-level level)
+        (assoc :devotion-experience exp))))
+
 (defn gt-apply-devotions
   [gt-devotions character]
 
@@ -98,13 +119,11 @@
                     character)
 
                   (let [skill-record (dbu/record-by-name skill-recordname)
-                        skill-max-level (get skill-record "skillMaxLevel")]
-                    ;; (pprint (dbu/record-by-name skill-recordname))
+                        ]
                     (-> character
-                        (update :skills conj (cond-> skill/blank-skill
-                                               :always (assoc :skill-name skill-recordname)
-                                               skill-max-level (assoc :devotion-level (min 1 skill-max-level))
-                                               ))
+                        (update :skills conj (-> skill/blank-skill
+                                               (assoc :skill-name skill-recordname)
+                                               (devotion-skill-set-max-level)))
                         (update :devotion-points dec))))))
             character
             gt-devotions)))
@@ -264,6 +283,8 @@
 
                        (gt-apply-skills (:skills target-character))
                        (gt-apply-devotions (:devotionNodes target-character))
+                       (println-passthrough-last "")
+
                        (gt-apply-equipment (:items target-character))
                        (cap-min-to-zero :attribute-points)
                        (cap-min-to-zero :skill-points))]
@@ -304,7 +325,19 @@
 
   ;; Make a new character from a template
   (let [template (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
-    (def t (from-grimtools-character-file (u/expand-home "~/inbox/charData (2).json") template)))
+    (def t (from-grimtools-character-file (u/expand-home "~/inbox/charData (4).json") template)))
+
+  (let [devotions
+
+        (->> (json/read-json (slurp (u/expand-home "~/inbox/charData (4).json")) true)
+             (:devotionNodes)
+             )]
+    (gt-apply-devotions devotions {:skills []
+                                   :skill-points 1000
+                                   :devotion-points 55
+                                   })
+    :ok)
+
 
   (def t (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc"))))
 
@@ -375,7 +408,7 @@
 
   (:skills t)
 
-  (repl/cmd "show points")
+  (repl/cmd "show skills")
 
   (repl/cmd "level 100")
 

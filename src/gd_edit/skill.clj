@@ -60,7 +60,7 @@
 
 (def blank-skill
   {:skill-name               ""
-   :level                    0
+   :level                    1    ;; Skills with level 0 are ignored by the game
    :enabled                  true
    :devotion-level           0
    :devotion-experience      0
@@ -94,7 +94,7 @@
          ;; Update the entry to something we want
          entry (-> entry
                    (assoc :skill-name recordname)
-                   (assoc :level level))]
+                   (assoc :level (max 1 level)))]
 
      ;; Put the update entry back into the array
      ;; Or just push the item onto the back of the array

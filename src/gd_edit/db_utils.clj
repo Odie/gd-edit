@@ -194,22 +194,22 @@
   (and (u/byte-array? x)
        (= (count x) 16)))
 
+(defn skill-display-name
+  [skill-record]
+  (skill-record "skillDisplayName"))
+
 (defn skill-name-from-record
   [skill-record]
 
   (when skill-record
-    (let [record-display-name (fn [record]
-                                (or (record "skillDisplayName")
-                                    ;; (record "FileDescription")
-                                    ))]
-      (if-let [display-name (record-display-name skill-record)]
-        display-name
+    (if-let [display-name (skill-display-name skill-record)]
+      display-name
 
-        (or
-         (when-let [buff-skill (record-by-name (skill-record "buffSkillName"))]
-           (skill-name-from-record buff-skill))
-         (when-let [pet-skill (record-by-name (skill-record "petSkillName"))]
-           (skill-name-from-record pet-skill)))))))
+      (or
+       (when-let [buff-skill (record-by-name (skill-record "buffSkillName"))]
+         (skill-name-from-record buff-skill))
+       (when-let [pet-skill (record-by-name (skill-record "petSkillName"))]
+         (skill-name-from-record pet-skill))))))
 
 (defn skill-description-from-record
   [skill-record]
