@@ -5,10 +5,15 @@
             [clojure.java.shell]
             [clojure.data.xml :as xml]
             [me.raynes.fs :as fs]
+
+            [clojure.edn :as edn]
+            [digest]
             )
   (:import [java.nio.file Path Paths]
            [java.io FileOutputStream]
-           )
+           [com.dropbox.core DbxRequestConfig]
+           [com.dropbox.core.v2 DbxClientV2]
+           [com.dropbox.core.v2.files WriteMode])
   )
 
 (def project 'gd-edit)
@@ -38,6 +43,13 @@
 (defn git-branch
   []
   (str/trim ((shell "git rev-parse --abbrev-ref HEAD") :out)))
+
+(defn git-has-uncommitted-changes
+  []
+
+  (if (= (:exit (shell "git diff-index --quiet HEAD --")) 1)
+    true
+    false))
 
 (defn make-build-info
   ([]
@@ -131,8 +143,7 @@
                               :jre-path     jre-path}
                              xml))
     (shell-stream (format "launch4j %s" (.getPath xml-file)))
-    )
-  )
+    out-file))
 
 (defn- bin-header
   [jvm-opts]
@@ -157,7 +168,7 @@
         (io/copy header bin)
         (io/copy jar bin))
       (.setExecutable tgt-file true false)
-      ))
+      tgt-file))
 
 (comment
   (build-exe {:uber-file uber-file
@@ -229,17 +240,100 @@
                   :project-name project
                   :description "GrimDawn save game editor"
                   :copyright "2022"
-                  :version version}]
-    (print-build-stage "Building nix binary...")
-    (build-bin settings)
+                  :version version}
 
-    (print-build-stage "Building exe...")
-    (build-exe settings))
-  )
+        _ (print-build-stage "Building nix binary...")
+        bin-file (build-bin settings)
+
+        _ (print-build-stage "Building exe...")
+        exe-file (build-exe settings)]
+
+    {:bin-file bin-file
+     :exe-file exe-file}))
+
+
+(defn make-dropbox-client
+  []
+  (let [config (DbxRequestConfig. "GDUploader/0.1" "en_US")
+        dropbox-setting-file (edn/read-string (slurp (io/file ".publish.edn")))]
+    (DbxClientV2. config (:token dropbox-setting-file))))
+
+
+(defn replace-path-extension
+  [path new-ext]
+
+  (as-> (io/file path) $
+    (fs/base-name $ true)
+    (io/file (fs/parent path) $)
+    (str $ new-ext)))
+
+(defn replace-base-name-extension
+  [basename new-ext]
+
+  (-> (io/file basename)
+      (fs/base-name true)
+      (str new-ext)))
+
+(defn upload-bin-edn-pair-to-dropbox
+  [dropbox-client bin-file upload-filename]
+
+  (let [edn-base-name (replace-base-name-extension upload-filename ".edn")]
+
+       ;; Write the gd-editor.exe file
+       (println (format "Uploading %s build..." upload-filename))
+       (with-open [exe-stream (io/input-stream bin-file)]
+         (-> dropbox-client
+             (.files)
+             (.uploadBuilder (str (io/file "/Public/GrimDawn/editor/" upload-filename)))
+             (.withMode WriteMode/OVERWRITE)
+             (.uploadAndFinish exe-stream)))
+
+       ;; Write the gd-editor.edn file to describe the latest version
+       (println (format "Uploading %s edn file..." upload-filename))
+       (-> dropbox-client
+           (.files)
+           (.uploadBuilder (str (io/file "/Public/GrimDawn/editor/" edn-base-name)))
+           (.withMode WriteMode/OVERWRITE)
+           (.uploadAndFinish (-> (make-build-info {:filesize (.length bin-file)
+                                                   :file-sha1 (digest/sha1 bin-file)})
+                                 (pr-str)
+                                 (.getBytes)
+                                 (io/input-stream))))))
+(defn publish
+  "Publish the built windows exe to dropbox"
+  [_]
+
+  (when (git-has-uncommitted-changes)
+    (println "Please don't publish using uncommitted changes.\nThis makes the build info useless for determining what the user is running.")
+    (throw (Throwable. "Should not publish uncommitted changes")))
+
+  (println "Publishing exe to dropbox...")
+
+  (let [{:keys [bin-file exe-file]} (build {})]
+
+    (if-not (and (.exists bin-file)
+                 (.exists exe-file))
+      (println "Not all the files were properly built... aboring")
+
+      (let [client (make-dropbox-client)]
+        ;; Upload the windows exe
+        (upload-bin-edn-pair-to-dropbox client
+                                        exe-file
+                                        "gd-edit.exe")
+
+        ;; Upload wrapped binary suitable for platforms
+        (upload-bin-edn-pair-to-dropbox client
+                                        ;; (io/file (replace-path-extension output-file ""))
+                                        bin-file
+                                        "gd-edit.nix.bin")))))
+
 
 (comment
 
+
   (uber {})
   (build {})
+
+  (publish {})
 
   )

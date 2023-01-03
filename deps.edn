@@ -25,6 +25,9 @@
         }
  :aliases
  {:build {:deps {io.github.clojure/tools.build {:git/tag "v0.9.0" :git/sha "8c93e0c"}
-                 me.raynes/fs {:mvn/version "1.4.6"}}
+                 me.raynes/fs {:mvn/version "1.4.6"}
+                 com.dropbox.core/dropbox-core-sdk {:mvn/version "5.4.4"}
+                 digest/digest {:mvn/version "1.4.5"}
+                 }
           :ns-default build}}
  }
