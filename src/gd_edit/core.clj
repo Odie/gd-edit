@@ -328,7 +328,7 @@
   []
 
   (if-let [build-info (get-build-info-str)]
-    (u/print-line (bold (black build-info)))
+    (u/print-line (yellow build-info))
     (u/print-line (red "No build info available"))))
 
 (defn- check-save-dir-found?!
