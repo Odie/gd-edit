@@ -313,12 +313,28 @@
         _ (gdc/write-character-file new-character character-file)
 
         save-dir (dirs/get-local-save-dir)
+
+        _ (println)
+        _ (println "local save dir seems to be: " save-dir)
+
         character-dir (io/file save-dir (format "_%s" (:character-name new-character)))
         ]
 
     ;; The template directory now contains the new character
     ;; Move it to the local save dir now
-    (.renameTo tmp-dir character-dir)))
+    (println "Saving character to")
+    (println "\t" (.getAbsolutePath character-dir))
+    (println)
+
+    (if-not (.renameTo tmp-dir character-dir)
+      (do
+        (println "Moving the directory didn't seem to work...")
+        (println "Copying and overwriting instead...")
+        (fs/copy-dir-into tmp-dir character-dir)
+        (fs/delete-dir tmp-dir)))
+
+    (if-not (.exists character-dir)
+      (println "Oops! Unable to save the character to the destination for some reason..."))))
 
 
 (comment
