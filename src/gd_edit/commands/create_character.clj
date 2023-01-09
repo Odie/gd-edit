@@ -15,7 +15,10 @@
             [clojure.pprint :refer [pprint]]
             [me.raynes.fs :as fs]
             [gd-edit.jline :as jl]
-            [gd-edit.game-dirs :as dirs]))
+            [gd-edit.game-dirs :as dirs]
+            [gd-edit.printer :as printer]
+            [gd-edit.db-query :as query]
+            [clojure.string :as str]))
 
 
 (defn gt-classes
@@ -175,6 +178,7 @@
 
 
 (defn gt-apply-item-relic
+  "Apply relic/component settings to the item"
   [gt-item item]
 
   ;; Try to look up the augment specified in the gt-item by name
@@ -186,6 +190,136 @@
 
     ;; Otherwise, just passback the unaltered item
     item))
+
+
+(defn relic-search-by-name
+  [relic-name]
+  (first (query/query-db (dbu/db) (format "Class=\"ItemArtifact\" value~\"%s\"" relic-name))))
+
+(defn relic-completion-bonus-records
+  [relic-record]
+
+  (assert (= (get relic-record "Class") "ItemArtifact"))
+
+  (let [completion-records (as-> relic-record $
+                                  (get $ "bonusTableName")
+                                  (dbu/record-by-name $)
+                                  (dbu/record-fields-starting-with "randomizerName" $)
+                                  (map val $)
+                                  (map dbu/record-by-name $)
+                                  )]
+    completion-records))
+
+(defn select-keys-by
+  [m pred]
+
+  (->> m
+       (reduce (fn [accum kv]
+                 (if (pred (key kv))
+                   (conj accum kv)
+                   accum))
+               [])
+       (into {})))
+
+(defn relic-bonus-v-normalize
+  "We need a way to compare matched relic bonus fields, between what's on a grimtools character and
+  what's in the dabase.
+
+  Here, we normalize the representation of the value field so it's easier to determine their equality.
+  "
+  [v]
+
+  (cond
+    (nil? v) v
+
+    ;; Single strings are returned as is
+    (string? v) v
+
+    ;; Integers are returned as floats
+    (int? v) (float v)
+
+    ;; Floats are returned as is
+    (float? v) v
+
+    ;; Vectors should be considered as a set
+    (or (vector? v) (list? v)) (set v)
+
+    :else
+    (ex-info "Don't know how to handle relic bonus value of this type!")))
+
+(defn relic-bonus-v=
+  [a b]
+
+  (= (relic-bonus-v-normalize a) (relic-bonus-v-normalize b)))
+
+(defn relic-completion-bonus--match-kv
+  "Given a list of relic completion bonus records, and a single k v pair to look for, return the
+  record that matches the given `kv`"
+  [completions [k v]]
+
+  (reduce (fn [res item]
+            (when (relic-bonus-v= (get item k) v)
+              (reduced item)))
+          nil
+          completions))
+
+
+(defn relic-completion-bonus--match-kvs
+  "Given a list of relic completion bonus records, and mutiple k v pairs, `kvs`, to match for, return the
+  record that matches the given all kvs pairs"
+  [completions kvs]
+
+  (reduce (fn [res item]
+            (when (every? (fn [[k v]] (relic-bonus-v= (get item k) v)) kvs)
+              (reduced item)))
+          nil
+          completions))
+
+(defn relic-completion-bonus-skill-augments
+  [relic-record]
+
+  (let [bonus-records (relic-completion-bonus-records relic-record)
+        augment-records (filter #(dbu/record-fields-starting-with "augmentSkillLevel" %) bonus-records)]
+    (apply hash-map
+           (interleave
+            (->> augment-records
+                 ;; Select only kv pairs where the key starts with 'augmentSkillName'
+                 (map #(select-keys-by % (fn [k]
+                                           (str/starts-with? (str k) "augmentSkillName"))))
+
+                 ;; Each value point to a skill to be augmented
+                 ;; Look up the record and turn it into the actual skill name
+                 (s/transform [s/ALL s/MAP-VALS] #(dbu/skill-name-from-record (dbu/record-by-name %)))
+
+                 ;; Collect the skill names into a set
+                 (map #(set (vals %))))
+            (map :recordname augment-records)))))
+
+(defn gt-apply-artifact-completion-bonus
+  "Apply the completion bonus for a thing in the `relic` equipment slot"
+  [gt-item item]
+
+  (if-not (= "relic" (:slot gt-item))
+    item
+
+    (let [relic-record (dbu/record-by-name (:basename item))
+          bonus-spec (get-in gt-item [:completionBonus :completionBonuses])
+          bonus-recordname (if (get-in gt-item [:completionBonus :isClassRelic])
+                             (get (relic-completion-bonus-skill-augments relic-record) (set bonus-spec))
+
+                             ;; The bonus spec should be a bunch of kv pairs that needs to all match to
+                             ;; uniquely identify a single bonus record for this relic
+
+                             ;; Make sure our key names are strings instead of keywords
+                             ;; This needs to happen because the database uses strings as keys
+                             (->> (s/transform [s/MAP-KEYS] name bonus-spec)
+                                  ;; Grab a list of bonus records
+                                  ;; Try to find one that matches all of the criteria
+                                  (relic-completion-bonus--match-kvs (relic-completion-bonus-records relic-record))
+                                  :recordname))]
+      (cond-> item
+        bonus-recordname (assoc :relic-bonus bonus-recordname))
+      )))
 
 (defn gt-apply-equipment
   [gt-character-equipments character]
@@ -225,7 +359,8 @@
                 (do
                   (let [item (->> item
                                   (gt-apply-item-augment gt-item)
-                                  (gt-apply-item-relic gt-item))]
+                                  (gt-apply-item-relic gt-item)
+                                  (gt-apply-artifact-completion-bonus gt-item))]
 
                     ;; Try to place the item onto the character
                     (if-let [updated-character (place-item-in-inventory character path item)]
@@ -415,6 +550,8 @@
 
   (require 'repl)
 
+  (repl/cmd "load AAA")
+
   (repl/cmd "class")
   (repl/cmd "show equipment")
 
@@ -428,5 +565,80 @@
 
   (repl/cmd "level 100")
 
+  (require '[gd-edit.printer :as printer])
+
+
+  ;;------------------------------------------------------------------------------
+  ;; Relic completion bonus forms
+  ;;------------------------------------------------------------------------------
+  (def t (relic-search-by-name "Deathchill"))
+
+  (-> t
+      relic-completion-bonus-records)
+
+  (-> t
+      relic-completion-bonus-records
+      (relic-completion-bonus--match-kvs {"characterDexterityModifier"  3
+                                          "characterIntelligenceModifier" 3
+                                          "characterStrengthModifier" 3}))
+
+  (-> t
+      relic-completion-bonus-records
+      (relic-completion-bonus--match-kvs {"racialBonusRace" ["Race002" "Race012"]
+                                          "racialBonusPercentDamage" 8}))
+
+  (def t (relic-search-by-name "Eye of the Storm"))
+
+  (-> t
+      relic-completion-bonus-skill-augments
+      )
+
+  (do
+    (def j
+      (json/read-json (slurp (u/expand-home "~/inbox/charData-11-f.json")) true))
+
+    (def t
+      (relic-search-by-name "Eye of the Storm")))
+
+  (->> (json/read-json (slurp (u/expand-home "~/inbox/charData-11-f.json")) true)
+       :items
+       last
+       )
+
+  (gt-apply-artifact-completion-bonus
+   (-> j
+       :items
+       last
+       )
+
+   {:stack-count 1,
+    :basename (:recordname t)
+    :unknown 0
+    :relic-seed 0
+    :prefix-name ""
+    :relic-completion-level 0
+    :seed 1699262392
+    :augment-seed 0
+    :transmute-name ""
+    :augment-name ""
+    :modifier-name ""
+    :relic-name ""
+    :suffix-name ""
+    :attached true
+    :relic-bonus ""}
+   )
+
+
+  (do
+    (def j
+      (json/read-json (slurp (u/expand-home "~/inbox/charData-12-f.json")) true))
+
+    (def t
+      (relic-search-by-name "Deathchill")))
+
+  (->> @globals/character
+       :equipment
+       last
+       )
 
   )

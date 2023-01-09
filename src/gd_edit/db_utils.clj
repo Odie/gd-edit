@@ -64,21 +64,23 @@
       v)))
 
 (defn related-db-records
-  [record db-and-index]
+  ([record]
+   (related-db-records record (db-and-index)))
+  ([record db-and-index]
 
-  (let [;; Collect all values in the record that look like a db record
-        related-recordnames (->> record
-                                 (reduce (fn [coll [_ value]]
-                                           (if (and (string? value) (.startsWith value "records/"))
-                                             (conj coll value)
-                                             coll
-                                             ))
-                                         #{}))
+   (let [;; Collect all values in the record that look like a db record
+         related-recordnames (->> record
+                                  (reduce (fn [coll [_ value]]
+                                            (if (and (string? value) (.startsWith value "records/"))
+                                              (conj coll value)
+                                              coll
+                                              ))
+                                          #{}))
 
-        ;; Retrieve all related records by name
-        related-records (map #((:index db-and-index) %1) related-recordnames)]
+         ;; Retrieve all related records by name
+         related-records (map #((:index db-and-index) %1) related-recordnames)]
 
-    related-records))
+     related-records)))
 
 (defn item-base-record-get-base-name
   [base-record]

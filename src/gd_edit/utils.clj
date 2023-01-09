@@ -804,3 +804,11 @@
   [m pred]
   (->> m
        (filter (fn [[k v]] (pred k)))))
+
+(defn key-by
+  [f coll]
+
+  (reduce (fn [accum item]
+            (assoc accum (f item) item))
+          {}
+          coll))
