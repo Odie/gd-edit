@@ -65,6 +65,7 @@
   [coll]
 
   (->> coll
+       (distinct)
        (remove nil?)
        (into [])))
 
