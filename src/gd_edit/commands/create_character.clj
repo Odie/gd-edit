@@ -360,7 +360,12 @@
                   (let [item (->> item
                                   (gt-apply-item-augment gt-item)
                                   (gt-apply-item-relic gt-item)
-                                  (gt-apply-artifact-completion-bonus gt-item))]
+                                  (gt-apply-artifact-completion-bonus gt-item))
+                        ;; Some gt-items may come with specifc prefix and suffix recordnames
+                        item (cond-> item
+                                 (:prefix gt-item) (assoc :prefix-name (:prefix gt-item))
+                                 (:suffix gt-item) (assoc :suffix-name (:suffix gt-item)))
+                        ]
 
                     ;; Try to place the item onto the character
                     (if-let [updated-character (place-item-in-inventory character path item)]
@@ -369,6 +374,25 @@
                       character))))))
 
           character gt-character-equipments))
+
+(comment
+
+  ;; Test generating a single item
+  (let [equipments (-> (json/read-json (slurp (u/expand-home "~/inbox/charData-13-f.json")) true)
+                       :items
+                       (nth 8)
+                       (vector))
+        character (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
+
+    (def t (gt-apply-equipment equipments character))
+    )
+
+  (-> t
+      :equipment
+      (nth 6)
+      )
+
+  )
 
 (defn prompt-set-character-name
   [character]
