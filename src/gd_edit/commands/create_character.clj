@@ -394,6 +394,41 @@
 
   )
 
+;; Given some equipment definition that comes from gt directly...
+;; Refine an existing already generated item...
+;;
+;; Expects input in the shape of:
+;;
+;; {:item "records/items/gearrelic/d201_relic.dbr",
+;;  :relicBonus "records/items/lootaffixes/completionrelics/aoathkeeper_19a.dbr"}
+(defn gt-equipment-refine
+  "Given some equipment definition that comes from gt directly, refine an existing item.
+  More specifically, make sure we are using the exact prefix and suffix"
+  [gt-character-data-equipment item]
+
+  (let [mappings {:item :basename
+                  :prefix :prefix-name
+                  :suffix :suffix-name
+                  :component :relic-name
+                  :augment :augment-name}]
+    (reduce (fn [item [def-k new-val]]
+              (cond-> item
+                  ;; If we know apply a definition onto a field...
+                  (mappings def-k)
+                  ;; Put the new value into the correct corresponding field
+                  (assoc (mappings def-k) new-val)))
+            item
+            gt-character-data-equipment)))
+
+(defn gt-apply-equipment-refine
+  [gt-character-data-equipments character]
+
+  (reduce (fn [character [slot-name item-def]]
+            (let [path (equipment-slot-path slot-name)]
+              (update-in character path #(gt-equipment-refine item-def %))))
+          character
+          gt-character-data-equipments))
+
 (defn prompt-set-character-name
   [character]
 
@@ -446,8 +481,66 @@
 
                        (gt-apply-equipment (:items target-character))
                        (cap-min-to-zero :attribute-points)
-                       (cap-min-to-zero :skill-points))]
-    character))
+                       (cap-min-to-zero :skill-points))
+        ]
+    (cond->> character
+      ;; If we have some equipment data that comes directly from grimtools...
+      ;; Apply the exact records that should be used for the equipment
+      (get-in target-character [:data :equipment])
+      (gt-apply-equipment-refine (get-in target-character [:data :equipment])))))
+
+
+(defn gt-apply-attributes-v2
+  [gt-character-attributes character]
+
+  (let [;; gt-character field -> gd-edit character fields
+        mapping {:attributePoints :attribute-points :skillPoints :skill-points
+                 :devotionPoints :devotion-points
+                 :physique :physique
+                 :cunning :cunning
+                 :spirit :spirit}]
+    (reduce (fn [character [gt-attr-name new-val]]
+              (cond-> character
+                (mapping gt-attr-name)
+                (assoc (mapping gt-attr-name) new-val)))
+            character
+            gt-character-attributes)))
+
+
+(defn mk-skill-v2
+  [gt-character-skill]
+
+  (let [;; gt-character field -> gd-edit character fields
+        mapping {:name :skill-name
+                 :level :level
+                 :autoCastSkill :autocast-skill-name}]
+    (->> (reduce (fn [character [field-name val]]
+               (cond-> character
+                 (mapping field-name)
+                 (assoc (mapping field-name) val)))
+             skill/blank-skill
+             gt-character-skill)
+         (devotion-skill-set-max-level))))
+
+(defn gt-apply-skills-v2
+  [gt-character-skills character]
+
+  (reduce (fn [character gt-character-skill]
+            (update character :skills conj (mk-skill-v2 gt-character-skill)))
+          character
+          gt-character-skills))
+
+(comment
+  (gt-apply-skills-v2 (-> j :data :skills) {})
+
+  (-> j :data :equipment)
+
+  (dbu/record-by-name
+   "records/skills/devotion/tier3_21c.dbr")
+
+  (item/blank-item)
+
+  )
 
 
 (defn create-character

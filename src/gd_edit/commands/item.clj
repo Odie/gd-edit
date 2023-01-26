@@ -227,12 +227,11 @@
      :suffix suffix-record
      :remaining-tokens tokens-cursor}))
 
-(defn- item-def->item
-  [def]
-
-  {:basename       (or (get-in def [:base :recordname]) "")
-   :prefix-name    (or (get-in def [:prefix :recordname]) "")
-   :suffix-name    (or (get-in def [:suffix :recordname]) "")
+(defn blank-item
+  []
+  {:basename       ""
+   :prefix-name    ""
+   :suffix-name    ""
    :modifier-name  ""
    :transmute-name ""
    :seed           (rand-int Integer/MAX_VALUE)
@@ -248,6 +247,15 @@
 
    :var1        0
    :stack-count 1})
+
+(defn- item-def->item
+  [def]
+
+  (merge
+   (blank-item)
+   {:basename       (or (get-in def [:base :recordname]) "")
+    :prefix-name    (or (get-in def [:prefix :recordname]) "")
+    :suffix-name    (or (get-in def [:suffix :recordname]) "")}))
 
 (defn analyze-item-name
   [item-name-idx {prefix-name-idx :prefix suffix-name-idx :suffix} target-name]
