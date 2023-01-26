@@ -59,11 +59,13 @@
                     (:spirit gt-character-attributes)
                     (assoc :spirit (:spirit gt-character-attributes))
                     )]
-    (update character :attribute-points #(max (- %
-                                                 (attribute-points-required (:physique character))
-                                                 (attribute-points-required (:cunning character))
-                                                 (attribute-points-required (:spirit character)))
-                                              0))))
+    (update character :attribute-points #(dbu/coerce-to-type
+                                          (max (- %
+                                                  (attribute-points-required (:physique character))
+                                                  (attribute-points-required (:cunning character))
+                                                  (attribute-points-required (:spirit character)))
+                                               0)
+                                          (type %)))))
 
 (defn gt-apply-skills
   [gt-character-skills character]
