@@ -2,4 +2,4 @@ vdf = name block
 block = <"{"> entry+ <"}">
 entry = name (value | block)
 name = #"\"[^\"]+\""
-value = #"\"[^\"]+\""
+value = #"\"[^\"]*\""
