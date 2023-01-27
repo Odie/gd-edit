@@ -21,16 +21,16 @@
             [clojure.string :as str]))
 
 
-(defn gt-classes
+(defn ggd-classes
   [gt-character]
 
   (:classes gt-character))
 
-(defn gt-attributes
+(defn ggd-attributes
   [gt-character]
   (:attributes gt-character))
 
-(defn gt-apply-classes
+(defn ggd-apply-classes
   [gt-character-classes character]
 
   (reduce #(class-cmds/class-add-by-name % (:name %2) (:level %2)) character gt-character-classes))
@@ -57,8 +57,8 @@
                     (assoc :cunning (:cunning gt-character-attributes))
 
                     (:spirit gt-character-attributes)
-                    (assoc :spirit (:spirit gt-character-attributes))
-                    )]
+                    (assoc :spirit (:spirit gt-character-attributes)))]
+
     (update character :attribute-points #(dbu/coerce-to-type
                                           (max (- %
                                                   (attribute-points-required (:physique character))
@@ -67,7 +67,7 @@
                                                0)
                                           (type %)))))
 
-(defn gt-apply-skills
+(defn ggd-apply-skills
   [gt-character-skills character]
 
   ;; Entries in the gt-character-skills array may have a single layer of child skills.
@@ -105,7 +105,7 @@
         (assoc :devotion-level level)
         (assoc :devotion-experience exp))))
 
-(defn gt-apply-devotions
+(defn ggd-apply-devotions
   [gt-devotions character]
 
   (let [skills-map (dbu/constellation-skills-map)]
@@ -323,7 +323,7 @@
         bonus-recordname (assoc :relic-bonus bonus-recordname))
       )))
 
-(defn gt-apply-equipment
+(defn ggd-apply-equipment
   [gt-character-equipments character]
 
   ;; Try to add each piece of equipment onto the character
@@ -386,7 +386,7 @@
                        (vector))
         character (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
 
-    (def t (gt-apply-equipment equipments character))
+    (def t (ggd-apply-equipment equipments character))
     )
 
   (-> t
@@ -516,10 +516,12 @@
 
   (update character field-keyword #(max % 0)))
 
-(defn from-grimtools-character-file
+(defn from-ggd-character-file
   [json-file template-character]
   (let [;; This is the character we want to end up with
-        target-character (json/read-json (slurp json-file) true)
+        ggd-character (json/read-json (slurp json-file) true)
+
+        gt-character (:data ggd-character)
 
         ;; Apply various settings from the json character file
         character (->> template-character
@@ -528,24 +530,23 @@
                        prompt-set-character-level
                        (println-passthrough-last "")
 
-                       (gt-apply-classes (gt-classes target-character))
-                       (gt-apply-attributes (gt-attributes target-character))
+                       (ggd-apply-classes (ggd-classes ggd-character))
+                       (gt-apply-attributes (:bio gt-character))
 
-                       (gt-apply-skills (:skills target-character))
-                       (gt-apply-devotions (:devotionNodes target-character))
+                       (ggd-apply-skills (:skills ggd-character))
+                       (ggd-apply-devotions (:devotionNodes ggd-character))
                        (println-passthrough-last "")
 
-                       (gt-apply-equipment (:items target-character))
+                       (ggd-apply-equipment (:items ggd-character))
                        (cap-min-to-zero :attribute-points)
-                       (cap-min-to-zero :skill-points))
-        ]
+                       (cap-min-to-zero :skill-points))]
     (cond->> character
       ;; If we have some equipment data that comes directly from grimtools...
       ;; Apply the exact records that should be used for the equipment
-      (get-in target-character [:data :equipment])
-      (gt-apply-equipment-refine (get-in target-character [:data :equipment]))
-      (get-in target-character [:data :skills])
-      (gt-apply-skill-refine (get-in target-character [:data :skills]))
+      (:equipment gt-character)
+      (gt-apply-equipment-refine (:equipment gt-character))
+      (:skills gt-character)
+      (gt-apply-skill-refine (:skills gt-character))
       )))
 
 (comment
@@ -582,7 +583,8 @@
   [gt-character-attributes character]
 
   (let [;; gt-character field -> gd-edit character fields
-        mapping {:attributePoints :attribute-points :skillPoints :skill-points
+        mapping {:attributePoints :attribute-points 
+                 :skillPoints :skill-points
                  :devotionPoints :devotion-points
                  :physique :physique
                  :cunning :cunning
@@ -647,7 +649,7 @@
         template-character (gdc/load-character-file character-file)
 
         ;; Create a new character from the template
-        new-character (from-grimtools-character-file json-file template-character)
+        new-character (from-ggd-character-file json-file template-character)
 
         ;; Save it back into the template files directory
         _ (gdc/write-character-file new-character character-file)
@@ -681,13 +683,13 @@
 
   ;; Make a new character from a template
   (let [template (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
-    (def t (from-grimtools-character-file (u/expand-home "~/inbox/charData (4).json") template)))
+    (def t (from-ggd-character-file (u/expand-home "~/inbox/charData (4).json") template)))
 
   (let [devotions
 
         (->> (json/read-json (slurp (u/expand-home "~/inbox/charData (4).json")) true)
              (:devotionNodes))]
-    (gt-apply-devotions devotions {:skills []
+    (ggd-apply-devotions devotions {:skills []
                                    :skill-points 1000
                                    :devotion-points 55})
     :ok)
@@ -717,7 +719,7 @@
 
   (do
     (reset! globals/character
-            (from-grimtools-character-file "~/inbox/testChar-formatted.json"))
+            (from-ggd-character-file "~/inbox/testChar-formatted.json"))
     :ok)
 
 
@@ -731,14 +733,14 @@
          (s/select [s/ALL :children])
          (apply concat gt-character-skills)))
 
-  (:equipment (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json")))
+  (:equipment (from-ggd-character-file (u/expand-home "~/inbox/testChar-formatted.json")))
 
-  (-> (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json"))
+  (-> (from-ggd-character-file (u/expand-home "~/inbox/testChar-formatted.json"))
       (gdc/write-character-file (u/expand-home "~/inbox/out.gdc")))
 
   (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true)
 
-  (create-character (u/expand-home "~/Downloads/charData (4).json"))
+  (create-character (u/expand-home "~/Downloads/charData (5).json"))
 
   (class-cmds/class-display-name-map)
 
