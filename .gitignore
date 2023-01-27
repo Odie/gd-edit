@@ -19,3 +19,6 @@ settings.edn
 gd-edit.log
 
 .cpcache
+.calva
+.clj-kondo
+.lsp
