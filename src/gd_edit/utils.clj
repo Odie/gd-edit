@@ -812,3 +812,8 @@
             (assoc accum (f item) item))
           {}
           coll))
+
+(defn println-passthrough
+  [x]
+  (println x)
+  x)

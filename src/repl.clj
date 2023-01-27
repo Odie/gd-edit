@@ -60,7 +60,7 @@
 (defn load-character-file
   "Loads the returns the character at the file location"
   [f]
-  (gdc/load-character-file f))
+  (gdc/load-character-file (resolve-save-file f)))
 
 (defn load-character
   "Load the character and set as global state, then returns the character"

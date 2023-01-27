@@ -431,6 +431,60 @@
           character
           gt-character-data-equipments))
 
+(defn find-skill-idx-by-recordname
+  [character skill-recordname]
+  (u/first-match-position (fn [skill]
+                            (= (:skill-name skill) skill-recordname))
+                          (:skills character)))
+
+(defn find-skill-path-by-recordname
+  [character skill-recordname]
+  (if-let [idx (find-skill-idx-by-recordname character skill-recordname)]
+    [:skills idx]
+    nil))
+
+(defn skill-attach-autocast-controller
+  [skill]
+  
+  (if-not (:autocast-skill-name skill)
+    skill
+
+    (let [;; Look up the skill record
+          record (dbu/devotion-skill-descriptor-by-recordname (:autocast-skill-name skill))]
+
+      ;; Apply the "templateAutoCast" to the :autocast-controller-name field
+      ;; The two :autocast-* fields work together to indicate that a skill is bound
+      ;; and what what frequency the skill should be triggerred
+      (if-let [controller-name (get record "templateAutoCast")]
+        (assoc skill :autocast-controller-name controller-name)
+        skill))))
+
+(defn gt-skill-refine
+  [gt-character-data-skill skill]
+  (let [mappings {:autoCastSkill :autocast-skill-name}]
+      (reduce (fn [skill [def-k new-val]]
+                (cond-> skill
+                  ;; If we know apply a definition onto a field...
+                  (mappings def-k)
+                  ;; Put the new value into the correct corresponding field
+                  (assoc (mappings def-k) new-val)
+
+                  ;; Id the definition asking to set the auto cast skill?
+                  (= def-k :autoCastSkill)
+                  (skill-attach-autocast-controller)))
+              
+              skill
+              gt-character-data-skill)))
+
+(defn gt-apply-skill-refine
+  [gt-character-data-skills character]
+  (reduce (fn [character skill-def]
+              (let [path (find-skill-path-by-recordname character (:name skill-def))]
+                (update-in character path #(gt-skill-refine skill-def %))))
+            character
+            gt-character-data-skills)
+  )
+
 (defn prompt-set-character-name
   [character]
 
@@ -489,9 +543,41 @@
       ;; If we have some equipment data that comes directly from grimtools...
       ;; Apply the exact records that should be used for the equipment
       (get-in target-character [:data :equipment])
-      (gt-apply-equipment-refine (get-in target-character [:data :equipment])))))
+      (gt-apply-equipment-refine (get-in target-character [:data :equipment]))
+      (get-in target-character [:data :skills])
+      (gt-apply-skill-refine (get-in target-character [:data :skills]))
+      )))
 
+(comment
+  (find-skill-idx-by-recordname @globals/character
+                                "records/skills/playerclass01/blitz1.dbr")
 
+  (-> @globals/character
+      :skills
+      (nth 14))
+
+  (let [target-character (repl/load-character-file "DDD")
+        ggd-char (json/read-json (slurp (u/expand-home "~/Downloads/charData (4).json")) true)
+        updated-character (gt-apply-skill-refine (get-in ggd-char [:data :skills]) target-character)]
+    (-> updated-character
+        :skills
+        (nth 15)))
+
+  (-> (repl/load-character-file "CCC")
+      (dissoc :meta-block-list)
+      :skills
+      (nth 14))
+
+  (-> (repl/load-character-file "DDD")
+      (dissoc :meta-block-list)
+      :skills
+      (nth 15))
+  
+  (find-skill-idx-by-recordname (repl/load-character-file "CCC") "records/skills/playerclass01/blitz1.dbr")
+
+  (find-skill-idx-by-recordname (repl/load-character-file "DDD") "records/skills/playerclass01/blitz1.dbr")
+
+  )
 (defn gt-apply-attributes-v2
   [gt-character-attributes character]
 
