@@ -686,12 +686,10 @@
   (let [devotions
 
         (->> (json/read-json (slurp (u/expand-home "~/inbox/charData (4).json")) true)
-             (:devotionNodes)
-             )]
+             (:devotionNodes))]
     (gt-apply-devotions devotions {:skills []
                                    :skill-points 1000
-                                   :devotion-points 55
-                                   })
+                                   :devotion-points 55})
     :ok)
 
 
@@ -708,25 +706,19 @@
   (let [character (-> (au/locate-character-files "Odie")
                       first
                       gdc/load-character-file
-                      remove-all-skills
-                      )]
+                      remove-all-skills)]
     character)
 
   (->> (range 10)
-       (drop 1)
-       )
+       (drop 1))
 
-  (let [a-map {:skills [:a :b :c :d :e :f :g]}
-
-        ]
-    (s/transform [:skills] (fn [v] (take 5 v)) a-map)
-    )
+  (let [a-map {:skills [:a :b :c :d :e :f :g]}]
+    (s/transform [:skills] (fn [v] (take 5 v)) a-map))
 
   (do
     (reset! globals/character
             (from-grimtools-character-file "~/inbox/testChar-formatted.json"))
-    :ok
-    )
+    :ok)
 
 
   (:skills @globals/character)
@@ -737,10 +729,7 @@
 
     (->> gt-character-skills
          (s/select [s/ALL :children])
-         (apply concat gt-character-skills)
-         )
-
-    )
+         (apply concat gt-character-skills)))
 
   (:equipment (from-grimtools-character-file (u/expand-home "~/inbox/testChar-formatted.json")))
 
@@ -749,17 +738,17 @@
 
   (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true)
 
-  (create-character (u/expand-home "~/inbox/charData-f.json"))
+  (create-character (u/expand-home "~/Downloads/charData (4).json"))
 
   (class-cmds/class-display-name-map)
 
   (require 'repl)
 
-  (repl/cmd "load AAA")
+  (repl/cmd "load CCC")
 
   (repl/cmd "class")
-  (repl/cmd "show equipment")
-
+  (repl/cmd "show skills")
+  
   (repl/cmd "show weaponsets")
 
   (:weapon-sets t)
@@ -795,26 +784,25 @@
   (def t (relic-search-by-name "Eye of the Storm"))
 
   (-> t
-      relic-completion-bonus-skill-augments
-      )
+      relic-completion-bonus-skill-augments)
 
   (do
     (def j
-      (json/read-json (slurp (u/expand-home "~/inbox/charData-11-f.json")) true))
+      (json/read-json (slurp (u/expand-home "~/Downloads/charData (4).json")) true))
 
     (def t
       (relic-search-by-name "Eye of the Storm")))
 
   (->> (json/read-json (slurp (u/expand-home "~/inbox/charData-11-f.json")) true)
        :items
-       last
-       )
+       last)
+
+  j
 
   (gt-apply-artifact-completion-bonus
    (-> j
        :items
-       last
-       )
+       last)
 
    {:stack-count 1,
     :basename (:recordname t)
@@ -830,8 +818,7 @@
     :relic-name ""
     :suffix-name ""
     :attached true
-    :relic-bonus ""}
-   )
+    :relic-bonus ""})
 
 
   (do
@@ -843,7 +830,6 @@
 
   (->> @globals/character
        :equipment
-       last
-       )
+       last)
 
   )

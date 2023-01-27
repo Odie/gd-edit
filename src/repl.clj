@@ -201,14 +201,12 @@
          (map #(get % "Class"))
          (into #{})
          ;; count
-         )
-    )
+         ))
 
   (->> (reachable-records [((db-index) "records/items/loottables/mastertables/mt_crafting_blueprints_runes_c201.dbr")])
        ;; (map #(get % "Class"))
        ;; (into #{})
-       count
-       )
+       count)
 
   (referenced-records
    "records/items/loottables/mastertables/mt_crafting_blueprints_runes_c201.dbr")
@@ -217,7 +215,7 @@
    "records/items/loottables/blueprints/lt_blueprints_mobilityrunes_c201.dbr")
 
   (referenced-records
-  "records/items/loottables/materia/tdyn_comp_magical_a01.dbr")
+   "records/items/loottables/materia/tdyn_comp_magical_a01.dbr")
 
   (referenced-records
    "records/items/autopickup/materia/compa_polishedemerald.dbr")
@@ -236,8 +234,7 @@
   (printer/show-item (get-at-path @globals/character "equipment/0"))
 
   (doseq [i (range 75)]
-    (cmd (format "write %s" (str i)))
-    )
+    (cmd (format "write %s" (str i))))
 
   ;; Load the template blank character
   (let [filepath (io/file (io/resource "_blank_character/player.gdc"))
@@ -248,15 +245,26 @@
   (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
                   (dissoc :meta-block-list))
         char2 (-> (load-character-file (io/file (io/resource "blank-character.gdc")))
+                  (dissoc :meta-block-list))]
+    (diff char1 char2))
+
+  (let [char1 (-> (load-character-file "CCC")
                   (dissoc :meta-block-list))
-        ]
-    (diff char1 char2)
-    )
+        char2 (-> (load-character-file "DDD")
+                  (dissoc :meta-block-list))]
+    (-> (diff char1 char2)
+        drop-last
+        (nth 1)
+        :skills))
+
+  (-> (load-character-file "DDD")
+      (dissoc :meta-block-list)
+      :skills
+      (nth 14))
 
   (let [template-file (io/file (io/resource "_blank_character/player.gdc"))
         target-file (io/file (u/expand-home "player.gdc"))]
-    (fs/copy template-file target-file)
-    )
+    (fs/copy template-file target-file))
 
   (let [template-file (io/file (io/resource "_blank_character/player.gdc"))
         ;;template-file (io/file (u/expand-home "player.gdc"))
@@ -324,18 +332,14 @@
   (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
                   (dissoc :meta-block-list))
         char2 (-> (load-character-file (io/file (io/resource "blank-character.gdc")))
-                  (dissoc :meta-block-list))
-        ]
-    (diff char1 char2)
-    )
+                  (dissoc :meta-block-list))]
+    (diff char1 char2))
 
   (let [char1 (-> (load-character-file (io/file (io/resource "_blank_character/player.gdc")))
                   (dissoc :meta-block-list))
         char2 (-> (load-character-file (io/file (u/expand-home "~/inbox/_blank_character 2/player.gdc")))
-                  (dissoc :meta-block-list))
-        ]
-    (nth (diff char1 char2) 1)
-    )
+                  (dissoc :meta-block-list))]
+    (nth (diff char1 char2) 1))
 
   (reset! globals/character
           (load-character-file (io/file (io/resource "_blank_character/player.gdc"))))
@@ -356,7 +360,7 @@
   (->> (dbu/db)
        (filter #(= (get % "Class") "ItemEnchantment"))
        (group-by #(get % "description"))
-       (filter #(> (count (val % )) 1))
+       (filter #(> (count (val %)) 1))
 
        ;; (map :recordname)
        )
@@ -367,8 +371,7 @@
    "records/items/enchants/c102a_enchant.dbr")
 
   (diff (dbu/record-by-name "records/items/enchants/a02a_enchant.dbr")
-        (dbu/record-by-name "records/items/enchants/a00000a_enchant.dbr")
-        )
+        (dbu/record-by-name "records/items/enchants/a00000a_enchant.dbr"))
 
   (->> (dbu/db)
 
@@ -378,12 +381,10 @@
        ;; Group them by their display name
        (group-by #(get % "description"))
 
-       (s/transform [s/MAP-VALS] #(first %))
-       )
+       (s/transform [s/MAP-VALS] #(first %)))
 
   (->> (dbu/relics)
-       keys
-       )
+       keys)
 
 
   (cmd "db records/ui/skills/devotion/constellations/")
@@ -393,9 +394,14 @@
        (filter #(not (dbu/record-has-field "bitmapName" %)))
        (apply concat)
        (filter #(str/starts-with? (first %) "devotionButton"))
-       count
-       )
+       count)
   (json/read-json (slurp (io/resource "mastertable.json")) true)
 
+  (cmd "db records/skills/devotion/tier2_05f_skill.dbr")
 
-)
+  (-> (dbu/record-by-name "records/skills/devotion/tier2_05f_skill.dbr")
+
+      (get "buffSkillName")
+      (dbu/record-by-name))
+
+  )
