@@ -135,7 +135,7 @@
 
 (defn gdc-skill-is-celestial-power
   [gdc-skill]
-  (contains? (dbu/celestial-power-recordnames)
+  (contains? (dbu/celestial-power-recordnames-memoized)
              (:skill-name gdc-skill)))
 
 (defn gdc-skill-is-from-constellation-star
@@ -144,7 +144,7 @@
 
   It might be a passive or it can be a celetial power"
   [gdc-skill]
-  (contains? (dbu/constellation-star-skill-recordnames)
+  (contains? (dbu/constellation-star-skill-recordnames-memoized)
              (:skill-name gdc-skill)))
 
 ;; Given some equipment definition that comes from gt directly...

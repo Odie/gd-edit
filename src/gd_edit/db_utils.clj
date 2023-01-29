@@ -634,6 +634,8 @@
        (map #(get % "skillName"))
        set))
 
+(def constellation-star-skill-recordnames-memoized (memoize constellation-star-skill-recordnames))
+
 (defn devotion-skill-descriptor-by-recordname
   "Fetch a a record that actually looks like a structure that describes a skill.
 
@@ -692,3 +694,5 @@
                    (and (get record "skillDisplayName")
                         (get record "skillExperienceLevels")))))
        set))
+
+(def celestial-power-recordnames-memoized (memoize celestial-power-recordnames))
