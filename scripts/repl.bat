@@ -1,0 +1,1 @@
+clojure -Sdeps '{:deps {nrepl/nrepl {:mvn/version ""1.0.0""} cider/cider-nrepl {:mvn/version ""0.29.0""} refactor-nrepl/refactor-nrepl {:mvn/version ""3.6.0""}} :aliases {:cider/nrepl {:main-opts [""-m"" ""nrepl.cmdline"" ""--middleware"" ""[refactor-nrepl.middleware/wrap-refactor,cider.nrepl/cider-middleware]""]}}}' -M:cider/nrepl

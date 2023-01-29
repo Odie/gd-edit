@@ -18,7 +18,8 @@
             [gd-edit.game-dirs :as dirs]
             [gd-edit.printer :as printer]
             [gd-edit.db-query :as query]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.data]))
 
 
 (defn ggd-classes
@@ -68,21 +69,21 @@
                                           (type %)))))
 
 (defn ggd-apply-skills
-  [gt-character-skills character]
+  [ggd-character-skills character]
 
   ;; Entries in the gt-character-skills array may have a single layer of child skills.
   ;; Flatten that into a single list so we can add the skills more easily.
-  (let [gt-character-skills (->> gt-character-skills
+  (let [ggd-character-skills (->> ggd-character-skills
                                  (s/select [s/ALL :children])
-                                 (apply concat gt-character-skills))]
+                                 (apply concat ggd-character-skills))]
 
-    (reduce (fn [character gt-skill]
+    (reduce (fn [character ggd-skill]
               (skill/skill-add-by-display-name
                character
-               (:name gt-skill)
-               (:level gt-skill)))
+               (:name ggd-skill)
+               (:level ggd-skill)))
             character
-            gt-character-skills)))
+            ggd-character-skills)))
 
 (defn devotion-skill-set-max-level
   [skill]
@@ -123,8 +124,7 @@
                     (pprint gt-devotion)
                     character)
 
-                  (let [skill-record (dbu/record-by-name skill-recordname)
-                        ]
+                  (let [skill-record (dbu/record-by-name skill-recordname)]
                     (-> character
                         (update :skills conj (-> skill/blank-skill
                                                (assoc :skill-name skill-recordname)
@@ -132,6 +132,46 @@
                         (update :devotion-points dec))))))
             character
             gt-devotions)))
+
+(defn gdc-skill-is-celestial-power
+  [gdc-skill]
+  (contains? (dbu/celestial-power-recordnames)
+             (:skill-name gdc-skill)))
+
+(defn gdc-skill-is-from-constellation-star
+  "Check if the skill is something that came from constallation stars, basically anything
+  that can be taken by using devotion points.
+
+  It might be a passive or it can be a celetial power"
+  [gdc-skill]
+  (contains? (dbu/constellation-star-skill-recordnames)
+             (:skill-name gdc-skill)))
+
+;; Given some equipment definition that comes from gt directly...
+;; Refine an existing already generated item...
+;;
+;; Expects input in the shape of:
+;;
+;; {:item "records/items/gearrelic/d201_relic.dbr",
+;;  :relicBonus "records/items/lootaffixes/completionrelics/aoathkeeper_19a.dbr"}
+(defn gt-equipment-refine
+  "Given some equipment definition that comes from gt directly, refine an existing item.
+  More specifically, make sure we are using the exact prefix and suffix"
+  [gt-character-data-equipment item]
+
+  (let [mappings {:item :basename
+                  :prefix :prefix-name
+                  :suffix :suffix-name
+                  :component :relic-name
+                  :augment :augment-name}]
+    (reduce (fn [item [def-k new-val]]
+              (cond-> item
+                  ;; If we know apply a definition onto a field...
+                  (mappings def-k)
+                  ;; Put the new value into the correct corresponding field
+                  (assoc (mappings def-k) new-val)))
+            item
+            gt-character-data-equipment)))
 
 (def weapon-set-path {:weapon1 [:weapon-sets 0 :items 0]
                       :weapon2 [:weapon-sets 0 :items 1]
@@ -377,25 +417,6 @@
 
           character gt-character-equipments))
 
-(comment
-
-  ;; Test generating a single item
-  (let [equipments (-> (json/read-json (slurp (u/expand-home "~/inbox/charData-13-f.json")) true)
-                       :items
-                       (nth 8)
-                       (vector))
-        character (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
-
-    (def t (ggd-apply-equipment equipments character))
-    )
-
-  (-> t
-      :equipment
-      (nth 6)
-      )
-
-  )
-
 ;; Given some equipment definition that comes from gt directly...
 ;; Refine an existing already generated item...
 ;;
@@ -445,7 +466,7 @@
 
 (defn skill-attach-autocast-controller
   [skill]
-  
+
   (if-not (:autocast-skill-name skill)
     skill
 
@@ -472,7 +493,7 @@
                   ;; Id the definition asking to set the auto cast skill?
                   (= def-k :autoCastSkill)
                   (skill-attach-autocast-controller)))
-              
+
               skill
               gt-character-data-skill)))
 
@@ -482,8 +503,7 @@
               (let [path (find-skill-path-by-recordname character (:name skill-def))]
                 (update-in character path #(gt-skill-refine skill-def %))))
             character
-            gt-character-data-skills)
-  )
+            gt-character-data-skills))
 
 (defn prompt-set-character-name
   [character]
@@ -506,6 +526,14 @@
           (recur)
           @globals/character)))))
 
+(defn set-character-level
+  [character-level character]
+
+  (binding [gd-edit.globals/character (atom character)]
+    (println)
+    (let [result (level/level-handler ["" [character-level]])]
+      @globals/character)))
+
 (defn println-passthrough-last
   [text passthrough]
   (println text)
@@ -515,6 +543,73 @@
   [field-keyword character]
 
   (update character field-keyword #(max % 0)))
+
+;;---------------------------------------------------------------
+;; Skills related functions
+;;---------------------------------------------------------------
+
+(defn mk-skill
+  [gt-character-skill]
+
+  (let [;; gt-character field -> gd-edit character fields
+        mapping {:name :skill-name
+                 :level :level
+                 :autoCastSkill :autocast-skill-name}
+        skill (reduce (fn [character [field-name val]]
+                   (cond-> character
+                     (mapping field-name)
+                     (assoc (mapping field-name) val)))
+                 skill/blank-skill
+                 gt-character-skill)
+        skill (skill-attach-autocast-controller skill)
+        ]
+
+    ;; If we've countered a regular skill and there is no reason to do
+    ;; anything further
+    (if-not (gdc-skill-is-from-constellation-star skill)
+      skill
+
+      (if (gdc-skill-is-celestial-power skill)
+        ;; - for celestial powers, set level to max
+        (devotion-skill-set-max-level skill)
+
+        ;; - for stars, set devotion level to 1
+        (assoc skill :devotion-level 1)))
+    )
+  )
+
+(comment
+  (mk-skill
+   {:name "records/skills/playerclass09/summon_celestialguardian1.dbr",
+    :level 1,
+    :autoCastSkill "records/skills/devotion/tier3_20e_skill.dbr"})
+
+  (mk-skill
+   {:level 1, :name "records/skills/devotion/tier3_20e_skill.dbr"})
+
+  )
+
+(defn gt-apply-skills
+  [gt-character-skills character]
+
+  ;; Entries in the gt-character-skills array may have a single layer of child skills.
+  ;; Flatten that into a single list so we can add the skills more easily.
+  (reduce (fn [character gt-skill]
+            (skill/skill-add
+             character
+             (mk-skill gt-skill)))
+          character
+          gt-character-skills))
+
+(defn fetch-gt-character
+  [char-id]
+  (-> (u/fetch-json-from-url (format "https://grimtools.com/get_build_data.php?id=%s" char-id))
+      (assoc :character-id char-id)))
+
+
+(defn load-ggd-file
+  [filepath]
+  (u/load-json-file filepath))
 
 (defn from-ggd-character-file
   [json-file template-character]
@@ -546,91 +641,39 @@
       (:equipment gt-character)
       (gt-apply-equipment-refine (:equipment gt-character))
       (:skills gt-character)
-      (gt-apply-skill-refine (:skills gt-character))
+      (gt-apply-skill-refine (:skills gt-character)))))
+
+(defn from-gt-character-file
+  [json-file template-character]
+  (let [;; This is the character we want to end up with
+        ggd-character (json/read-json (slurp json-file) true)
+
+        gt-character (:data ggd-character)
+
+        ;; Apply various settings from the json character file
+        character (->> template-character
+                       skill/skills-remove-all
+                       prompt-set-character-name
+                       (set-character-level (str (get-in gt-character [:bio :level])))
+                       (println-passthrough-last "")
+
+                       (gt-apply-attributes (:bio gt-character))
+
+                       (gt-apply-skills (:skills gt-character))
+                       ;; (ggd-apply-devotions (:devotionNodes ggd-character))
+                       (println-passthrough-last "")
+
+                       (ggd-apply-equipment (:items ggd-character))
+                       (cap-min-to-zero :attribute-points)
+                       (cap-min-to-zero :skill-points))]
+    (cond->> character
+      ;; If we have some equipment data that comes directly from grimtools...
+      ;; Apply the exact records that should be used for the equipment
+      (:equipment gt-character)
+      (gt-apply-equipment-refine (:equipment gt-character))
+      ;; (:skills gt-character)
+      ;; (gt-apply-skill-refine (:skills gt-character))
       )))
-
-(comment
-  (find-skill-idx-by-recordname @globals/character
-                                "records/skills/playerclass01/blitz1.dbr")
-
-  (-> @globals/character
-      :skills
-      (nth 14))
-
-  (let [target-character (repl/load-character-file "DDD")
-        ggd-char (json/read-json (slurp (u/expand-home "~/Downloads/charData (4).json")) true)
-        updated-character (gt-apply-skill-refine (get-in ggd-char [:data :skills]) target-character)]
-    (-> updated-character
-        :skills
-        (nth 15)))
-
-  (-> (repl/load-character-file "CCC")
-      (dissoc :meta-block-list)
-      :skills
-      (nth 14))
-
-  (-> (repl/load-character-file "DDD")
-      (dissoc :meta-block-list)
-      :skills
-      (nth 15))
-  
-  (find-skill-idx-by-recordname (repl/load-character-file "CCC") "records/skills/playerclass01/blitz1.dbr")
-
-  (find-skill-idx-by-recordname (repl/load-character-file "DDD") "records/skills/playerclass01/blitz1.dbr")
-
-  )
-(defn gt-apply-attributes-v2
-  [gt-character-attributes character]
-
-  (let [;; gt-character field -> gd-edit character fields
-        mapping {:attributePoints :attribute-points 
-                 :skillPoints :skill-points
-                 :devotionPoints :devotion-points
-                 :physique :physique
-                 :cunning :cunning
-                 :spirit :spirit}]
-    (reduce (fn [character [gt-attr-name new-val]]
-              (cond-> character
-                (mapping gt-attr-name)
-                (assoc (mapping gt-attr-name) new-val)))
-            character
-            gt-character-attributes)))
-
-
-(defn mk-skill-v2
-  [gt-character-skill]
-
-  (let [;; gt-character field -> gd-edit character fields
-        mapping {:name :skill-name
-                 :level :level
-                 :autoCastSkill :autocast-skill-name}]
-    (->> (reduce (fn [character [field-name val]]
-               (cond-> character
-                 (mapping field-name)
-                 (assoc (mapping field-name) val)))
-             skill/blank-skill
-             gt-character-skill)
-         (devotion-skill-set-max-level))))
-
-(defn gt-apply-skills-v2
-  [gt-character-skills character]
-
-  (reduce (fn [character gt-character-skill]
-            (update character :skills conj (mk-skill-v2 gt-character-skill)))
-          character
-          gt-character-skills))
-
-(comment
-  (gt-apply-skills-v2 (-> j :data :skills) {})
-
-  (-> j :data :equipment)
-
-  (dbu/record-by-name
-   "records/skills/devotion/tier3_21c.dbr")
-
-  (item/blank-item)
-
-  )
 
 
 (defn create-character
@@ -649,7 +692,7 @@
         template-character (gdc/load-character-file character-file)
 
         ;; Create a new character from the template
-        new-character (from-ggd-character-file json-file template-character)
+        new-character (from-gt-character-file json-file template-character)
 
         ;; Save it back into the template files directory
         _ (gdc/write-character-file new-character character-file)
@@ -681,6 +724,71 @@
 
 (comment
 
+  (find-skill-idx-by-recordname @globals/character
+                                "records/skills/playerclass01/blitz1.dbr")
+
+  (-> @globals/character
+      :skills
+      (nth 14))
+
+  (let [target-character (repl/load-character-file "DDD")
+        ggd-char (json/read-json (slurp (u/expand-home "~/Downloads/charData (4).json")) true)
+        updated-character (gt-apply-skill-refine (get-in ggd-char [:data :skills]) target-character)]
+    (-> updated-character
+        :skills
+        (nth 15)))
+
+  (-> (repl/load-character-file "CCC")
+      (dissoc :meta-block-list)
+      :skills
+      (nth 14))
+
+  (-> (repl/load-character-file "DDD")
+      (dissoc :meta-block-list)
+      :skills
+      (nth 15))
+
+  (find-skill-idx-by-recordname (repl/load-character-file "CCC") "records/skills/playerclass01/blitz1.dbr")
+
+  (find-skill-idx-by-recordname (repl/load-character-file "DDD") "records/skills/playerclass01/blitz1.dbr")
+
+  )
+
+(defn gt-apply-attributes-v2
+  [gt-character-attributes character]
+
+  (let [;; gt-character field -> gd-edit character fields
+        mapping {:attributePoints :attribute-points
+                 :skillPoints :skill-points
+                 :devotionPoints :devotion-points
+                 :physique :physique
+                 :cunning :cunning
+                 :spirit :spirit}]
+    (reduce (fn [character [gt-attr-name new-val]]
+              (cond-> character
+                (mapping gt-attr-name)
+                (assoc (mapping gt-attr-name) new-val)))
+            character
+            gt-character-attributes)))
+
+
+
+;;------------------------------------------------------------------------------------------------
+;;
+;; Comment
+;;
+;;------------------------------------------------------------------------------------------------
+
+(comment
+  (def t
+    (fetch-gt-character "xZyBgRqN"))
+
+  (def t
+    (u/fetch-json-from-url "https://www.grimtools.com/get_build_data.php?id=xZyBgRqN"))
+
+  (-> t
+      :data)
+
   ;; Make a new character from a template
   (let [template (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc")))]
     (def t (from-ggd-character-file (u/expand-home "~/inbox/charData (4).json") template)))
@@ -690,10 +798,9 @@
         (->> (json/read-json (slurp (u/expand-home "~/inbox/charData (4).json")) true)
              (:devotionNodes))]
     (ggd-apply-devotions devotions {:skills []
-                                   :skill-points 1000
-                                   :devotion-points 55})
+                                    :skill-points 1000
+                                    :devotion-points 55})
     :ok)
-
 
   (def t (gdc/load-character-file (io/file (io/resource "_blank_character/player.gdc"))))
 
@@ -722,12 +829,13 @@
             (from-ggd-character-file "~/inbox/testChar-formatted.json"))
     :ok)
 
-
   (:skills @globals/character)
 
   (:skills (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true))
 
-  (let [gt-character-skills (:skills (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true))]
+  (load-ggd-file "~/Desktop/GDChars/xZyBgRqN.json")
+
+  (let [gt-character-skills (load-ggd-file "~/inbox/charData.json")]
 
     (->> gt-character-skills
          (s/select [s/ALL :children])
@@ -738,33 +846,27 @@
   (-> (from-ggd-character-file (u/expand-home "~/inbox/testChar-formatted.json"))
       (gdc/write-character-file (u/expand-home "~/inbox/out.gdc")))
 
-  (json/read-json (slurp (u/expand-home "~/inbox/charData.json")) true)
+  (def j (load-ggd-file "~/Dropbox/Public/GrimDawn/gd-chars/xZyBgRqN.json"))
 
-  (create-character (u/expand-home "~/Downloads/charData (5).json"))
+  (create-character (u/expand-home "~/Dropbox/Public/GrimDawn/gd-chars/xZyBgRqN.json"))
 
-  (class-cmds/class-display-name-map)
+  (dbu/record-by-name "records/skills/devotion/tier1_08e_skill.dbr")
 
   (require 'repl)
+  (repl/init)
 
-  (repl/cmd "load CCC")
+  (repl/cmd "load AAA")
+
+  (repl/cmd "set attribute-points 20")
+  (repl/cmd "write")
 
   (repl/cmd "class")
   (repl/cmd "show skills")
-  
   (repl/cmd "show weaponsets")
-
-  (:weapon-sets t)
-
-  (:skills t)
-
   (repl/cmd "show skills")
-
   (repl/cmd "level 100")
 
-  (require '[gd-edit.printer :as printer])
-
-
-  ;;------------------------------------------------------------------------------
+;;------------------------------------------------------------------------------
   ;; Relic completion bonus forms
   ;;------------------------------------------------------------------------------
   (def t (relic-search-by-name "Deathchill"))
@@ -799,7 +901,7 @@
        :items
        last)
 
-  j
+  (-> j :data :skills)
 
   (gt-apply-artifact-completion-bonus
    (-> j
@@ -822,7 +924,6 @@
     :attached true
     :relic-bonus ""})
 
-
   (do
     (def j
       (json/read-json (slurp (u/expand-home "~/inbox/charData-12-f.json")) true))
@@ -833,5 +934,36 @@
   (->> @globals/character
        :equipment
        last)
+
+  ;; Printing the entire character during debugging locks up the repl
+  (set! *print-length* 20)
+
+  (let [char1 (-> (repl/load-character-file "AAA")
+                  (dissoc :meta-block-list))
+        char2 (-> (repl/load-character-file "target")
+                  (dissoc :meta-block-list))]
+    (clojure.data/diff char1 char2))
+
+  (let [offset 0
+        char1 (as-> (repl/load-character-file "AAA") $
+                  (dissoc $ :meta-block-list)
+                  (:skills $)
+                  (sort-by :skill-name $)
+                  ;; (drop offset $)
+                  )
+        char2 (as-> (repl/load-character-file "target") $
+                (dissoc $ :meta-block-list)
+                (:skills $)
+                (sort-by :skill-name $)
+                ;; (drop offset $)
+                )
+        ]
+    (->> (clojure.data/diff char1 char2)
+         (take 2)
+        )
+
+    )
+
+
 
   )

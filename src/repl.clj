@@ -248,14 +248,12 @@
                   (dissoc :meta-block-list))]
     (diff char1 char2))
 
-  (let [char1 (-> (load-character-file "CCC")
+  (let [char1 (-> (load-character-file "EEE")
                   (dissoc :meta-block-list))
-        char2 (-> (load-character-file "DDD")
+        char2 (-> (load-character-file "FFF")
                   (dissoc :meta-block-list))]
     (-> (diff char1 char2)
-        drop-last
-        (nth 1)
-        :skills))
+        drop-last))
 
   (-> (load-character-file "DDD")
       (dissoc :meta-block-list)
@@ -403,5 +401,9 @@
 
       (get "buffSkillName")
       (dbu/record-by-name))
+
+  (cmd "load TTT")
+
+  (cmd "show attribute-points")
 
   )

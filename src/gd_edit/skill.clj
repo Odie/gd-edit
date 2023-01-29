@@ -103,6 +103,18 @@
            (update-in character [:skills] conj entry))
          (update :skill-points #(- % level))))))
 
+(defn skill-add
+  [character skill]
+  (let [;; Maybe the skill was already part of the array?
+        ;; If so, where is it in the array?
+        existing-entry-idx (u/first-match-position #(= (:skill-name %) (:skill-name skill)) (:skills character))]
+
+        (if existing-entry-idx
+          character
+          (-> character
+              (update-in [:skills] conj skill)
+              (update :skill-points #(- % (:level skill)))))))
+
 (comment
 
   (player-selectable-skills)

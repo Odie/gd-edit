@@ -7,9 +7,12 @@
             [taoensso.timbre :as t]
             [clojure.walk :refer [postwalk-replace]]
             [me.raynes.fs :as fs]
-            [cpath-clj.core :as cp])
+            [cpath-clj.core :as cp]
+            [clj-http.client :as client]
+            [clojure.data.json :as json])
   (:import java.nio.ByteBuffer
            java.io.File
+           java.io.IOException
            [java.security MessageDigest]))
 
 (def ^:dynamic *suppress-print* false)
@@ -817,3 +820,20 @@
   [x]
   (println x)
   x)
+
+(defn fetch-url 
+  [url-str]
+  (let [response (clj-http.client/get url-str
+                                      {:headers {"User-Agent" "curl/7.43.0"}})]
+    (if (not= (response :status) 200)
+      (throw (IOException. (str "Got response status:" (response :status))))
+
+      (response :body))))
+
+(defn fetch-json-from-url
+  [url-str]
+  (json/read-json (fetch-url url-str) true))
+
+(defn load-json-file
+  [filepath]
+  (json/read-json (slurp (expand-home filepath)) true))
