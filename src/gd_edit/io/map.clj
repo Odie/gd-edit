@@ -35,7 +35,7 @@
   [preamble]
 
   (when (or (not= (:magic preamble) "MAP")
-            (not= (:version preamble) 8))
+            (not (contains? #{8 9} (:version preamble))))
     (throw (Throwable. "I don't understand this MAP format!"))))
 
 (def sector-id-map
