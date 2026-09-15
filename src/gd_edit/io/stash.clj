@@ -34,20 +34,64 @@
          :X :float
          :Y :float)))
 
+(def TransferStashItemV2
+  (into gdc/ItemV2
+        (s/struct-def
+         :X :float
+         :Y :float)))
+
 (def InventorySack
   (s/struct-def
    :width           :int32
    :height          :int32
    :inventory-items (s/array TransferStashItem)))
 
+;; Fangs of Asterkarn (GD 1.3.x) added five trailing u32 fields to every stash
+;; page whose block-18 version >= ITEM_V2_BLOCK_VERSION (11).
+(def InventorySackV2
+  (s/struct-def
+   :width           :int32
+   :height          :int32
+   :inventory-items (s/array TransferStashItemV2)
+   :page-unk1       :int32
+   :page-unk2       :int32
+   :page-unk3       :int32
+   :page-unk4       :int32
+   :page-unk5       :int32))
+
+(defn read-block18
+  [^ByteBuffer bb context]
+  (let [version (gdc/read-int! bb context)
+        unknown (read-int-no-update bb context)
+        mod (gdc/read-string! bb context)
+        expansion-status (gdc/read-byte! bb context)
+        page-spec (if (>= version 11) InventorySackV2 InventorySack)
+        stash (reduce (fn [accum _]
+                        (conj accum (gdc/read-block bb context {0 page-spec})))
+                      []
+                      (range (gdc/read-int! bb context)))]
+    {:version version
+     :unknown unknown
+     :mod mod
+     :expansion-status expansion-status
+     :stash stash}))
+
+(defn write-block18
+  [^ByteBuffer bb block context]
+  (let [version (:version block)
+        page-spec (if (>= version 11) InventorySackV2 InventorySack)]
+    (gdc/write-int! bb version context)
+    (write-int-no-update bb (:unknown block) context)
+    (gdc/write-string! bb (:mod block) context)
+    (gdc/write-byte! bb (:expansion-status block) context)
+    (gdc/write-int! bb (count (:stash block)) context)
+    (doseq [page (:stash block)]
+      (gdc/write-block bb page context {0 page-spec}))))
+
 (def Block18
   (s/struct-def
-   :version   :int32
-   :unknown   :int32-
-   :mod       (s/string :ascii)
-   :expansion-status :byte
-   :stash     (s/array
-               (struct-block {0 InventorySack}))))
+   {:struct/read read-block18
+    :struct/write write-block18}))
 
 ;; The transfer stash file seem to have a
 (defn make-enc-context
