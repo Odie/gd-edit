@@ -140,11 +140,59 @@
         (s/struct-def
          :attached :bool)))
 
+;; Fangs of Asterkarn (GD 1.3.x) added four trailing u32 fields to every item in
+;; container blocks whose version >= ITEM_V2_BLOCK_VERSION (11).
+(def ItemV2
+  (s/struct-def
+   :basename       (s/string :ascii)
+   :prefix-name    (s/string :ascii)
+   :suffix-name    (s/string :ascii)
+   :modifier-name  (s/string :ascii)
+   :transmute-name (s/string :ascii)
+   :seed           :int32
+
+   :relic-name     (s/string :ascii)
+   :relic-bonus    (s/string :ascii)
+   :relic-seed     :int32
+
+   :augment-name   (s/string :ascii)
+   :unknown        :int32
+   :augment-seed   :int32
+
+   :relic-completion-level :int32
+   :unknown2               :int32
+   :unknown3               :int32
+   :stack-count            :int32
+   :unknown4               :int32
+   :unknown5               :int32))
+
+(def InventoryItemV2
+  (into ItemV2
+        (s/struct-def
+         :X :int32
+         :Y :int32)))
+
+(def StashItemV2
+  (into ItemV2
+        (s/struct-def
+         :X :int32
+         :Y :int32)))
+
+(def EquipmentItemV2
+  (into ItemV2
+        (s/struct-def
+         :attached :bool)))
+
 
 (def InventorySack
   (s/struct-def
    :unused :bool
    :inventory-items (s/array InventoryItem)))
+
+(def InventorySackV2
+  (s/struct-def
+   :unused :bool
+   :inventory-items (s/array InventoryItemV2)))
 
 
 (defn read-block3
@@ -160,27 +208,31 @@
             focused-sack (read-int! bb context)
             selected-sack (read-int! bb context)
 
+            v2          (>= version 11)
+            sack-spec   (if v2 InventorySackV2 InventorySack)
+            equip-spec  (if v2 EquipmentItemV2 EquipmentItem)
+
             inventory-sacks (reduce (fn  [accum _]
-                                      (conj accum (read-block bb context {0 InventorySack})))
+                                      (conj accum (read-block bb context {0 sack-spec})))
                                     []
                                     (range sack-count))
 
             use-alt-weaponset (read-bool! bb context)
 
             equipment (reduce (fn  [accum _]
-                                (conj accum (s/read-struct EquipmentItem bb context)))
+                                (conj accum (s/read-struct equip-spec bb context)))
                               []
                               (range 12))
 
             alternate1 (read-bool! bb context)
             alternate1-set (reduce (fn  [accum _]
-                                     (conj accum (s/read-struct EquipmentItem bb context)))
+                                     (conj accum (s/read-struct equip-spec bb context)))
                                    []
                                    (range 2))
 
             alternate2 (read-bool! bb context)
             alternate2-set (reduce (fn  [accum _]
-                                     (conj accum (s/read-struct EquipmentItem bb context)))
+                                     (conj accum (s/read-struct equip-spec bb context)))
                                    []
                                    (range 2))]
         {:version           version
@@ -203,29 +255,33 @@
   (write-bool! bb (:has-data block) context)
 
   (when (:has-data block)
-    (write-int! bb (:sack-count block) context)
-    (write-int! bb (:focused-sack block) context)
-    (write-int! bb (:selected-sack block) context)
+    (let [v2         (>= (:version block) 11)
+          sack-spec  (if v2 InventorySackV2 InventorySack)
+          equip-spec (if v2 EquipmentItemV2 EquipmentItem)]
 
-    (assert (= (:sack-count block) (count (:inventory-sacks block))))
-    (doseq [sack (:inventory-sacks block)]
-      (write-block bb sack context {0 InventorySack}))
+      (write-int! bb (:sack-count block) context)
+      (write-int! bb (:focused-sack block) context)
+      (write-int! bb (:selected-sack block) context)
 
-    (write-bool! bb (:use-alt-weaponset block) context)
+      (assert (= (:sack-count block) (count (:inventory-sacks block))))
+      (doseq [sack (:inventory-sacks block)]
+        (write-block bb sack context {0 sack-spec}))
 
-    (assert (=  (count (:equipment block)) 12))
-    (doseq [item (:equipment block)]
-      (s/write-struct EquipmentItem bb item context))
+      (write-bool! bb (:use-alt-weaponset block) context)
 
-    (write-bool! bb (get-in block [:weapon-sets 0 :unused]) context)
-    (assert (=  (count (get-in block [:weapon-sets 0 :items])) 2))
-    (doseq [item (get-in block [:weapon-sets 0 :items])]
-      (s/write-struct EquipmentItem bb item context))
+      (assert (=  (count (:equipment block)) 12))
+      (doseq [item (:equipment block)]
+        (s/write-struct equip-spec bb item context))
 
-    (write-bool! bb (get-in block [:weapon-sets 1 :unused]) context)
-    (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
-    (doseq [item (get-in block [:weapon-sets 1 :items])]
-      (s/write-struct EquipmentItem bb item context))))
+      (write-bool! bb (get-in block [:weapon-sets 0 :unused]) context)
+      (assert (=  (count (get-in block [:weapon-sets 0 :items])) 2))
+      (doseq [item (get-in block [:weapon-sets 0 :items])]
+        (s/write-struct equip-spec bb item context))
+
+      (write-bool! bb (get-in block [:weapon-sets 1 :unused]) context)
+      (assert (=  (count (get-in block [:weapon-sets 1 :items])) 2))
+      (doseq [item (get-in block [:weapon-sets 1 :items])]
+        (s/write-struct equip-spec bb item context)))))
 
 
 ;; For reference only
@@ -254,14 +310,29 @@
 
    :items  (s/array StashItem)))
 
+(def StashV2
+  (s/struct-def
+   :width  :int32
+   :height :int32
+
+   :items  (s/array StashItemV2)
+
+   :page-unk1 :int32
+   :page-unk2 :int32
+   :page-unk3 :int32
+   :page-unk4 :int32
+   :page-unk5 :int32))
+
 (defn read-block4
   [^ByteBuffer bb context]
 
   (let [version (read-int! bb context)
         stash-count (read-int! bb context)
+        v2 (>= version 11)
+        stash-spec (if v2 StashV2 Stash)
 
         stashes (reduce (fn  [accum _]
-                          (conj accum (read-block bb context {0 Stash})))
+                          (conj accum (read-block bb context {0 stash-spec})))
                         []
                         (range stash-count))]
     {:version version
@@ -270,11 +341,13 @@
 (defn write-block4
   [^ByteBuffer bb block context]
 
-  (write-int! bb (:version block) context)
-  (write-int! bb (count (:stashes block)) context)
+  (let [v2 (>= (:version block) 11)
+        stash-spec (if v2 StashV2 Stash)]
+    (write-int! bb (:version block) context)
+    (write-int! bb (count (:stashes block)) context)
 
-  (doseq [stash (:stashes block)]
-    (write-block bb stash context {0 Stash})))
+    (doseq [stash (:stashes block)]
+      (write-block bb stash context {0 stash-spec}))))
 
 (def Block4
   (s/struct-def
@@ -337,6 +410,22 @@
    :autocast-skill-name      (s/string :ascii)
    :autocast-controller-name (s/string :ascii)))
 
+;; Fangs of Asterkarn (GD 1.3.x): skills in block 8 whose version >=
+;; SKILL_V2_BLOCK_VERSION (8) gained an extra byte after :enabled.
+(def CharacterSkillV2
+  (s/struct-def
+   :skill-name               (s/string :ascii)
+   :level                    :int32
+   :enabled                  :bool
+   :skill-unknown-byte       :byte
+   :devotion-level           :int32
+   :devotion-experience      :int32
+   :sublevel                 :int32
+   :skill-active             :bool
+   :skill-transition         :bool
+   :autocast-skill-name      (s/string :ascii)
+   :autocast-controller-name (s/string :ascii)))
+
 (def ItemSkill
   (s/struct-def
    :skill-name               (s/string :ascii)
@@ -345,17 +434,51 @@
    :unknown-bytes            (s/string :ascii :length 4)
    :unknown                  (s/string :ascii)))
 
+(defn read-block8
+  [^ByteBuffer bb context]
+  (let [version   (read-int! bb context)
+        skill-spec (if (>= version 8) CharacterSkillV2 CharacterSkill)
+        skills (reduce (fn [accum _]
+                         (conj accum (s/read-struct skill-spec bb context)))
+                       []
+                       (range (read-int! bb context)))
+        masteries-allowed         (read-int! bb context)
+        skill-points-reclaimed    (read-int! bb context)
+        devotion-points-reclaimed (read-int! bb context)
+        item-skills (reduce (fn [accum _]
+                              (conj accum (s/read-struct ItemSkill bb context)))
+                            []
+                            (range (read-int! bb context)))
+        unk1 (when (>= version 6) (read-int! bb context))]
+    {:version                   version
+     :skills                    skills
+     :masteries-allowed         masteries-allowed
+     :skill-points-reclaimed    skill-points-reclaimed
+     :devotion-points-reclaimed devotion-points-reclaimed
+     :item-skills               item-skills
+     :8-unk1                    unk1}))
+
+(defn write-block8
+  [^ByteBuffer bb block context]
+  (let [version   (:version block)
+        skill-spec (if (>= version 8) CharacterSkillV2 CharacterSkill)]
+    (write-int! bb version context)
+    (write-int! bb (count (:skills block)) context)
+    (doseq [skill (:skills block)]
+      (s/write-struct skill-spec bb skill context))
+    (write-int! bb (:masteries-allowed block) context)
+    (write-int! bb (:skill-points-reclaimed block) context)
+    (write-int! bb (:devotion-points-reclaimed block) context)
+    (write-int! bb (count (:item-skills block)) context)
+    (doseq [item-skill (:item-skills block)]
+      (s/write-struct ItemSkill bb item-skill context))
+    (when (>= version 6)
+      (write-int! bb (:8-unk1 block) context))))
+
 (def Block8
   (s/struct-def
-   :version :int32
-
-   :skills                     (s/array CharacterSkill)
-   :masteries-allowed          :int32
-   :skill-points-reclaimed     :int32
-   :devotion-points-reclaimed  :int32
-   :item-skills                (s/array ItemSkill)
-   :8-unk1                     (after-block-version 6 :int32)
-   {:anchor true}))
+   {:struct/read read-block8
+    :struct/write write-block8}))
 
 (def Block12
   (s/struct-def
@@ -528,6 +651,8 @@
 
    :unique-items-found          :int32
    :randomized-items-found      :int32
+   :16-unk-v12-a                (after-block-version 12 :int32)
+   :16-unk-v12-b                (after-block-version 12 :int32)
    {:anchor true}))
 
 
